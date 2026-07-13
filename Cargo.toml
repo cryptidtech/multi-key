@@ -40,7 +40,7 @@ ml-dsa = "0.1.1"
 ml-kem = { version = "0.2", features = ["deterministic"] }
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
-p521 = { version = "0.14.0-rc.15", features = ["ecdsa", "ecdh"] }
+p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 poly1305 = "0.8"
 pq-mayo = "0.5.0"
 # RustCrypto 0.14 stack (vsss-rs 6, elliptic-curve 0.14, ed25519-dalek 3) is on
