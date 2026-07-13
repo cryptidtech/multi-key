@@ -14,12 +14,12 @@ use blsful::{
     Bls12381G1Impl, Bls12381G2Impl, PublicKey, PublicKeyShare, SecretKey, SecretKeyShare,
     Signature, SignatureSchemes, SignatureShare, TimeCryptCiphertext, SECRET_KEY_BYTES,
 };
+use elliptic_curve::group::GroupEncoding;
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, views::bls12381::SchemeTypeId, Multisig, Views as SigViews};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
-use elliptic_curve::group::GroupEncoding;
 use rand_core::Rng;
 use ssh_encoding::{Decode, Encode};
 use std::{array::TryFromSliceError, collections::BTreeMap};

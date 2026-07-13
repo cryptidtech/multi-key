@@ -6,9 +6,9 @@ use aes_gcm::{
     aead::{Aead, KeyInit, Payload},
     Aes128Gcm, Aes256Gcm,
 };
-use multi_codec::Codec;
 use chacha20poly1305::{ChaCha20Poly1305, XChaCha20Poly1305};
 use hkdf::Hkdf;
+use multi_codec::Codec;
 use sha2::Sha512;
 use zeroize::Zeroizing;
 

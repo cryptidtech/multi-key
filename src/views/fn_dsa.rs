@@ -7,13 +7,13 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Views as _};
 use fn_dsa::{
     signature_size, vrfy_key_size, SigningKey, SigningKeyStandard, VerifyingKey,
     VerifyingKeyStandard, DOMAIN_NONE, FN_DSA_LOGN_1024, FN_DSA_LOGN_512, HASH_ID_RAW,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_sig::{ms, Views as _};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 

@@ -7,14 +7,14 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Views as _};
 use ml_dsa::{
     signature::{Keypair, Signer, Verifier},
     EncodedSignature, EncodedVerifyingKey, MlDsa65, MlDsa87, Seed, Signature, SigningKey,
     VerifyingKey,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_sig::{ms, Views as _};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 
@@ -24,11 +24,11 @@ pub const ALGORITHM_NAME_65: &str = "ml-dsa-65@multikey";
 pub const ALGORITHM_NAME_87: &str = "ml-dsa-87@multikey";
 
 fn is_ml_dsa_priv(codec: Codec) -> bool {
-    codec == Codec::MlDsa65Priv || codec == Codec::MlDsa87Priv
+    codec == Codec::Mldsa65Priv || codec == Codec::Mldsa87Priv
 }
 
 fn is_ml_dsa_pub(codec: Codec) -> bool {
-    codec == Codec::MlDsa65Pub || codec == Codec::MlDsa87Pub
+    codec == Codec::Mldsa65Pub || codec == Codec::Mldsa87Pub
 }
 
 const ML_DSA_SEED_LENGTH: usize = 32;
@@ -91,7 +91,7 @@ impl<'a> ConvView for View<'a> {
         };
 
         let (public_key, codec) = match (self.mk.codec, secret_bytes.len()) {
-            (Codec::MlDsa65Priv, ML_DSA_SEED_LENGTH) => {
+            (Codec::Mldsa65Priv, ML_DSA_SEED_LENGTH) => {
                 let seed_bytes: [u8; ML_DSA_SEED_LENGTH] =
                     secret_bytes.as_slice().try_into().map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid seed length".into())
@@ -100,10 +100,10 @@ impl<'a> ConvView for View<'a> {
                 let kp = SigningKey::<MlDsa65>::from_seed(&seed);
                 (
                     kp.verifying_key().encode().as_slice().to_vec(),
-                    Codec::MlDsa65Pub,
+                    Codec::Mldsa65Pub,
                 )
             }
-            (Codec::MlDsa87Priv, ML_DSA_SEED_LENGTH) => {
+            (Codec::Mldsa87Priv, ML_DSA_SEED_LENGTH) => {
                 let seed_bytes: [u8; ML_DSA_SEED_LENGTH] =
                     secret_bytes.as_slice().try_into().map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid seed length".into())
@@ -112,7 +112,7 @@ impl<'a> ConvView for View<'a> {
                 let kp = SigningKey::<MlDsa87>::from_seed(&seed);
                 (
                     kp.verifying_key().encode().as_slice().to_vec(),
-                    Codec::MlDsa87Pub,
+                    Codec::Mldsa87Pub,
                 )
             }
             _ => {
@@ -142,8 +142,8 @@ impl<'a> ConvView for View<'a> {
 
         // Determine algorithm name based on codec
         let algorithm_name = match pk.codec {
-            Codec::MlDsa65Pub => ALGORITHM_NAME_65,
-            Codec::MlDsa87Pub => ALGORITHM_NAME_87,
+            Codec::Mldsa65Pub => ALGORITHM_NAME_65,
+            Codec::Mldsa87Pub => ALGORITHM_NAME_87,
             _ => return Err(ConversionsError::UnsupportedCodec(pk.codec).into()),
         };
 
@@ -174,8 +174,8 @@ impl<'a> ConvView for View<'a> {
 
         // Determine algorithm name based on codec
         let algorithm_name = match self.mk.codec {
-            Codec::MlDsa65Priv => ALGORITHM_NAME_65,
-            Codec::MlDsa87Priv => ALGORITHM_NAME_87,
+            Codec::Mldsa65Priv => ALGORITHM_NAME_65,
+            Codec::Mldsa87Priv => ALGORITHM_NAME_87,
             _ => return Err(ConversionsError::UnsupportedCodec(self.mk.codec).into()),
         };
 
@@ -248,7 +248,7 @@ impl<'a> SignView for View<'a> {
             kd.secret_bytes()?
         };
         let (signature, codec) = match (self.mk.codec, secret_bytes.len()) {
-            (Codec::MlDsa65Priv, ML_DSA_SEED_LENGTH) => {
+            (Codec::Mldsa65Priv, ML_DSA_SEED_LENGTH) => {
                 let seed_bytes: [u8; ML_DSA_SEED_LENGTH] =
                     secret_bytes.as_slice().try_into().map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid seed length".into())
@@ -257,10 +257,10 @@ impl<'a> SignView for View<'a> {
                 let kp = SigningKey::<MlDsa65>::from_seed(&seed);
                 (
                     kp.sign(msg).encode().as_slice().to_vec(),
-                    Codec::MlDsa65Msig,
+                    Codec::Mldsa65Msig,
                 )
             }
-            (Codec::MlDsa87Priv, ML_DSA_SEED_LENGTH) => {
+            (Codec::Mldsa87Priv, ML_DSA_SEED_LENGTH) => {
                 let seed_bytes: [u8; ML_DSA_SEED_LENGTH] =
                     secret_bytes.as_slice().try_into().map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid seed length".into())
@@ -269,7 +269,7 @@ impl<'a> SignView for View<'a> {
                 let kp = SigningKey::<MlDsa87>::from_seed(&seed);
                 (
                     kp.sign(msg).encode().as_slice().to_vec(),
-                    Codec::MlDsa87Msig,
+                    Codec::Mldsa87Msig,
                 )
             }
             _ => {

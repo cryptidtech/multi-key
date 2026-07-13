@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{error::NonceError, Error};
+use core::fmt;
 use multi_base::Base;
 use multi_codec::Codec;
 use multi_trait::{Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes};
-use core::fmt;
 use rand_core::CryptoRng;
 
 /// the Nonce multicodec sigil

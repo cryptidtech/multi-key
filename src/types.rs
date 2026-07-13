@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Type-safe wrappers for cryptographic key components
 
-use multi_codec::Codec;
 use core::fmt;
+use multi_codec::Codec;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Public key bytes

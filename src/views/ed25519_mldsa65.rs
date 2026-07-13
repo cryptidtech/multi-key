@@ -10,15 +10,15 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
+use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
+use ml_dsa::{
+    signature::{Keypair, Signer as MldsaSigner, Verifier as MldsaVerifier},
+    EncodedSignature, EncodedVerifyingKey, MlDsa65, Seed as MldsaSeed, Signature as MldsaSig,
+    SigningKey as MldsaSigningKey, VerifyingKey as MldsaVerifyingKey,
+};
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, Multisig, Views as SigViews};
-use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
-use ml_dsa::{
-    signature::{Keypair, Signer as MlDsaSigner, Verifier as MlDsaVerifier},
-    EncodedSignature, EncodedVerifyingKey, MlDsa65, Seed as MlDsaSeed, Signature as MlDsaSig,
-    SigningKey as MlDsaSigningKey, VerifyingKey as MlDsaVerifyingKey,
-};
 use zeroize::Zeroizing;
 
 const ED25519_SEED_LEN: usize = 32;
@@ -101,8 +101,8 @@ impl<'a> ConvView for View<'a> {
         let mldsa_seed: [u8; 32] = secret_bytes[ED25519_SEED_LEN..PRIV_SEED_LEN]
             .try_into()
             .map_err(|_| ConversionsError::SecretKeyFailure("invalid ml-dsa-65 seed".into()))?;
-        let mldsa_seed = MlDsaSeed::from(mldsa_seed);
-        let kp = MlDsaSigningKey::<MlDsa65>::from_seed(&mldsa_seed);
+        let mldsa_seed = MldsaSeed::from(mldsa_seed);
+        let kp = MldsaSigningKey::<MlDsa65>::from_seed(&mldsa_seed);
 
         // Concatenate (classical-first): ed25519_pub (32) || mldsa65_pub (1952)
         let mut pub_bytes = Vec::with_capacity(PUB_KEY_LEN);
@@ -173,14 +173,14 @@ impl<'a> SignView for View<'a> {
             .map_err(|_| {
                 ConversionsError::SecretKeyFailure("failed to get ml-dsa-65 seed".into())
             })?;
-        let mldsa_seed = MlDsaSeed::from(mldsa_seed);
-        let kp = MlDsaSigningKey::<MlDsa65>::from_seed(&mldsa_seed);
+        let mldsa_seed = MldsaSeed::from(mldsa_seed);
+        let kp = MldsaSigningKey::<MlDsa65>::from_seed(&mldsa_seed);
 
         let mut m2 = Vec::with_capacity(msg.len() + ED25519_SIG_LEN);
         m2.extend_from_slice(msg);
         m2.extend_from_slice(&s1.to_bytes());
 
-        let s2 = MlDsaSigner::sign(&kp, &m2);
+        let s2 = MldsaSigner::sign(&kp, &m2);
 
         // Step 3: sig = s1 || s2
         let mut sig_bytes = Vec::with_capacity(HYBRID_SIG_LEN);
@@ -257,10 +257,10 @@ impl<'a> VerifyView for View<'a> {
             EncodedVerifyingKey::<MlDsa65>::try_from(mldsa_pub_bytes).map_err(|_| {
                 ConversionsError::PublicKeyFailure("invalid ML-DSA-65 public key".into())
             })?;
-        let mldsa_vk = MlDsaVerifyingKey::<MlDsa65>::decode(&encoded_vk);
+        let mldsa_vk = MldsaVerifyingKey::<MlDsa65>::decode(&encoded_vk);
         let encoded_sig = EncodedSignature::<MlDsa65>::try_from(s2_bytes)
             .map_err(|_| VerifyError::BadSignature("invalid ML-DSA-65 signature".into()))?;
-        let s2 = MlDsaSig::decode(&encoded_sig).ok_or(VerifyError::BadSignature(
+        let s2 = MldsaSig::decode(&encoded_sig).ok_or(VerifyError::BadSignature(
             "invalid ML-DSA-65 signature".into(),
         ))?;
 

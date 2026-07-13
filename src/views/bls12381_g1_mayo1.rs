@@ -13,10 +13,10 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
+use ml_dsa::signature::{Signer, Verifier};
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, Multisig, Views as SigViews};
-use ml_dsa::signature::{Signer, Verifier};
 use pq_mayo::{KeyPair, Mayo1, Signature, VerifyingKey};
 use zeroize::Zeroizing;
 

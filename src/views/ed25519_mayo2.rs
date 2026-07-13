@@ -9,10 +9,10 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
+use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, Multisig, Views as SigViews};
-use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use pq_mayo::{KeyPair, Mayo2};
 use zeroize::Zeroizing;
 

@@ -60,12 +60,24 @@ fn public_codec(codec: Codec) -> Result<Codec, Error> {
 
 fn public_from_private(codec: Codec, secret_bytes: &[u8]) -> Result<Vec<u8>, Error> {
     match codec {
-        Codec::FrodoKem640AesPriv => super::frodokem_helper::public_from_private_640aes(secret_bytes),
-        Codec::FrodoKem976AesPriv => super::frodokem_helper::public_from_private_976aes(secret_bytes),
-        Codec::FrodoKem1344AesPriv => super::frodokem_helper::public_from_private_1344aes(secret_bytes),
-        Codec::FrodoKem640ShakePriv => super::frodokem_helper::public_from_private_640shake(secret_bytes),
-        Codec::FrodoKem976ShakePriv => super::frodokem_helper::public_from_private_976shake(secret_bytes),
-        Codec::FrodoKem1344ShakePriv => super::frodokem_helper::public_from_private_1344shake(secret_bytes),
+        Codec::FrodoKem640AesPriv => {
+            super::frodokem_helper::public_from_private_640aes(secret_bytes)
+        }
+        Codec::FrodoKem976AesPriv => {
+            super::frodokem_helper::public_from_private_976aes(secret_bytes)
+        }
+        Codec::FrodoKem1344AesPriv => {
+            super::frodokem_helper::public_from_private_1344aes(secret_bytes)
+        }
+        Codec::FrodoKem640ShakePriv => {
+            super::frodokem_helper::public_from_private_640shake(secret_bytes)
+        }
+        Codec::FrodoKem976ShakePriv => {
+            super::frodokem_helper::public_from_private_976shake(secret_bytes)
+        }
+        Codec::FrodoKem1344ShakePriv => {
+            super::frodokem_helper::public_from_private_1344shake(secret_bytes)
+        }
         _ => {
             return Err(
                 ConversionsError::SecretKeyFailure("not a FrodoKEM private key".into()).into(),
@@ -108,10 +120,18 @@ fn decap(
     match codec {
         Codec::FrodoKem640AesPriv => super::frodokem_helper::decap_640aes(secret_bytes, ciphertext),
         Codec::FrodoKem976AesPriv => super::frodokem_helper::decap_976aes(secret_bytes, ciphertext),
-        Codec::FrodoKem1344AesPriv => super::frodokem_helper::decap_1344aes(secret_bytes, ciphertext),
-        Codec::FrodoKem640ShakePriv => super::frodokem_helper::decap_640shake(secret_bytes, ciphertext),
-        Codec::FrodoKem976ShakePriv => super::frodokem_helper::decap_976shake(secret_bytes, ciphertext),
-        Codec::FrodoKem1344ShakePriv => super::frodokem_helper::decap_1344shake(secret_bytes, ciphertext),
+        Codec::FrodoKem1344AesPriv => {
+            super::frodokem_helper::decap_1344aes(secret_bytes, ciphertext)
+        }
+        Codec::FrodoKem640ShakePriv => {
+            super::frodokem_helper::decap_640shake(secret_bytes, ciphertext)
+        }
+        Codec::FrodoKem976ShakePriv => {
+            super::frodokem_helper::decap_976shake(secret_bytes, ciphertext)
+        }
+        Codec::FrodoKem1344ShakePriv => {
+            super::frodokem_helper::decap_1344shake(secret_bytes, ciphertext)
+        }
         _ => return Err(SealError::NotDecapsulationKey.into()),
     }
     .map_err(|e| SealError::DecapsulationFailed(e).into())

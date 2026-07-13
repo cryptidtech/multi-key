@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Performance benchmarks for multi-key
 
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use multi_codec::Codec;
 use multi_key::{Builder, Multikey};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 
 /// Benchmark key generation

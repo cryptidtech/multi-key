@@ -22,11 +22,11 @@
 use crate::mk::Attributes;
 use crate::{AttrId, Builder, Error, Multikey, Views};
 use blsful::inner_types::{G1Projective, G2Projective, Scalar as BlsScalar};
-use multi_codec::Codec;
-use multi_util::CodecInfo;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as DalekScalar};
 use elliptic_curve::ff::PrimeField;
 use elliptic_curve::group::GroupEncoding;
+use multi_codec::Codec;
+use multi_util::CodecInfo;
 use rand_core::CryptoRng;
 use serde::{Deserialize, Serialize};
 use vsss_rs::{

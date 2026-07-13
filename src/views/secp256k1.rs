@@ -8,17 +8,17 @@ use crate::{
     KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
 };
 
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
-use multi_trait::TryDecodeFrom;
-use multi_util::{Varbytes, Varuint};
 use elliptic_curve::sec1::ToSec1Point;
 use elliptic_curve::Generate;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
     Signature, SigningKey, VerifyingKey,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_trait::TryDecodeFrom;
+use multi_util::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 

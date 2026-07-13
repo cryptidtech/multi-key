@@ -4,12 +4,12 @@ use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
     Multikey, Views,
 };
+use chacha20::cipher::{KeyIvInit, StreamCipher};
+use chacha20::{ChaCha20, Nonce};
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
-use chacha20::cipher::{KeyIvInit, StreamCipher};
-use chacha20::{ChaCha20, Nonce};
 use zeroize::Zeroizing;
 
 use super::bcrypt::SALT_LENGTH;

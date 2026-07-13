@@ -4,14 +4,14 @@ use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, Multikey, SignView, VerifyView, Views,
 };
+use ed25519_dalek::{
+    Signature, Signer, SigningKey, VerifyingKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
+};
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, Multisig, Views as SigViews};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
-use ed25519_dalek::{
-    Signature, Signer, SigningKey, VerifyingKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
-};
 use zeroize::Zeroizing;
 
 pub(crate) struct View<'a> {

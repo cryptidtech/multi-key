@@ -17,12 +17,12 @@ use ::fn_dsa::{
     sign_key_size, vrfy_key_size, KeyPairGenerator, KeyPairGeneratorStandard, FN_DSA_LOGN_1024,
     FN_DSA_LOGN_512,
 };
+use elliptic_curve::sec1::ToSec1Point;
+use elliptic_curve::Generate;
 use multi_base::Base;
 use multi_codec::Codec;
 use multi_trait::{Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
-use elliptic_curve::sec1::ToSec1Point;
-use elliptic_curve::Generate;
 use rand_core::CryptoRng;
 use ssh_key::{
     private::{EcdsaKeypair, KeypairData},
@@ -50,7 +50,7 @@ pub const RSA_KEY_CODECS: [Codec; 3] = [Codec::Rsa2048Priv, Codec::Rsa3072Priv, 
 pub const FN_DSA_KEY_CODECS: [Codec; 2] = [Codec::FnDsa512Priv, Codec::FnDsa1024Priv];
 
 /// the list of ML-DSA key codecs supported for key generation
-pub const ML_DSA_KEY_CODECS: [Codec; 2] = [Codec::MlDsa65Priv, Codec::MlDsa87Priv];
+pub const ML_DSA_KEY_CODECS: [Codec; 2] = [Codec::Mldsa65Priv, Codec::Mldsa87Priv];
 
 /// the list of MAYO key codecs supported for key generation
 pub const MAYO_KEY_CODECS: [Codec; 4] = [
@@ -62,18 +62,18 @@ pub const MAYO_KEY_CODECS: [Codec; 4] = [
 
 /// the list of SLH-DSA key codecs (all 12 parameter sets)
 pub const SLH_DSA_KEY_CODECS: [Codec; 12] = [
-    Codec::SlhDsaSha2128FPriv,
-    Codec::SlhDsaSha2128SPriv,
-    Codec::SlhDsaSha2192FPriv,
-    Codec::SlhDsaSha2192SPriv,
-    Codec::SlhDsaSha2256FPriv,
-    Codec::SlhDsaSha2256SPriv,
-    Codec::SlhDsaShake128FPriv,
-    Codec::SlhDsaShake128SPriv,
-    Codec::SlhDsaShake192FPriv,
-    Codec::SlhDsaShake192SPriv,
-    Codec::SlhDsaShake256FPriv,
-    Codec::SlhDsaShake256SPriv,
+    Codec::SlhdsaSha2128FPriv,
+    Codec::SlhdsaSha2128SPriv,
+    Codec::SlhdsaSha2192FPriv,
+    Codec::SlhdsaSha2192SPriv,
+    Codec::SlhdsaSha2256FPriv,
+    Codec::SlhdsaSha2256SPriv,
+    Codec::SlhdsaShake128FPriv,
+    Codec::SlhdsaShake128SPriv,
+    Codec::SlhdsaShake192FPriv,
+    Codec::SlhdsaShake192SPriv,
+    Codec::SlhdsaShake256FPriv,
+    Codec::SlhdsaShake256SPriv,
 ];
 
 /// the list of ML-KEM key codecs supported for key generation
@@ -284,31 +284,31 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -434,31 +434,31 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -629,31 +629,31 @@ impl Views for Multikey {
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -766,31 +766,31 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -1052,31 +1052,31 @@ impl Views for Multikey {
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -1153,31 +1153,31 @@ impl Views for Multikey {
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
+            Codec::SlhdsaSha2128FPub
+            | Codec::SlhdsaSha2128SPub
+            | Codec::SlhdsaSha2192FPub
+            | Codec::SlhdsaSha2192SPub
+            | Codec::SlhdsaSha2256FPub
+            | Codec::SlhdsaSha2256SPub
+            | Codec::SlhdsaShake128FPub
+            | Codec::SlhdsaShake128SPub
+            | Codec::SlhdsaShake192FPub
+            | Codec::SlhdsaShake192SPub
+            | Codec::SlhdsaShake256FPub
+            | Codec::SlhdsaShake256SPub
+            | Codec::SlhdsaSha2128FPriv
+            | Codec::SlhdsaSha2128SPriv
+            | Codec::SlhdsaSha2192FPriv
+            | Codec::SlhdsaSha2192SPriv
+            | Codec::SlhdsaSha2256FPriv
+            | Codec::SlhdsaSha2256SPriv
+            | Codec::SlhdsaShake128FPriv
+            | Codec::SlhdsaShake128SPriv
+            | Codec::SlhdsaShake192FPriv
+            | Codec::SlhdsaShake192SPriv
+            | Codec::SlhdsaShake256FPriv
+            | Codec::SlhdsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
+            Codec::Mldsa65Pub | Codec::Mldsa65Priv | Codec::Mldsa87Pub | Codec::Mldsa87Priv => {
                 Ok(Box::new(ml_dsa::View::try_from(self)?))
             }
             Codec::Mayo1Pub
@@ -1299,7 +1299,7 @@ impl Builder {
                 );
                 sign_key
             }
-            Codec::MlDsa65Priv | Codec::MlDsa87Priv => {
+            Codec::Mldsa65Priv | Codec::Mldsa87Priv => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
@@ -1460,18 +1460,18 @@ impl Builder {
                     .as_bytes()
                     .to_vec()
             }
-            Codec::SlhDsaSha2128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128f>(),
-            Codec::SlhDsaSha2128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128s>(),
-            Codec::SlhDsaSha2192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192f>(),
-            Codec::SlhDsaSha2192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192s>(),
-            Codec::SlhDsaSha2256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256f>(),
-            Codec::SlhDsaSha2256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256s>(),
-            Codec::SlhDsaShake128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128f>(),
-            Codec::SlhDsaShake128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128s>(),
-            Codec::SlhDsaShake192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192f>(),
-            Codec::SlhDsaShake192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192s>(),
-            Codec::SlhDsaShake256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256f>(),
-            Codec::SlhDsaShake256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256s>(),
+            Codec::SlhdsaSha2128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128f>(),
+            Codec::SlhdsaSha2128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128s>(),
+            Codec::SlhdsaSha2192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192f>(),
+            Codec::SlhdsaSha2192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192s>(),
+            Codec::SlhdsaSha2256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256f>(),
+            Codec::SlhdsaSha2256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256s>(),
+            Codec::SlhdsaShake128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128f>(),
+            Codec::SlhdsaShake128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128s>(),
+            Codec::SlhdsaShake192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192f>(),
+            Codec::SlhdsaShake192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192s>(),
+            Codec::SlhdsaShake256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256f>(),
+            Codec::SlhdsaShake256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256s>(),
             _ => return Err(ConversionsError::UnsupportedCodec(codec).into()),
         };
         let mut attributes = Attributes::new();
@@ -1668,7 +1668,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::MlDsa65Pub,
+                        codec: Codec::Mldsa65Pub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1687,7 +1687,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::MlDsa87Pub,
+                        codec: Codec::Mldsa87Pub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1746,7 +1746,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2128FPub,
+                        codec: Codec::SlhdsaSha2128FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1765,7 +1765,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2128SPub,
+                        codec: Codec::SlhdsaSha2128SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1784,7 +1784,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2192FPub,
+                        codec: Codec::SlhdsaSha2192FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1803,7 +1803,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2192SPub,
+                        codec: Codec::SlhdsaSha2192SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1822,7 +1822,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2256FPub,
+                        codec: Codec::SlhdsaSha2256FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1841,7 +1841,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2256SPub,
+                        codec: Codec::SlhdsaSha2256SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1860,7 +1860,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake128FPub,
+                        codec: Codec::SlhdsaShake128FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1879,7 +1879,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake128SPub,
+                        codec: Codec::SlhdsaShake128SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1898,7 +1898,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake192FPub,
+                        codec: Codec::SlhdsaShake192FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1917,7 +1917,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake192SPub,
+                        codec: Codec::SlhdsaShake192SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1936,7 +1936,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake256FPub,
+                        codec: Codec::SlhdsaShake256FPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -1955,7 +1955,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake256SPub,
+                        codec: Codec::SlhdsaShake256SPub,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2163,7 +2163,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::MlDsa65Priv,
+                        codec: Codec::Mldsa65Priv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2182,7 +2182,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::MlDsa87Priv,
+                        codec: Codec::Mldsa87Priv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2241,7 +2241,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2128FPriv,
+                        codec: Codec::SlhdsaSha2128FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2260,7 +2260,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2128SPriv,
+                        codec: Codec::SlhdsaSha2128SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2279,7 +2279,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2192FPriv,
+                        codec: Codec::SlhdsaSha2192FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2298,7 +2298,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2192SPriv,
+                        codec: Codec::SlhdsaSha2192SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2317,7 +2317,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2256FPriv,
+                        codec: Codec::SlhdsaSha2256FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2336,7 +2336,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaSha2256SPriv,
+                        codec: Codec::SlhdsaSha2256SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2355,7 +2355,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake128FPriv,
+                        codec: Codec::SlhdsaShake128FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2374,7 +2374,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake128SPriv,
+                        codec: Codec::SlhdsaShake128SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2393,7 +2393,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake192FPriv,
+                        codec: Codec::SlhdsaShake192FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2412,7 +2412,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake192SPriv,
+                        codec: Codec::SlhdsaShake192SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2431,7 +2431,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake256FPriv,
+                        codec: Codec::SlhdsaShake256FPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -2450,7 +2450,7 @@ impl Builder {
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::KeyData, key_bytes.into());
                     Ok(Builder {
-                        codec: Codec::SlhDsaShake256SPriv,
+                        codec: Codec::SlhdsaShake256SPriv,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()

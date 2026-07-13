@@ -3,9 +3,9 @@ use crate::{
     mk::{self, Attributes},
     nonce, AttrId, Multikey, Nonce,
 };
+use core::fmt;
 use multi_codec::Codec;
 use multi_util::EncodedVarbytes;
-use core::fmt;
 use serde::{
     de::{Error, MapAccess, Visitor},
     Deserialize, Deserializer,

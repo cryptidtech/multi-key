@@ -11,14 +11,14 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
 };
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use fn_dsa::{
     sign_key_size, signature_size, vrfy_key_size, SigningKey as _, SigningKeyStandard,
     VerifyingKey as _, VerifyingKeyStandard, DOMAIN_NONE, FN_DSA_LOGN_512, HASH_ID_RAW,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_sig::{ms, Multisig, Views as SigViews};
 use zeroize::Zeroizing;
 
 const LOGN: u32 = FN_DSA_LOGN_512;

@@ -10,14 +10,14 @@ use crate::{
     KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
 };
 
+use elliptic_curve::sec1::ToSec1Point;
+use elliptic_curve::Generate;
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_sig::{ms, Multisig, Views as SigViews};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use multi_util::Varuint;
-use elliptic_curve::sec1::ToSec1Point;
-use elliptic_curve::Generate;
 use zeroize::Zeroizing;
 
 /// P-256: 32-byte secret

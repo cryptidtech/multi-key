@@ -8,14 +8,14 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
 };
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_trait::TryDecodeFrom;
-use multi_util::Varbytes;
 use ml_kem::{
     kem::{Decapsulate, Encapsulate},
     EncodedSizeUser, KemCore, MlKem768,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_trait::TryDecodeFrom;
+use multi_util::Varbytes;
 use sha2::{Digest, Sha512};
 use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::Zeroizing;

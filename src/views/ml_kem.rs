@@ -7,14 +7,14 @@ use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
 };
-use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_trait::TryDecodeFrom;
-use multi_util::Varbytes;
 use ml_kem::{
     kem::{Decapsulate, Encapsulate},
     EncodedSizeUser, KemCore, MlKem1024, MlKem768,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_trait::TryDecodeFrom;
+use multi_util::Varbytes;
 use zeroize::Zeroizing;
 
 const ML_KEM_SEED_LENGTH: usize = 64; // d (32) || z (32)
