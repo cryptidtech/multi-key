@@ -1,11 +1,11 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{error::NonceError, Error};
+use multi_base::Base;
+use multi_codec::Codec;
+use multi_trait::{Null, TryDecodeFrom};
+use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes};
 use core::fmt;
-use multibase::Base;
-use multicodec::Codec;
-use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes};
-use rand::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 /// the Nonce multicodec sigil
 pub const SIGIL: Codec = Codec::Nonce;
@@ -14,7 +14,7 @@ pub const SIGIL: Codec = Codec::Nonce;
 pub type EncodedNonce = BaseEncoded<Nonce>;
 
 /// a multicodec Nonce type
-#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Nonce {
     /// the random nonce bytes
     pub(crate) nonce: Vec<u8>,
@@ -24,6 +24,11 @@ impl Nonce {
     /// return the size of the nonce in bytes
     pub fn len(&self) -> usize {
         self.nonce.len()
+    }
+
+    /// check if the nonce is empty
+    pub fn is_empty(&self) -> bool {
+        self.nonce.is_empty()
     }
 }
 
@@ -61,7 +66,7 @@ impl From<Nonce> for Vec<u8> {
         // add the sigil
         v.append(&mut SIGIL.into());
         // add the nonce bytes
-        v.append(&mut Varbytes(val.nonce.clone()).into());
+        v.append(&mut Varbytes::new(val.nonce.clone()).into());
         v
     }
 }
@@ -120,7 +125,7 @@ pub struct Builder {
 
 impl Builder {
     /// build from random source
-    pub fn new_from_random_bytes(size: usize, rng: &mut (impl RngCore + CryptoRng)) -> Self {
+    pub fn new_from_random_bytes(size: usize, rng: &mut impl CryptoRng) -> Self {
         let mut bytes = vec![0; size];
         bytes.resize(size, 0u8);
         rng.fill_bytes(bytes.as_mut());
@@ -167,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand::rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
             .unwrap();
@@ -178,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_binary_roundtrip() {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand::rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
             .unwrap();
@@ -188,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_encoded_roundtrip() {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand::rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build_encoded()
             .unwrap();
@@ -200,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_nonce_multisig_roundtrip() {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand::rng();
         let mk = mk::Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
             .unwrap()
             .with_comment("test key")

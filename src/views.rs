@@ -1,22 +1,51 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{Error, Multikey};
-use multicodec::Codec;
-use multihash::Multihash;
-use multisig::Multisig;
+use multi_codec::Codec;
+use multi_hash::Multihash;
+use multi_sig::Multisig;
 use zeroize::Zeroizing;
 
 // algorithms implement different sets of view
 pub(crate) mod bcrypt;
 pub(crate) mod bls12381;
+pub(crate) mod bls12381_g1_fndsa512;
+pub(crate) mod bls12381_g1_mayo1;
+pub(crate) mod bls12381_g1_mayo2;
+pub(crate) mod bls12381_g1_mldsa65;
+pub(crate) mod bls12381_hybrid;
 pub(crate) mod chacha20;
+pub(crate) mod classic_mceliece;
+pub(crate) mod dkg_threshold;
 pub(crate) mod ed25519;
+pub(crate) mod ed25519_fndsa512;
+pub(crate) mod ed25519_mayo2;
+pub(crate) mod ed25519_mldsa65;
+pub(crate) mod fn_dsa;
+pub(crate) mod frodokem;
+pub(crate) mod frodokem_helper;
+pub(crate) mod mayo;
+pub(crate) mod ml_dsa;
+pub(crate) mod ml_kem;
+pub(crate) mod nist_p;
+pub(crate) mod rsa;
 pub(crate) mod secp256k1;
+pub(crate) mod slh_dsa;
+pub(crate) mod sntrup;
+/// Split (Shamir) threshold marker attributes and scheme classifier.
+pub mod threshold_marker;
+pub(crate) mod x25519;
+pub(crate) mod x25519_frodokem640;
+pub(crate) mod x25519_mceliece348864;
+pub(crate) mod x25519_mlkem768;
+pub(crate) mod x25519_sntrup761;
+
+// shared AEAD helper used by ml_kem, sntrup, classic_mceliece, x25519, and hybrid KEM views
+pub(crate) mod aead;
 
 ///
 /// Attributes views let you inquire about the Multikey and retrieve data
 /// associated with the particular view.
 ///
-
 /// trait for returning basic, general attributes about a Multikey
 pub trait AttrView {
     /// is this key encrypted
@@ -70,7 +99,7 @@ pub trait ThresholdAttrView {
     /// get the limit value for the multikey
     fn limit(&self) -> Result<usize, Error>;
     /// get the share identifier for the multikey
-    fn identifier(&self) -> Result<u8, Error>;
+    fn identifier(&self) -> Result<&[u8], Error>;
     /// get the codec-specific threshold data
     fn threshold_data(&self) -> Result<&[u8], Error>;
 }
@@ -79,7 +108,6 @@ pub trait ThresholdAttrView {
 /// The following key operations views are functions that generate new
 /// Multikeys, Multihashes, or Multisigs from the viewed Multikey (self)
 ///
-
 /// trait for encrypting and decrypting Multikeys
 pub trait CipherView {
     /// decrypt the secret_bytes from the viewed Multikey using the codec and
@@ -125,6 +153,39 @@ pub trait KdfView {
     fn derive_key(&self, passphrase: &[u8]) -> Result<Multikey, Error>;
 }
 
+/// trait for sealing (encrypting) data using a public encryption key
+pub trait SealView {
+    /// Seal (encrypt) plaintext using the public key and the specified AEAD codec.
+    ///
+    /// Returns `(sealed_bytes, optional_ephemeral_pub)`.  For ECDH-based schemes
+    /// (e.g. X25519) the second element is the sender's ephemeral public key,
+    /// which the caller should transmit alongside the sealed blob.  For
+    /// unidirectional PQ KEMs (ML-KEM, sntrup761, McEliece, BLS TimeCrypt, and
+    /// hybrid schemes) it is `None` because the ephemeral material is already
+    /// self-contained inside `sealed_bytes`.
+    fn seal(
+        &self,
+        plaintext: &[u8],
+        aead_codec: Codec,
+        aad: &[u8],
+    ) -> Result<(Vec<u8>, Option<Multikey>), Error>;
+}
+
+/// trait for opening (decrypting) data using a private encryption key
+pub trait OpenView {
+    /// Open (decrypt) a sealed message using the private key.
+    ///
+    /// `ephemeral` must be `Some(sender_ephemeral_pub)` for ECDH-based schemes
+    /// (e.g. X25519) and `None` for PQ KEMs that embed their ephemeral material
+    /// inside `sealed_msg`.
+    fn open(
+        &self,
+        sealed_msg: &[u8],
+        ephemeral: Option<&Multikey>,
+        aad: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>, Error>;
+}
+
 /// trait for digially signing data using a multikey
 pub trait SignView {
     /// try to create a Multisig by siging the passed-in data with the Multikey
@@ -139,6 +200,25 @@ pub trait ThresholdView {
     fn add_share(&self, share: &Multikey) -> Result<Multikey, Error>;
     /// reconstruct the key from teh shares
     fn combine(&self) -> Result<Multikey, Error>;
+}
+
+/// trait exposing higher-level DKG-shaped read-only metadata on a Multikey
+/// that participates in a threshold (t-of-n) key.
+///
+/// This is intentionally narrower than [`ThresholdAttrView`]: it returns
+/// already-decoded values (u16, owning Vec<u8>) suitable for direct consumption
+/// by application code, and includes [`is_threshold_key`] for cheap discrimination.
+pub trait ThresholdKeyView {
+    /// Get the group public key bytes for the t-of-n key.
+    fn group_pubkey(&self) -> Result<Vec<u8>, Error>;
+    /// Returns `true` if the underlying Multikey is part of a threshold key.
+    fn is_threshold_key(&self) -> bool;
+    /// Number of participants `n` in the t-of-n scheme.
+    fn participant_count(&self) -> Result<u16, Error>;
+    /// Threshold `t` in the t-of-n scheme.
+    fn threshold(&self) -> Result<u16, Error>;
+    /// VLAD bytes of the session owner.
+    fn owner_vlad(&self) -> Result<Vec<u8>, Error>;
 }
 
 /// trait for verifying digial signatures using a multikey
@@ -159,6 +239,8 @@ pub trait Views {
     fn kdf_attr_view<'a>(&'a self) -> Result<Box<dyn KdfAttrView + 'a>, Error>;
     /// Provide a read-only view of the threshold attributes in the viewed Multikey
     fn threshold_attr_view<'a>(&'a self) -> Result<Box<dyn ThresholdAttrView + 'a>, Error>;
+    /// Provide a read-only view of higher-level threshold key metadata in the viewed Multikey
+    fn threshold_key_view<'a>(&'a self) -> Result<Box<dyn ThresholdKeyView + 'a>, Error>;
     /// Provide an interface to do encryption/decryption of the viewed Multikey
     fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error>;
     /// Provide an interface to do key conversions from the viewe Multikey
@@ -167,6 +249,10 @@ pub trait Views {
     fn fingerprint_view<'a>(&'a self) -> Result<Box<dyn FingerprintView + 'a>, Error>;
     /// Provide an interface to do kdf operations from the viewed Multikey
     fn kdf_view<'a>(&'a self, kdf: &'a Multikey) -> Result<Box<dyn KdfView + 'a>, Error>;
+    /// Provide an interface to seal (encrypt) plaintext
+    fn seal_view<'a>(&'a self) -> Result<Box<dyn SealView + 'a>, Error>;
+    /// Provide an interface to open (decrypt) sealed data
+    fn open_view<'a>(&'a self) -> Result<Box<dyn OpenView + 'a>, Error>;
     /// Provide an interface to sign a message and return a Multisig
     fn sign_view<'a>(&'a self) -> Result<Box<dyn SignView + 'a>, Error>;
     /// Provide an interface to threshold operations on the Mutlikey

@@ -1,11 +1,11 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     mk::{self, Attributes},
     nonce, AttrId, Multikey, Nonce,
 };
+use multi_codec::Codec;
+use multi_util::EncodedVarbytes;
 use core::fmt;
-use multicodec::Codec;
-use multiutil::EncodedVarbytes;
 use serde::{
     de::{Error, MapAccess, Visitor},
     Deserialize, Deserializer,

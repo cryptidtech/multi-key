@@ -1,17 +1,17 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{AttributesError, CipherError, ConversionsError, KdfError, SignError, VerifyError},
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, Multikey, SignView, VerifyView, Views,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_trait::TryDecodeFrom;
+use multi_util::Varuint;
 use ed25519_dalek::{
     Signature, Signer, SigningKey, VerifyingKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
 };
-use multicodec::Codec;
-use multihash::{mh, Multihash};
-use multisig::{ms, Multisig, Views as SigViews};
-use multitrait::TryDecodeFrom;
-use multiutil::Varuint;
 use zeroize::Zeroizing;
 
 pub(crate) struct View<'a> {
@@ -150,7 +150,7 @@ impl<'a> FingerprintView for View<'a> {
             // get the key bytes
             let bytes = {
                 let kd = self.mk.data_view()?;
-                
+
                 kd.key_bytes()?
             };
             // hash the key bytes using the given codec
@@ -165,7 +165,7 @@ impl<'a> ConvView for View<'a> {
         // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -193,7 +193,7 @@ impl<'a> ConvView for View<'a> {
 
         let key_bytes = {
             let kd = pk.data_view()?;
-            
+
             kd.key_bytes()?
         };
 
@@ -214,7 +214,7 @@ impl<'a> ConvView for View<'a> {
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -256,7 +256,7 @@ impl<'a> SignView for View<'a> {
         // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -267,7 +267,7 @@ impl<'a> SignView for View<'a> {
                 .map_err(|_| {
                     ConversionsError::SecretKeyFailure("failed to get secret key bytes".to_string())
                 })?;
-            
+
             SigningKey::from_bytes(&bytes)
         };
 
@@ -290,7 +290,7 @@ impl<'a> VerifyView for View<'a> {
         let attr = self.mk.attr_view()?;
         let pubmk = if attr.is_secret_key() {
             let kc = self.mk.conv_view()?;
-            
+
             kc.to_public_key()?
         } else {
             self.mk.clone()
@@ -299,7 +299,7 @@ impl<'a> VerifyView for View<'a> {
         // get the secret key bytes
         let key_bytes = {
             let kd = pubmk.data_view()?;
-            
+
             kd.key_bytes()?
         };
 

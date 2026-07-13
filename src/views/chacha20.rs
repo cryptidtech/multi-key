@@ -1,15 +1,15 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{AttributesError, CipherError, KdfError},
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
     Multikey, Views,
 };
+use multi_codec::Codec;
+use multi_hash::{mh, Multihash};
+use multi_trait::TryDecodeFrom;
+use multi_util::Varuint;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use chacha20::{ChaCha20, Nonce};
-use multicodec::Codec;
-use multihash::{mh, Multihash};
-use multitrait::TryDecodeFrom;
-use multiutil::Varuint;
 use zeroize::Zeroizing;
 
 use super::bcrypt::SALT_LENGTH;
@@ -17,7 +17,7 @@ use super::bcrypt::SALT_LENGTH;
 pub const KEY_SIZE: usize = poly1305::KEY_SIZE;
 
 /// Return the length of the [Nonce]
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn nonce_length() -> usize {
     Nonce::default().len()
 }
@@ -92,6 +92,7 @@ impl<'a> CipherAttrView for View<'a> {
         Ok(Codec::Chacha20Poly1305)
     }
 
+    #[allow(deprecated)]
     fn nonce_bytes(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
         // try to look up the salt in the multikey attributes
         let nonce = self
@@ -100,8 +101,7 @@ impl<'a> CipherAttrView for View<'a> {
             .get(&AttrId::CipherNonce)
             .ok_or(CipherError::MissingNonce)?;
 
-        let nonce =
-            Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
+        let nonce = Nonce::clone_from_slice(nonce);
 
         Ok(nonce.to_vec().into())
     }
@@ -148,6 +148,7 @@ impl<'a> KdfAttrView for View<'a> {
 }
 
 impl<'a> CipherView for View<'a> {
+    #[allow(deprecated)]
     fn decrypt(&self) -> Result<Multikey, Error> {
         let cipher = self.cipher.ok_or(CipherError::MissingCodec)?;
         // make sure the viewed key is an encrypted secret key
@@ -163,7 +164,7 @@ impl<'a> CipherView for View<'a> {
         };
 
         // create the chacha nonce from the data
-        let n = Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
+        let n = Nonce::clone_from_slice(&nonce);
 
         // get the key data from the passed-in Multikey
         let key = {
@@ -176,8 +177,7 @@ impl<'a> CipherView for View<'a> {
         };
 
         // create the chacha key from the data
-        let k =
-            chacha20::Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
+        let k = chacha20::Key::clone_from_slice(&key);
 
         // get the encrypted key bytes from the viewed Multikey (self)
         let msg = {
@@ -185,15 +185,33 @@ impl<'a> CipherView for View<'a> {
             attr.key_bytes()?
         };
 
-        // // decrypt the key bytes
-        // let dec = chacha20poly1305::open(msg.as_slice(), None, &n, &k)
-        //     .map_err(|_| CipherError::DecryptionFailed)?;
-
-        let mut chacha = ChaCha20::new(&k, &n);
-
-        let mut dec = msg.clone();
-
-        chacha.apply_keystream(&mut dec);
+        // Authenticated decryption (ChaCha20Poly1305): the stored ciphertext is
+        // `plaintext || 16-byte Poly1305 tag`, so tampering or a wrong passphrase
+        // is rejected rather than silently yielding garbage key bytes.
+        //
+        // Legacy fallback: keys encrypted before authentication was added used
+        // bare ChaCha20 (no tag). If AEAD verification fails we retry the legacy
+        // path so existing keystores keep opening; re-encrypting a key upgrades
+        // it to the authenticated format.
+        let dec = {
+            use chacha20poly1305::aead::{Aead, KeyInit};
+            use chacha20poly1305::{ChaCha20Poly1305, Nonce as AeadNonce};
+            let opened = ChaCha20Poly1305::new_from_slice(&key)
+                .ok()
+                .and_then(|aead| {
+                    aead.decrypt(AeadNonce::from_slice(&nonce), msg.as_slice())
+                        .ok()
+                });
+            match opened {
+                Some(pt) => Zeroizing::new(pt),
+                None => {
+                    let mut chacha = ChaCha20::new(&k, &n);
+                    let mut legacy = msg.clone();
+                    chacha.apply_keystream(&mut legacy);
+                    legacy
+                }
+            }
+        };
 
         // create a new Multikey from the viewed Multikey (self) with the
         // decrypted key and none of the kdf or cipher attributes
@@ -209,6 +227,7 @@ impl<'a> CipherView for View<'a> {
         Ok(res)
     }
 
+    #[allow(deprecated)]
     fn encrypt(&self) -> Result<Multikey, Error> {
         let cipher = self.cipher.ok_or(CipherError::MissingCodec)?;
         // make sure the viewed key is not encrypted
@@ -225,8 +244,6 @@ impl<'a> CipherView for View<'a> {
             cattr.nonce_bytes()?
         };
 
-        let n = Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
-
         // get the key data from the passed-in Multikey
         let key = {
             let kd = cipher.data_view()?;
@@ -237,21 +254,26 @@ impl<'a> CipherView for View<'a> {
             key
         };
 
-        let k =
-            chacha20::Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
-
         // get the secret bytes from the viewed Multikey
         let msg = {
             let kd = self.mk.data_view()?;
             kd.secret_bytes()?
         };
 
-        let mut chacha = ChaCha20::new(&k, &n);
-
-        let mut enc = msg.clone();
-
-        // apply keystream (encrypt)
-        chacha.apply_keystream(&mut enc);
+        // Authenticated encryption (ChaCha20Poly1305): output is
+        // `ciphertext || 16-byte Poly1305 tag` so integrity is verified on
+        // decrypt. Same 32-byte key / 12-byte nonce as the bare cipher.
+        let enc = {
+            use chacha20poly1305::aead::{Aead, KeyInit};
+            use chacha20poly1305::{ChaCha20Poly1305, Nonce as AeadNonce};
+            let aead = ChaCha20Poly1305::new_from_slice(&key).map_err(|_| {
+                CipherError::EncryptionFailed("invalid cipher key length".to_string())
+            })?;
+            let ct = aead
+                .encrypt(AeadNonce::from_slice(&nonce), msg.as_slice())
+                .map_err(|_| CipherError::EncryptionFailed("AEAD seal failed".to_string()))?;
+            Zeroizing::new(ct)
+        };
 
         // prepare the cipher attributes
         let cattr = cipher.cipher_attr_view()?;

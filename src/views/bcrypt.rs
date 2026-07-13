@@ -1,7 +1,7 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{error::KdfError, AttrId, Error, KdfAttrView, KdfView, Multikey, Views};
-use multicodec::Codec;
-use multiutil::Varuint;
+use multi_codec::Codec;
+use multi_util::Varuint;
 use zeroize::Zeroizing;
 
 /// constants for Bcrypt
@@ -42,7 +42,7 @@ impl<'a> KdfView for View<'a> {
         // get the key length from the viewed Multikey
         let key_length = {
             let cattr = self.mk.cipher_attr_view()?;
-            
+
             cattr.key_length()?
         };
 
@@ -50,13 +50,8 @@ impl<'a> KdfView for View<'a> {
         let mut key: Zeroizing<Vec<u8>> = vec![0; key_length].into();
 
         // derive the key
-        bcrypt_pbkdf::bcrypt_pbkdf(
-            passphrase,
-            &salt,
-            rounds as u32,
-            key.as_mut_slice(),
-        )
-        .map_err(KdfError::Bcrypt)?;
+        bcrypt_pbkdf::bcrypt_pbkdf(passphrase, &salt, rounds as u32, key.as_mut_slice())
+            .map_err(KdfError::Bcrypt)?;
 
         // prepare the attributes
         let kdf_codec: Vec<u8> = kdf.codec.into();

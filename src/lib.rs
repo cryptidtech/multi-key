@@ -1,5 +1,70 @@
-// SPDX-License-Idnetifier: Apache-2.0
-//! Multikey Crate
+// SPDX-License-Identifier: Apache-2.0
+//! # multi-key
+//!
+//! Self-describing cryptographic key implementation supporting multiple key types
+//! and formats including public keys, private keys, encrypted keys, and threshold keys.
+//!
+//! ## Overview
+//!
+//! This crate provides multikey functionality for creating and managing self-describing
+//! cryptographic keys with support for:
+//! - Ed25519, Secp256k1, and BLS12-381 key schemes
+//! - Public and private key pairs
+//! - Key encryption and decryption
+//! - Threshold key sharing (Shamir Secret Sharing)
+//! - SSH key format conversion
+//! - Nonce generation
+//!
+//! ## Quick Start
+//!
+//! ### Generating a Key Pair
+//!
+//! ```rust
+//! use multi_key::Builder;
+//! use multi_codec::Codec;
+//!
+//! let mut rng = rand::rng();
+//! let multikey = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+//!     .unwrap()
+//!     .try_build()
+//!     .unwrap();
+//! ```
+//!
+//! ### Encoding and Decoding
+//!
+//! ```rust
+//! use multi_key::{Builder, Multikey};
+//! use multi_codec::Codec;
+//!
+//! let mut rng = rand::rng();
+//! let mk1 = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+//!     .unwrap()
+//!     .try_build()
+//!     .unwrap();
+//!
+//! // Encode to bytes
+//! let bytes: Vec<u8> = mk1.clone().into();
+//!
+//! // Decode from bytes
+//! let mk2 = Multikey::try_from(bytes.as_ref()).unwrap();
+//! assert_eq!(mk1, mk2);
+//! ```
+//!
+//! ## Features
+//!
+//! - **`serde`** (default): Enables serde serialization
+//! - **`wasm`**: Enables WebAssembly support with getrandom/js
+//!
+//! ## Security
+//!
+//! - Private keys are automatically zeroized on drop
+//! - Debug output redacts sensitive key material
+//! - Thread-safe for concurrent operations
+//!
+//! ## Supported Key Types
+//!
+//! See [`KEY_CODECS`] for the complete list of supported key algorithms.
+
 #![warn(missing_docs)]
 #![deny(
     trivial_casts,
@@ -24,28 +89,56 @@ pub mod kdf;
 
 /// Key views
 pub mod views;
+pub use views::threshold_marker::{
+    self, group_public_key, participants, set_group_public_key, set_participants, threshold_kind,
+    threshold_params, MarkerView, ThresholdParticipant, ThresholdScheme,
+};
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
-    KdfView, SignView, ThresholdAttrView, ThresholdView, VerifyView, Views,
+    KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdKeyView, ThresholdView,
+    VerifyView, Views,
 };
+
+/// Key splitting / recombination (verifiable threshold shares)
+pub mod keysplit;
 
 /// Multikey type and functions
 pub mod mk;
-pub use mk::{Builder, EncodedMultikey, Multikey, KEY_CODECS, KEY_SHARE_CODECS};
+pub use mk::{
+    Builder, EncodedMultikey, Multikey, FN_DSA_KEY_CODECS, KEY_CODECS, KEY_SHARE_CODECS,
+    ML_DSA_KEY_CODECS, ML_KEM_KEY_CODECS, SLH_DSA_KEY_CODECS, X25519_KEY_CODECS,
+};
 
 /// Nonce type
 pub mod nonce;
 pub use nonce::{EncodedNonce, Nonce};
 
+// Re-export EncodingInfo for consumers of Nonce who need the encoding() method
+pub use multi_util::EncodingInfo;
+
+/// Type-safe wrappers for key components
+pub mod types;
+pub use types::{KeyScheme, PrivateKeyBytes, PublicKeyBytes};
+
 /// Serde serialization
 #[cfg(feature = "serde")]
 pub mod serde;
 
-/// ...and in the darkness bind them
+/// Commonly used items
+///
+/// ```
+/// use multi_key::prelude::*;
+///
+/// let mut rng = rand::rng();
+/// let mk = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+///     .unwrap()
+///     .try_build()
+///     .unwrap();
+/// ```
 pub mod prelude {
     pub use super::*;
     /// re-exports
-    pub use multibase::Base;
-    pub use multicodec::Codec;
-    pub use multiutil::BaseEncoded;
+    pub use multi_base::Base;
+    pub use multi_codec::Codec;
+    pub use multi_util::BaseEncoded;
 }

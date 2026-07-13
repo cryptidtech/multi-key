@@ -1,7 +1,7 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{mk::Attributes, AttrId, Error, Multikey};
-use multicodec::Codec;
-use rand::{CryptoRng, RngCore};
+use multi_codec::Codec;
+use rand_core::CryptoRng;
 use zeroize::Zeroizing;
 
 /// Builder for creating a Multikey intended for encryption/decryption of other
@@ -49,7 +49,7 @@ impl Builder {
     }
 
     /// add a random nonce for cipher
-    pub fn with_random_nonce(mut self, len: usize, rng: &mut (impl RngCore + CryptoRng)) -> Self {
+    pub fn with_random_nonce(mut self, len: usize, rng: &mut impl CryptoRng) -> Self {
         // heap allocate a buffer to receive the random nonce
         let mut buf: Zeroizing<Vec<u8>> = vec![0; len].into();
         rng.fill_bytes(buf.as_mut_slice());
@@ -111,7 +111,7 @@ mod tests {
             .unwrap();
 
         // generate a random secret key
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand::rng();
         let mk = mk::Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
             .unwrap()
             .with_comment("test key")
