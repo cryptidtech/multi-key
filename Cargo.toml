@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
@@ -18,15 +18,9 @@ wasm = ["getrandom/wasm_js"]
 aes-gcm = "0.10"
 bcrypt-pbkdf = "0.10"
 blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
+curve25519-dalek = { version = "5.0.0", features = ["group"] }
 # blsful configured per-target below (blst for native, rust for wasm)
-mceliece348864 = { version = "1.0" }
 frodo-kem-rs = { version = "0.7", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
-multi-base = { version = "1.0", path = "../multi-base" }
-multi-codec = { version = "1.0", path = "../multi-codec" }
-multi-hash = { version = "1.0", path = "../multi-hash" }
-multi-sig = { version = "1.0", path = "../multi-sig" }
-multi-trait = { version = "1.0", path = "../multi-trait" }
-multi-util = { version = "1.0", path = "../multi-util" }
 chacha20 = "0.9"
 chacha20poly1305 = "0.10"
 ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"] }
@@ -36,8 +30,15 @@ getrandom = { version = "0.4", features = ["sys_rng"] }
 hex = "0.4"
 hkdf = "0.12"
 k256 = { version = "0.14", features = ["ecdh"] }
+mceliece348864 = { version = "1.0" }
 ml-dsa = "0.1.1"
 ml-kem = { version = "0.2", features = ["deterministic"] }
+multi-base = "1.0"
+multi-codec = "1.0"
+multi-hash = "1.0"
+multi-sig = "1.0"
+multi-trait = "1.0"
+multi-util = "1.0"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
@@ -58,6 +59,7 @@ rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"
 rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
 sec1 = "0.8"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
+serde_cbor = "0.11"
 sha2 = "0.10"
 signature = "3"
 slh-dsa = "0.2.0-rc.5"
@@ -66,9 +68,7 @@ ssh-encoding = "0.3"
 thiserror = { version = "2.0" }
 typenum = "1.17"
 unsigned-varint = { version = "0.8", features = ["std"] }
-serde_cbor = "0.11"
 vsss-rs = "6.0.0-rc2"
-curve25519-dalek = { version = "5.0.0", features = ["group"] }
 x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
 zeroize = "1"
 
