@@ -1,6 +1,6 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 /// Errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
     /// Attributes error
@@ -18,6 +18,9 @@ pub enum Error {
     /// Nonce error
     #[error(transparent)]
     Nonce(#[from] NonceError),
+    /// Seal error
+    #[error(transparent)]
+    Seal(#[from] SealError),
     /// Sign error
     #[error(transparent)]
     Sign(#[from] SignError),
@@ -27,25 +30,28 @@ pub enum Error {
     /// Verify error
     #[error(transparent)]
     Verify(#[from] VerifyError),
+    /// Key split/combine error
+    #[error("key split error: {0}")]
+    KeySplit(String),
 
     /// Multibase conversion error
     #[error(transparent)]
-    Multibase(#[from] multibase::Error),
+    Multibase(#[from] multi_base::Error),
     /// Multicodec decoding error
     #[error(transparent)]
-    Multicodec(#[from] multicodec::Error),
+    Multicodec(#[from] multi_codec::Error),
     /// Multiutil error
     #[error(transparent)]
-    Multiutil(#[from] multiutil::Error),
+    Multiutil(#[from] multi_util::Error),
     /// Multisig error
     #[error(transparent)]
-    Multisig(#[from] multisig::Error),
+    Multisig(#[from] multi_sig::Error),
     /// Multitrait error
     #[error(transparent)]
-    Multitrait(#[from] multitrait::Error),
+    Multitrait(#[from] multi_trait::Error),
     /// Multihash error
     #[error(transparent)]
-    Multihash(#[from] multihash::Error),
+    Multihash(#[from] multi_hash::Error),
 
     /// Utf8 error
     #[error(transparent)]
@@ -62,18 +68,18 @@ pub enum Error {
 }
 
 /// Attributes errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum AttributesError {
     /// Error with the key codec
     #[error("Unsupported key codec: {0}")]
-    UnsupportedCodec(multicodec::Codec),
+    UnsupportedCodec(multi_codec::Codec),
     /// No key data attribute
     #[error("Key data unit missing")]
     MissingKey,
     /// Not a secret key
     #[error("Not a secret key {0}")]
-    NotSecretKey(multicodec::codec::Codec),
+    NotSecretKey(multi_codec::codec::Codec),
     /// Key is encrypted
     #[error("Key is encrypted")]
     EncryptedKey,
@@ -95,10 +101,25 @@ pub enum AttributesError {
     /// No threshold data
     #[error("Missing threshold data")]
     MissingThresholdData,
+    /// No group public key
+    #[error("Missing group public key")]
+    MissingGroupPublicKey,
+    /// No participant map
+    #[error("Missing threshold participants")]
+    MissingThresholdParticipants,
+    /// CBOR (de)serialization error for a threshold marker attribute
+    #[error("Threshold marker CBOR error: {0}")]
+    ThresholdMarkerCbor(String),
+    /// The threshold marker bundle carries no authenticating signature.
+    #[error("Missing threshold marker signature")]
+    MissingThresholdMarkerSig,
+    /// The threshold marker signature failed verification (tampered marker).
+    #[error("Threshold marker signature verification failed")]
+    ThresholdMarkerSigInvalid,
 }
 
 /// Conversions errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ConversionsError {
     /// Ssh key error
@@ -115,12 +136,12 @@ pub enum ConversionsError {
     UnsupportedAlgorithm(String),
     /// Error with the key codec
     #[error("Unsupported key codec: {0}")]
-    UnsupportedCodec(multicodec::Codec),
+    UnsupportedCodec(multi_codec::Codec),
 }
 
 /// SSH Encoding Errors that cannot be handled by thiserror since they may not use the std feature
 /// in the case of wasm32 target.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum SshErrors {
     /// Error from [ssh_key::Error]
     Key(ssh_key::Error),
@@ -162,12 +183,12 @@ impl From<ssh_encoding::LabelError> for SshErrors {
 }
 
 /// Cipher errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum CipherError {
     /// Error with the cipher codec
     #[error("Unsupported cipher codec: {0}")]
-    UnsupportedCodec(multicodec::Codec),
+    UnsupportedCodec(multi_codec::Codec),
     /// Missing codec
     #[error("Missing cipher codec")]
     MissingCodec,
@@ -198,7 +219,7 @@ pub enum CipherError {
 }
 
 /// Kdf errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum KdfError {
     /// Bcrypt PBKDF error
@@ -206,7 +227,7 @@ pub enum KdfError {
     Bcrypt(#[from] bcrypt_pbkdf::Error),
     /// Error with the KDF codec
     #[error("Unsupported KDF codec: {0}")]
-    UnsupportedCodec(multicodec::Codec),
+    UnsupportedCodec(multi_codec::Codec),
     /// Missing codec
     #[error("Missing KDF codec")]
     MissingCodec,
@@ -222,7 +243,7 @@ pub enum KdfError {
 }
 
 /// Nonce errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum NonceError {
     /// Missing sigil
@@ -233,8 +254,44 @@ pub enum NonceError {
     MissingBytes,
 }
 
+/// Seal/Open (encryption) errors created by this library
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SealError {
+    /// Not an encryption key
+    #[error("Not an encryption key")]
+    NotEncryptionKey,
+    /// Not a decapsulation (private) key
+    #[error("Not a decapsulation key")]
+    NotDecapsulationKey,
+    /// Not an encapsulation (public) key
+    #[error("Not an encapsulation key")]
+    NotEncapsulationKey,
+    /// Unsupported AEAD codec
+    #[error("Unsupported AEAD codec: {0}")]
+    UnsupportedAeadCodec(multi_codec::Codec),
+    /// Encapsulation failed
+    #[error("Encapsulation failed: {0}")]
+    EncapsulationFailed(String),
+    /// Decapsulation failed
+    #[error("Decapsulation failed: {0}")]
+    DecapsulationFailed(String),
+    /// AEAD seal failed
+    #[error("AEAD seal failed: {0}")]
+    AeadSealFailed(String),
+    /// AEAD open failed
+    #[error("AEAD open failed")]
+    AeadOpenFailed,
+    /// Invalid format
+    #[error("Invalid sealed message format: {0}")]
+    InvalidFormat(String),
+    /// Key derivation failed
+    #[error("Key derivation failed: {0}")]
+    KeyDerivationFailed(String),
+}
+
 /// Sign errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SignError {
     /// Not a signing key
@@ -249,7 +306,7 @@ pub enum SignError {
 }
 
 /// Threshold errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ThresholdError {
     /// Bls error
@@ -273,7 +330,7 @@ pub enum ThresholdError {
 }
 
 /// Verify errors created by this library
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum VerifyError {
     /// Missing signature
@@ -285,4 +342,58 @@ pub enum VerifyError {
     /// Bad signature
     #[error("Bad signature: {0}")]
     BadSignature(String),
+}
+
+impl Error {
+    /// Get the error kind as a string
+    pub fn kind(&self) -> &str {
+        match self {
+            Self::Attributes(_) => "Attributes",
+            Self::Conversions(_) => "Conversions",
+            Self::Cipher(_) => "Cipher",
+            Self::Kdf(_) => "Kdf",
+            Self::Nonce(_) => "Nonce",
+            Self::Seal(_) => "Seal",
+            Self::Sign(_) => "Sign",
+            Self::Threshold(_) => "Threshold",
+            Self::Verify(_) => "Verify",
+            Self::KeySplit(_) => "KeySplit",
+            Self::Multibase(_) => "Multibase",
+            Self::Multicodec(_) => "Multicodec",
+            Self::Multiutil(_) => "Multiutil",
+            Self::Multisig(_) => "Multisig",
+            Self::Multitrait(_) => "Multitrait",
+            Self::Multihash(_) => "Multihash",
+            Self::Utf8(_) => "Utf8",
+            Self::DuplicateAttribute(_) => "DuplicateAttribute",
+            Self::MissingSigil => "MissingSigil",
+            Self::UnsupportedAlgorithm(_) => "UnsupportedAlgorithm",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_kind() {
+        let err = Error::MissingSigil;
+        assert_eq!(err.kind(), "MissingSigil");
+    }
+
+    #[test]
+    fn test_error_display() {
+        let err = Error::MissingSigil;
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_error_send_sync() {
+        fn assert_send<T: Send>() {}
+        fn assert_sync<T: Sync>() {}
+
+        assert_send::<Error>();
+        assert_sync::<Error>();
+    }
 }

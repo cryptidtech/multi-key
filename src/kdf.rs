@@ -1,8 +1,8 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{mk::Attributes, AttrId, Error, Multikey};
-use multicodec::Codec;
-use multiutil::Varuint;
-use rand::{CryptoRng, RngCore};
+use multi_codec::Codec;
+use multi_util::Varuint;
+use rand_core::CryptoRng;
 use zeroize::Zeroizing;
 
 /// Multikey builder constructs kdf multikeys.
@@ -49,7 +49,7 @@ impl Builder {
     }
 
     /// add a random salt for the kdf
-    pub fn with_random_salt(mut self, len: usize, rng: &mut (impl RngCore + CryptoRng)) -> Self {
+    pub fn with_random_salt(mut self, len: usize, rng: &mut impl CryptoRng) -> Self {
         // heap allocate a buffer to receive the random salt
         let mut buf: Zeroizing<Vec<u8>> = vec![0; len].into();
         rng.fill_bytes(buf.as_mut_slice());

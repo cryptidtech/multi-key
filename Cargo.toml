@@ -1,57 +1,93 @@
 [package]
-name = "multikey"
-version = "1.0.7"
+name = "multi-key"
+version = "1.0.2"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
-repository = "https://github.com/cryptidtech/multikey.git"
+repository = "https://github.com/cryptidtech/multi-key.git"
 readme = "README.md"
 license = "Apache-2.0"
+keywords = ["multiformats", "multikey", "crypto", "post-quantum"]
+categories = ["cryptography", "encoding"]
 
 [features]
 default = ["serde"]
-wasm = ["getrandom/js"] # needed for CI testing on wasm32-unknown-unknown
+wasm = ["getrandom/wasm_js"]
 
 [dependencies]
+aes-gcm = "0.10"
 bcrypt-pbkdf = "0.10"
-blsful = "2.5"
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-elliptic-curve = "0.13"
-hex = "0.4"
-k256 = "0.13"
-multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
-multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multicodec.git" }
-multihash = { version = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
-multisig = { version = "^1.0", git = "https://github.com/cryptidtech/multisig.git" }
-multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait.git" }
-multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
-rand = "0.8"
-sec1 = "0.7"
-serde = { version = "1.0", default-features = false, features = [
-  "alloc",
-  "derive",
-], optional = true }
+blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
+curve25519-dalek = { version = "5.0.0", features = ["group"] }
+# blsful configured per-target below (blst for native, rust for wasm)
+frodo-kem-rs = { version = "0.7", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
 chacha20 = "0.9"
+chacha20poly1305 = "0.10"
+ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"] }
+elliptic-curve = "0.14"
+fn-dsa = "0.3"
+getrandom = { version = "0.4", features = ["sys_rng"] }
+hex = "0.4"
+hkdf = "0.12"
+k256 = { version = "0.14", features = ["ecdh"] }
+mceliece348864 = { version = "1.0" }
+ml-dsa = "0.1.1"
+ml-kem = { version = "0.2", features = ["deterministic"] }
+multi-base = "1.0"
+multi-codec = "1.0"
+multi-hash = "1.0"
+multi-sig = "1.0"
+multi-trait = "1.0"
+multi-util = "1.0"
+p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 poly1305 = "0.8"
-thiserror = "1.0"
+pq-mayo = "0.5.0"
+# RustCrypto 0.14 stack (vsss-rs 6, elliptic-curve 0.14, ed25519-dalek 3) is on
+# rand_core 0.10; pin the rand ecosystem to the matching majors so RNGs thread
+# through cleanly (overrides the workspace rand 0.8 used by not-yet-migrated crates).
+rand = "0.10"
+# rand_chacha stays 0.3 (rand_core 0.6): the only ChaCha use is deterministic
+# PQC keygen (classic-mceliece), which is on the rand_core 0.6 island below.
+rand_chacha = "0.3"
+rand_core = "0.10"
+# The PQC crates (fn-dsa, ml-dsa, ml-kem, slh-dsa, sntrup) are still on rand_core
+# 0.6 (fn-dsa exposes its own RngCore/CryptoRng traits); keep a 0.6 OsRng for
+# those sites while the curve stack above uses rand_core 0.10.
+rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
+rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
+sec1 = "0.8"
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
+serde_cbor = "0.11"
+sha2 = "0.10"
+signature = "3"
+slh-dsa = "0.2.0-rc.5"
+sntrup = "0.3.0"
+ssh-encoding = "0.3"
+thiserror = { version = "2.0" }
 typenum = "1.17"
 unsigned-varint = { version = "0.8", features = ["std"] }
-vsss-rs = "3.4"
-zeroize = "1.7"
-ssh-encoding = { version = "0.2" }
+vsss-rs = "6.0.0-rc2"
+x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
+zeroize = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-ssh-key = { version = "0.6", default-features = false, features = [
-  "alloc",
-  "ecdsa",
-  "ed25519",
-] }
-getrandom = { version = "0.2", features = ["js"], optional = true }
+blsful = { version = "4.0.0-rc1", default-features = false, features = ["rust"] }
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ssh-key = { version = "0.6", features = ["alloc", "crypto", "ed25519"] }
+blsful = { version = "4.0.0-rc1", default-features = false, features = ["blst"] }
+ssh-key = { version = "0.7.0-rc.11", features = ["alloc", "crypto", "ed25519"] }
 
 [dev-dependencies]
-serde_test = "1.0"
+criterion = { version = "0.8", features = ["html_reports"] }
+proptest = "1.4"
 serde_cbor = "0.11"
 serde_json = "1.0"
+serde_test = "1.0"
+
+[[bench]]
+name = "multikey_bench"
+harness = false
+path = "benches/multikey_bench.rs"

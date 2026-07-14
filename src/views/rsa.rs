@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
+//! RSA-2048/3072/4096 multikey view — signing (PSS SHA-256) + encryption (RSA-OAEP + AEAD).
+
 use crate::{
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
-    views::aead,
+    views::{aead, Views},
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
 };
 
-use elliptic_curve::sec1::ToSec1Point;
-use elliptic_curve::Generate;
-use k256::ecdsa::{
-    signature::{Signer, Verifier},
-    Signature, SigningKey, VerifyingKey,
+use ::rsa::sha2::Sha256;
+use ::rsa::{
+    pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPublicKey},
+    pss, Oaep, RsaPrivateKey, RsaPublicKey,
 };
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
@@ -22,12 +23,56 @@ use multi_util::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 
-/// the number of bytes in an secp256k1 secret key
-pub const SECRET_KEY_LENGTH: usize = 32;
-/// the number of bytes in an secp256k1 public key
-pub const PUBLIC_KEY_LENGTH: usize = 33;
-/// the RFC 4251 algorithm name for SSH compatibility
-pub const ALGORITHM_NAME: &str = "secp256k1@multikey";
+/// OsRng compatible with rsa 0.10 (rand_core 0.10) using getrandom 0.4
+pub(crate) struct OsRng;
+
+impl ::rsa::rand_core::TryRng for OsRng {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        let mut buf = [0u8; 4];
+        getrandom::fill(&mut buf).expect("getrandom failed");
+        Ok(u32::from_le_bytes(buf))
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        let mut buf = [0u8; 8];
+        getrandom::fill(&mut buf).expect("getrandom failed");
+        Ok(u64::from_le_bytes(buf))
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        getrandom::fill(dest).expect("getrandom failed");
+        Ok(())
+    }
+}
+
+impl ::rsa::rand_core::TryCryptoRng for OsRng {}
+
+fn pub_codec(codec: Codec) -> Codec {
+    match codec {
+        Codec::Rsa2048Pub | Codec::Rsa2048Priv => Codec::Rsa2048Pub,
+        Codec::Rsa3072Pub | Codec::Rsa3072Priv => Codec::Rsa3072Pub,
+        Codec::Rsa4096Pub | Codec::Rsa4096Priv => Codec::Rsa4096Pub,
+        _ => codec,
+    }
+}
+
+fn is_priv(codec: Codec) -> bool {
+    matches!(
+        codec,
+        Codec::Rsa2048Priv | Codec::Rsa3072Priv | Codec::Rsa4096Priv
+    )
+}
+
+fn is_pub(codec: Codec) -> bool {
+    matches!(
+        codec,
+        Codec::Rsa2048Pub | Codec::Rsa3072Pub | Codec::Rsa4096Pub
+    )
+}
+
+const ALGORITHM_NAME: &str = "rsa-sha256@multikey";
 
 pub(crate) struct View<'a> {
     mk: &'a Multikey,
@@ -52,11 +97,11 @@ impl<'a> AttrView for View<'a> {
     }
 
     fn is_secret_key(&self) -> bool {
-        self.mk.codec == Codec::Secp256K1Priv
+        is_priv(self.mk.codec)
     }
 
     fn is_public_key(&self) -> bool {
-        self.mk.codec == Codec::Secp256K1Pub
+        is_pub(self.mk.codec)
     }
 
     fn is_secret_key_share(&self) -> bool {
@@ -65,8 +110,6 @@ impl<'a> AttrView for View<'a> {
 }
 
 impl<'a> DataView for View<'a> {
-    /// For Secp256K1Pub and Secp256K1Priv Multikey values, the key data is stored
-    /// using the AttrId::Data attribute id.
     fn key_bytes(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
         let key = self
             .mk
@@ -76,7 +119,6 @@ impl<'a> DataView for View<'a> {
         Ok(key.clone())
     }
 
-    /// Check to see if this is a secret key before returning the key bytes
     fn secret_bytes(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
         if !self.is_secret_key() {
             return Err(AttributesError::NotSecretKey(self.mk.codec).into());
@@ -90,7 +132,6 @@ impl<'a> DataView for View<'a> {
 
 impl<'a> CipherAttrView for View<'a> {
     fn cipher_codec(&self) -> Result<Codec, Error> {
-        // try to look up the cipher codec in the multikey attributes
         let codec = self
             .mk
             .attributes
@@ -100,7 +141,6 @@ impl<'a> CipherAttrView for View<'a> {
     }
 
     fn nonce_bytes(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
-        // try to look up the salt in the multikey attributes
         self.mk
             .attributes
             .get(&AttrId::CipherNonce)
@@ -109,7 +149,6 @@ impl<'a> CipherAttrView for View<'a> {
     }
 
     fn key_length(&self) -> Result<usize, Error> {
-        // try to look up the cipher key length in the multikey attributes
         let key_length = self
             .mk
             .attributes
@@ -121,7 +160,6 @@ impl<'a> CipherAttrView for View<'a> {
 
 impl<'a> KdfAttrView for View<'a> {
     fn kdf_codec(&self) -> Result<Codec, Error> {
-        // try to look up the kdf codec in the multikey attributes
         let codec = self
             .mk
             .attributes
@@ -131,7 +169,6 @@ impl<'a> KdfAttrView for View<'a> {
     }
 
     fn salt_bytes(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
-        // try to look up the salt in the multikey attributes
         self.mk
             .attributes
             .get(&AttrId::KdfSalt)
@@ -140,7 +177,6 @@ impl<'a> KdfAttrView for View<'a> {
     }
 
     fn rounds(&self) -> Result<usize, Error> {
-        // try to look up the rounds in the multikey attributes
         let rounds = self
             .mk
             .attributes
@@ -154,53 +190,39 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let attr = self.mk.attr_view()?;
         if attr.is_secret_key() {
-            // convert to a public key Multikey
             let pk = self.to_public_key()?;
-            // get a conversions view on the public key
             let fp = pk.fingerprint_view()?;
-            // get the fingerprint
-            let f = fp.fingerprint(codec)?;
-            Ok(f)
+            fp.fingerprint(codec)
         } else {
-            // get the key bytes
             let bytes = {
                 let kd = self.mk.data_view()?;
-
                 kd.key_bytes()?
             };
-            // hash the key bytes using the given codec
             Ok(mh::Builder::new_from_bytes(codec, bytes)?.try_build()?)
         }
     }
 }
 
 impl<'a> ConvView for View<'a> {
-    /// try to convert a secret key to a public key
     fn to_public_key(&self) -> Result<Multikey, Error> {
-        // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-
             kd.secret_bytes()?
         };
 
-        // build an secp256k1 signing key so that we can derive the verifying key
-        let bytes: [u8; SECRET_KEY_LENGTH] = secret_bytes.as_slice()[..SECRET_KEY_LENGTH]
-            .try_into()
-            .map_err(|_| {
-                ConversionsError::SecretKeyFailure("failed to get secret key bytes".to_string())
-            })?;
-        let secret_key = SigningKey::from_bytes(&bytes.into())
+        let private_key = RsaPrivateKey::from_pkcs1_der(&secret_bytes)
             .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-        // get the public key and build a Multikey out of it
-        let public_key = secret_key.verifying_key();
-        Builder::new(Codec::Secp256K1Pub)
+        let public_key = private_key.to_public_key();
+        let pub_der = public_key
+            .to_pkcs1_der()
+            .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
+
+        Builder::new(pub_codec(self.mk.codec))
             .with_comment(&self.mk.comment)
-            .with_key_bytes(&public_key.to_sec1_bytes())
+            .with_key_bytes(&pub_der)
             .try_build()
     }
 
-    /// try to convert a Multikey to an ssh_key::PublicKey
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
         let mut pk = self.mk.clone();
         if self.is_secret_key() {
@@ -209,7 +231,6 @@ impl<'a> ConvView for View<'a> {
 
         let key_bytes = {
             let kd = pk.data_view()?;
-
             kd.key_bytes()?
         };
 
@@ -232,11 +253,9 @@ impl<'a> ConvView for View<'a> {
         ))
     }
 
-    /// try to convert a Multikey to an ssh_key::PrivateKey
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-
             kd.secret_bytes()?
         };
 
@@ -251,7 +270,6 @@ impl<'a> ConvView for View<'a> {
         let pk = self.to_public_key()?;
         let key_bytes = {
             let kd = pk.data_view()?;
-
             kd.key_bytes()?
         };
 
@@ -281,39 +299,30 @@ impl<'a> ConvView for View<'a> {
 }
 
 impl<'a> SignView for View<'a> {
-    /// try to create a Multisig by siging the passed-in data with the Multikey
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
         let attr = self.mk.attr_view()?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
-        // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-
             kd.secret_bytes()?
         };
 
-        let secret_key = {
-            // build an secp256k1 signing key so that we can derive the verifying key
-            let bytes: [u8; SECRET_KEY_LENGTH] = secret_bytes.as_slice()[..SECRET_KEY_LENGTH]
-                .try_into()
-                .map_err(|_| {
-                    ConversionsError::SecretKeyFailure("failed to get secret key bytes".to_string())
-                })?;
+        let private_key = RsaPrivateKey::from_pkcs1_der(&secret_bytes)
+            .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
 
-            SigningKey::from_bytes(&bytes.into())
-                .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
-        };
-
-        // sign the data
-        let signature: Signature = secret_key
-            .try_sign(msg)
+        use ::rsa::signature::RandomizedSigner;
+        let signing_key = pss::SigningKey::<Sha256>::new(private_key);
+        let signature = signing_key
+            .try_sign_with_rng(&mut OsRng, msg)
             .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-        let mut ms =
-            ms::Builder::new(Codec::Es256KMsig).with_signature_bytes(&signature.to_bytes());
+        use ::rsa::signature::SignatureEncoding;
+        let sig_bytes = signature.to_bytes();
+
+        let mut ms = ms::Builder::new(Codec::Rs256Msig).with_signature_bytes(&sig_bytes);
         if combined {
             ms = ms.with_message_bytes(&msg);
         }
@@ -322,44 +331,26 @@ impl<'a> SignView for View<'a> {
 }
 
 impl<'a> VerifyView for View<'a> {
-    /// try to verify a Multisig using the Multikey
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
         let attr = self.mk.attr_view()?;
         let pubmk = if attr.is_secret_key() {
             let kc = self.mk.conv_view()?;
-
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
-        // get the secret key bytes
         let key_bytes = {
             let kd = pubmk.data_view()?;
-
             kd.key_bytes()?
         };
 
-        // build an secp256k1 verifying key so that we can derive the verifying key
-        let bytes: [u8; PUBLIC_KEY_LENGTH] = key_bytes.as_slice()[..PUBLIC_KEY_LENGTH]
-            .try_into()
-            .map_err(|_| {
-            ConversionsError::PublicKeyFailure("failed to get public key bytes".to_string())
-        })?;
-
-        // create the verifying key
-        let verifying_key = VerifyingKey::from_sec1_bytes(&bytes)
+        let public_key = RsaPublicKey::from_pkcs1_der(&key_bytes)
             .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
 
-        // get the signature data
         let sv = multisig.data_view()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
-        // create the signature
-        let sig = Signature::from_slice(sig.as_slice())
-            .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
-
-        // get the message
         let msg = if let Some(msg) = msg {
             msg
         } else if !multisig.message.is_empty() {
@@ -368,53 +359,58 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        verifying_key.verify(msg, &sig).map_err(|e| {
-            println!("{}", e);
-            VerifyError::BadSignature(e.to_string())
-        })?;
+        use ::rsa::signature::Verifier;
+        let verifying_key = pss::VerifyingKey::<Sha256>::new(public_key);
+        let signature = pss::Signature::try_from(sig.as_slice())
+            .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
+
+        verifying_key
+            .verify(msg, &signature)
+            .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
 
         Ok(())
     }
 }
 
-// ----------------------------------------------------------------------------
-// secp256k1 ECIES (ECDH + HKDF + AEAD).
-//
-// Same scheme as the NIST-P and X25519 ECIES paths: an ephemeral keypair is
-// generated per seal, ECDH against the recipient's public key yields a shared
-// secret, HKDF-SHA512 expands it into an AEAD key, and the ephemeral public key
-// is carried externally as a Multikey.
-// ----------------------------------------------------------------------------
+// --- Seal / Open: RSA-OAEP + AEAD hybrid encryption ---
 
-/// HKDF info string binding the derived key to the secp256k1 ECIES scheme.
-const SECP256K1_SEAL_INFO: &[u8] = b"secp256k1-ecies-seal";
-
-/// AEAD codecs allowed for secp256k1 ECIES sealing.
-fn is_secp_aead_allowed(codec: Codec) -> bool {
+/// Allowed AEAD codecs for RSA hybrid encryption
+fn is_rsa_aead_allowed(codec: Codec) -> bool {
     matches!(
         codec,
         Codec::AesGcm128 | Codec::AesGcm256 | Codec::Chacha20Poly1305 | Codec::Xchacha20Poly1305
     )
 }
 
-/// Encode a sealed message: `[aead_codec Codec][nonce Varbytes][ct+tag Varbytes]`.
-fn encode_sealed(aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
+/// Encode: [rsa_oaep_ciphertext Varbytes][aead_codec Codec][nonce Varbytes][ciphertext Varbytes]
+fn encode_sealed(rsa_ct: &[u8], aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
+    out.append(&mut Varbytes::new(rsa_ct.to_vec()).into());
     out.append(&mut aead_codec.into());
     out.append(&mut Varbytes::new(nonce.to_vec()).into());
     out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
     out
 }
 
-/// Decode a sealed message produced by [`encode_sealed`].
-fn decode_sealed(data: &[u8]) -> Result<(Codec, Vec<u8>, Vec<u8>), SealError> {
-    let (aead_codec, ptr) = Codec::try_decode_from(data)
-        .map_err(|_| SealError::InvalidFormat("missing aead codec".into()))?;
+/// RSA-OAEP ciphertext, AEAD codec, nonce, ciphertext+tag
+type SealedParts = (Vec<u8>, Codec, Vec<u8>, Vec<u8>);
+
+/// Decode sealed message
+fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
+    let (rsa_ct, ptr) = Varbytes::try_decode_from(data)
+        .map_err(|_| SealError::InvalidFormat("missing RSA-OAEP ciphertext".into()))?;
+    let (aead_codec, ptr) = Codec::try_decode_from(ptr)
+        .map_err(|_| SealError::InvalidFormat("missing AEAD codec".into()))?;
     let (nonce, ptr) = Varbytes::try_decode_from(ptr)
         .map_err(|_| SealError::InvalidFormat("missing nonce".into()))?;
     let (ct_tag, _) = Varbytes::try_decode_from(ptr)
         .map_err(|_| SealError::InvalidFormat("missing ciphertext".into()))?;
-    Ok((aead_codec, nonce.to_inner(), ct_tag.to_inner()))
+    Ok((
+        rsa_ct.to_inner(),
+        aead_codec,
+        nonce.to_inner(),
+        ct_tag.to_inner(),
+    ))
 }
 
 impl<'a> SealView for View<'a> {
@@ -427,35 +423,30 @@ impl<'a> SealView for View<'a> {
         if !self.is_public_key() {
             return Err(SealError::NotEncapsulationKey.into());
         }
-        if !is_secp_aead_allowed(aead_codec) {
+        if !is_rsa_aead_allowed(aead_codec) {
             return Err(SealError::UnsupportedAeadCodec(aead_codec).into());
         }
 
         let pub_bytes = self.key_bytes()?;
-        let recipient = k256::PublicKey::from_sec1_bytes(&pub_bytes)
+        let public_key = RsaPublicKey::from_pkcs1_der(&pub_bytes)
             .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
 
-        let eph = k256::ecdh::EphemeralSecret::generate_from_rng(&mut rand::rng());
-        let eph_pub = eph.public_key();
-        let shared = eph.diffie_hellman(&recipient);
-
+        // Generate random AEAD key
         let key_len = aead::key_size(aead_codec)?;
-        let aead_key = aead::derive_aead_key(
-            shared.raw_secret_bytes().as_slice(),
-            SECP256K1_SEAL_INFO,
-            key_len,
-        )?;
+        let mut aead_key = vec![0u8; key_len];
+        use ::rsa::rand_core::Rng;
+        OsRng.fill_bytes(&mut aead_key);
+
+        // Encrypt AEAD key with RSA-OAEP
+        let padding = Oaep::<Sha256>::new();
+        let rsa_ct = public_key
+            .encrypt(&mut OsRng, padding, &aead_key)
+            .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+
+        // Encrypt plaintext with AEAD
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
-        let eph_pub_bytes = eph_pub.to_sec1_point(true).as_bytes().to_vec();
-        let ephemeral_mk = Builder::new(Codec::Secp256K1Pub)
-            .with_key_bytes(&eph_pub_bytes)
-            .try_build()?;
-
-        Ok((
-            encode_sealed(aead_codec, &nonce, &ct_tag),
-            Some(ephemeral_mk),
-        ))
+        Ok((encode_sealed(&rsa_ct, aead_codec, &nonce, &ct_tag), None))
     }
 }
 
@@ -463,105 +454,36 @@ impl<'a> OpenView for View<'a> {
     fn open(
         &self,
         sealed_msg: &[u8],
-        ephemeral: Option<&Multikey>,
+        _ephemeral: Option<&Multikey>,
         aad: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
         if !self.is_secret_key() {
             return Err(SealError::NotDecapsulationKey.into());
         }
 
-        let ephemeral_mk = ephemeral.ok_or_else(|| {
-            SealError::InvalidFormat("secp256k1 open requires an ephemeral public key".into())
-        })?;
+        let (rsa_ct, aead_codec, nonce, ct_tag) = decode_sealed(sealed_msg)?;
 
-        let (aead_codec, nonce, ct_tag) = decode_sealed(sealed_msg)?;
-        if !is_secp_aead_allowed(aead_codec) {
+        if !is_rsa_aead_allowed(aead_codec) {
             return Err(SealError::UnsupportedAeadCodec(aead_codec).into());
         }
 
-        let eph_bytes = ephemeral_mk.data_view()?.key_bytes()?;
         let secret_bytes = {
             let kd = self.mk.data_view()?;
             kd.secret_bytes()?
         };
 
-        let secret = k256::SecretKey::from_slice(&secret_bytes[..SECRET_KEY_LENGTH])
+        let private_key = RsaPrivateKey::from_pkcs1_der(&secret_bytes)
             .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
-        let eph_pub = k256::PublicKey::from_sec1_bytes(&eph_bytes)
-            .map_err(|_| SealError::InvalidFormat("invalid ephemeral public key".into()))?;
-        let shared = k256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), eph_pub.as_affine());
 
-        let key_len = aead::key_size(aead_codec)?;
-        let aead_key = aead::derive_aead_key(
-            shared.raw_secret_bytes().as_slice(),
-            SECP256K1_SEAL_INFO,
-            key_len,
-        )?;
+        // Decrypt AEAD key with RSA-OAEP
+        let padding = Oaep::<Sha256>::new();
+        let aead_key = private_key
+            .decrypt(padding, &rsa_ct)
+            .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
 
+        // Decrypt ciphertext with AEAD
         Ok(aead::aead_open(
             aead_codec, &aead_key, &nonce, &ct_tag, aad,
         )?)
-    }
-}
-
-#[cfg(test)]
-mod ecies_tests {
-    use super::*;
-    use crate::views::Views;
-
-    #[test]
-    fn test_secp256k1_seal_open_roundtrip() {
-        let mut rng = rand::rng();
-        let sk = Builder::new_from_random_bytes(Codec::Secp256K1Priv, &mut rng)
-            .unwrap()
-            .with_comment("secp256k1 ecies test")
-            .try_build()
-            .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
-
-        let plaintext = b"the quick brown fox jumps over the lazy dog";
-        for aead_codec in [
-            Codec::Chacha20Poly1305,
-            Codec::Xchacha20Poly1305,
-            Codec::AesGcm128,
-            Codec::AesGcm256,
-        ] {
-            let (sealed, ephemeral) = pk
-                .seal_view()
-                .unwrap()
-                .seal(plaintext, aead_codec, b"")
-                .unwrap();
-            let opened = sk
-                .open_view()
-                .unwrap()
-                .open(&sealed, ephemeral.as_ref(), b"")
-                .unwrap();
-            assert_eq!(plaintext.as_slice(), opened.as_slice());
-        }
-    }
-
-    #[test]
-    fn test_secp256k1_wrong_key_fails_to_open() {
-        let mut rng = rand::rng();
-        let sk1 = Builder::new_from_random_bytes(Codec::Secp256K1Priv, &mut rng)
-            .unwrap()
-            .try_build()
-            .unwrap();
-        let sk2 = Builder::new_from_random_bytes(Codec::Secp256K1Priv, &mut rng)
-            .unwrap()
-            .try_build()
-            .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
-
-        let (sealed, ephemeral) = pk1
-            .seal_view()
-            .unwrap()
-            .seal(b"secret", Codec::Chacha20Poly1305, b"")
-            .unwrap();
-        assert!(sk2
-            .open_view()
-            .unwrap()
-            .open(&sealed, ephemeral.as_ref(), b"")
-            .is_err());
     }
 }

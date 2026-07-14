@@ -1,6 +1,6 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{error::AttributesError, Error};
-use multitrait::{EncodeInto, TryDecodeFrom};
+use multi_trait::{EncodeInto, TryDecodeFrom};
 use std::fmt;
 
 /// enum of attribute identifiers. this is here to avoid collisions between
@@ -33,6 +33,42 @@ pub enum AttrId {
     ShareIdentifier,
     /// codec-specific threshold key data
     ThresholdData,
+    /// DKG: the VLAD bytes of the session owner
+    DkgOwnerId,
+    /// DKG: the CBOR-encoded list of participant VLADs
+    DkgParticipants,
+    /// DKG: the t-of-n threshold value (u16 little-endian)
+    DkgThreshold,
+    /// DKG: the t-of-n limit value (u16 little-endian)
+    DkgLimit,
+    /// DKG: the group public key bytes
+    DkgGroupPublicKey,
+    /// DKG: this participant's frost-dkg Identifier bytes
+    DkgIdentifier,
+    /// DKG: the session UUID bytes
+    DkgSessionId,
+    /// Feldman verifier commitment set for a verifiable key share (CBOR list of
+    /// group-element byte strings). Present on Feldman shares of split keys.
+    ShareVerifiers,
+    /// Secondary dual share for seed-based keys (Ed25519/X25519): the CBOR
+    /// encoding of the Feldman scalar share carried alongside the gf256 seed
+    /// share. Lets these keys mirror the ECC shares without losing exact restore.
+    ShareDual,
+    /// Split (Shamir) threshold key: the group/combined BLS public key bytes.
+    /// This is the split-key analogue of [`AttrId::DkgGroupPublicKey`]; it is
+    /// stamped on a controller Multikey so that the combined threshold
+    /// signature can be verified against the group public key.
+    ThresholdGroupPublicKey,
+    /// Split (Shamir) threshold key: a CBOR-encoded map from share-identifier
+    /// bytes (the Shamir x-coordinate, exactly as stored in
+    /// [`AttrId::ShareIdentifier`]) to a participant record carrying that
+    /// participant's VLAD and its BLS public key share v_i bytes.
+    ThresholdParticipants,
+    /// Split (Shamir) threshold key: a `Multisig` (signature) over the canonical
+    /// encoding of the marker bundle (group public key ‖ participants ‖ threshold
+    /// ‖ limit), produced by the controller's signing key. Lets a verifier reject
+    /// a tampered marker before trusting it (defeats TSIG-1 marker forgery).
+    ThresholdMarkerSig,
 }
 
 impl AttrId {
@@ -56,6 +92,18 @@ impl AttrId {
             AttrId::Limit => "limit",
             AttrId::ShareIdentifier => "share-identifier",
             AttrId::ThresholdData => "threshold-data",
+            AttrId::DkgOwnerId => "dkg-owner-id",
+            AttrId::DkgParticipants => "dkg-participants",
+            AttrId::DkgThreshold => "dkg-threshold",
+            AttrId::DkgLimit => "dkg-limit",
+            AttrId::DkgGroupPublicKey => "dkg-group-public-key",
+            AttrId::DkgIdentifier => "dkg-identifier",
+            AttrId::DkgSessionId => "dkg-session-id",
+            AttrId::ShareVerifiers => "share-verifiers",
+            AttrId::ShareDual => "share-dual",
+            AttrId::ThresholdGroupPublicKey => "threshold-group-public-key",
+            AttrId::ThresholdParticipants => "threshold-participants",
+            AttrId::ThresholdMarkerSig => "threshold-marker-sig",
         }
     }
 }
@@ -83,6 +131,18 @@ impl TryFrom<u8> for AttrId {
             9 => Ok(AttrId::Limit),
             10 => Ok(AttrId::ShareIdentifier),
             11 => Ok(AttrId::ThresholdData),
+            12 => Ok(AttrId::DkgOwnerId),
+            13 => Ok(AttrId::DkgParticipants),
+            14 => Ok(AttrId::DkgThreshold),
+            15 => Ok(AttrId::DkgLimit),
+            16 => Ok(AttrId::DkgGroupPublicKey),
+            17 => Ok(AttrId::DkgIdentifier),
+            18 => Ok(AttrId::DkgSessionId),
+            19 => Ok(AttrId::ShareVerifiers),
+            20 => Ok(AttrId::ShareDual),
+            21 => Ok(AttrId::ThresholdGroupPublicKey),
+            22 => Ok(AttrId::ThresholdParticipants),
+            23 => Ok(AttrId::ThresholdMarkerSig),
             _ => Err(AttributesError::InvalidAttributeValue(c).into()),
         }
     }
@@ -130,6 +190,18 @@ impl TryFrom<&str> for AttrId {
             "limit" => Ok(AttrId::Limit),
             "share-identifier" => Ok(AttrId::ShareIdentifier),
             "threshold-data" => Ok(AttrId::ThresholdData),
+            "dkg-owner-id" => Ok(AttrId::DkgOwnerId),
+            "dkg-participants" => Ok(AttrId::DkgParticipants),
+            "dkg-threshold" => Ok(AttrId::DkgThreshold),
+            "dkg-limit" => Ok(AttrId::DkgLimit),
+            "dkg-group-public-key" => Ok(AttrId::DkgGroupPublicKey),
+            "dkg-identifier" => Ok(AttrId::DkgIdentifier),
+            "dkg-session-id" => Ok(AttrId::DkgSessionId),
+            "share-verifiers" => Ok(AttrId::ShareVerifiers),
+            "share-dual" => Ok(AttrId::ShareDual),
+            "threshold-group-public-key" => Ok(AttrId::ThresholdGroupPublicKey),
+            "threshold-participants" => Ok(AttrId::ThresholdParticipants),
+            "threshold-marker-sig" => Ok(AttrId::ThresholdMarkerSig),
             _ => Err(AttributesError::InvalidAttributeName(s.to_string()).into()),
         }
     }
