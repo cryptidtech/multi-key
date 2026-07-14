@@ -5,12 +5,12 @@ use crate::{
         bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
         bls12381_g1_mldsa65, chacha20, classic_mceliece, ed25519, ed25519_fndsa512, ed25519_mayo2,
         ed25519_mldsa65, fn_dsa, frodokem, mayo, ml_dsa, ml_kem, nist_p, rsa, secp256k1, slh_dsa,
-        sntrup, x25519, x25519_frodokem640, x25519_mceliece348864, x25519_mlkem768,
-        x25519_sntrup761,
+        sntrup, threshold_meta, x25519, x25519_frodokem640, x25519_mceliece348864,
+        x25519_mlkem768, x25519_sntrup761,
     },
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdKeyView,
-    ThresholdView, VerifyView, Views,
+    KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
+    ThresholdKeyView, ThresholdView, VerifyView, Views,
 };
 
 use ::fn_dsa::{
@@ -21,7 +21,7 @@ use elliptic_curve::sec1::ToSec1Point;
 use elliptic_curve::Generate;
 use multi_base::Base;
 use multi_codec::Codec;
-use multi_trait::{Null, TryDecodeFrom};
+use multi_trait::{EncodeInto, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
 use rand_core::CryptoRng;
 use ssh_key::{
@@ -1227,6 +1227,11 @@ impl Views for Multikey {
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
+    }
+
+    /// Provide an interface for threshold disclosure mode operations
+    fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
+        Ok(Box::new(threshold_meta::DisclosureView::new(self)))
     }
 }
 
@@ -2543,6 +2548,71 @@ impl Builder {
     /// add in the threshold data
     pub fn with_threshold_data(self, tdata: &impl AsRef<[u8]>) -> Self {
         self.with_attribute(AttrId::ThresholdData, &tdata.as_ref().to_vec())
+    }
+
+    /// Set the disclosure mode for a threshold share being built.
+    ///
+    /// In [`ThresholdDisclosure::Full`] mode, t and n are stored as plaintext
+    /// attributes (same as `with_threshold()`/`with_limit()`).
+    /// In [`ThresholdDisclosure::Partial`] mode, t is encrypted and n is plaintext.
+    /// In [`ThresholdDisclosure::FullConfidentialial`] mode, both t and n are encrypted.
+    ///
+    /// `meta_key` is required for Partial/FullConfidentialial modes.
+    pub fn with_disclosure(
+        self,
+        mode: threshold_meta::ThresholdDisclosure,
+        meta_key: Option<&Multikey>,
+        threshold: usize,
+        limit: usize,
+    ) -> Self {
+        let mut attributes = self.attributes.unwrap_or_default();
+        let _ = threshold_meta::stamp_disclosure_attrs(
+            &mut attributes,
+            mode,
+            threshold,
+            limit,
+            meta_key,
+        );
+        Self {
+            attributes: Some(attributes),
+            ..self
+        }
+    }
+
+    /// Stamp pre-encrypted threshold metadata directly (advanced use).
+    ///
+    /// This bypasses the encryption step — the caller has already encrypted the
+    /// metadata and provides the ciphertext + cipher info directly.
+    pub fn with_encrypted_threshold_meta(
+        self,
+        mode: threshold_meta::ThresholdDisclosure,
+        encrypted_meta: Vec<u8>,
+        cipher_info: threshold_meta::ThresholdMetaCipher,
+        plaintext_limit: Option<usize>,
+    ) -> Self {
+        let mut attributes = self.attributes.unwrap_or_default();
+        attributes.remove(&AttrId::Threshold);
+        attributes.remove(&AttrId::Limit);
+        attributes.remove(&AttrId::EncryptedThresholdMeta);
+        attributes.remove(&AttrId::ThresholdMetaCipher);
+        attributes.remove(&AttrId::ThresholdDisclosure);
+
+        if let Some(n) = plaintext_limit {
+            let n_bytes: Vec<u8> = Varuint(n).into();
+            attributes.insert(AttrId::Limit, n_bytes.into());
+        }
+        attributes.insert(AttrId::EncryptedThresholdMeta, encrypted_meta.into());
+        if let Ok(bytes) = cipher_info.to_cbor_bytes() {
+            attributes.insert(AttrId::ThresholdMetaCipher, bytes.into());
+        }
+        attributes.insert(
+            AttrId::ThresholdDisclosure,
+            Zeroizing::new(threshold_meta::ThresholdDisclosure::encode_into(&mode)),
+        );
+        Self {
+            attributes: Some(attributes),
+            ..self
+        }
     }
 
     /// add a key share

@@ -274,6 +274,148 @@ as free functions (`split`, `combine`, `verify_share`) producing `KeySplitShare`
 - **Dual mode** — Ed25519 and X25519: a gf256 share of the 32-byte seed (exact restore)
   plus a Feldman scalar share (threshold-signing-ready).
 
+## Threshold Confidentiality
+
+By default, threshold `t` and share count `n` are stored as **plaintext** attributes on every
+key share — any observer of a share learns the threshold parameters. This crate supports three
+configurable disclosure modes that control the confidentiality of `t` and `n`, applicable to
+BLS12-381 Shamir shares and the generic `keysplit` module.
+
+### Disclosure Modes
+
+| Mode | `t` (threshold) | `n` (limit) | Who sees `t` | Who sees `n` |
+|---|---|---|---|---|
+| `Full` (default, 0) | plaintext attribute | plaintext attribute | everyone | everyone |
+| `Partial` (1) | encrypted (AEAD) | plaintext attribute | key-holder only | everyone (auditable) |
+| `FullConfidentialial` (2) | encrypted (AEAD) | encrypted (AEAD) | key-holder only | key-holder only |
+
+The encrypted values are sealed with **ChaCha20-Poly1305 AEAD** and stored as a CBOR-encoded
+`ThresholdMetadata` blob in `AttrId::EncryptedThresholdMeta`. The cipher parameters (codec +
+nonce) are recorded in `AttrId::ThresholdMetaCipher` so the blob is self-describing for
+decryption. A separate **meta key** (a 32-byte symmetric `Multikey` with
+`Codec::Chacha20Poly1305`) is required to encrypt/decrypt the metadata.
+
+### When to Use Each Mode
+
+- **`Full`** — Use when `t` and `n` are not sensitive. This is the default and is
+  backward-compatible with all existing shares. Appropriate for open governance systems where
+  the threshold structure is public knowledge.
+
+- **`Partial`** — Use when the total number of participants `n` should be auditable (e.g. for
+  governance transparency) but the threshold `t` should be hidden from share holders and
+  observers. Hiding `t` means an adversary who compromises some shares does not know how many
+  more they need to reconstruct the key. The `meta_key` is required to read `t` but `n` is
+  freely readable.
+
+- **`FullConfidentialial`** — Use when both `t` and `n` must be kept secret. An observer who
+  sees a share cannot determine the group size or how many shares are needed. This is the
+  strongest confidentiality mode. The `meta_key` is required to read both `t` and `n`.
+
+### Trade-offs
+
+| Consideration | Full | Partial | FullConfidentialial |
+|---|---|---|---|
+| Backward compatible | yes | yes (attribute defaults to Full if absent) | yes |
+| Observer learns `t` | yes | no | no |
+| Observer learns `n` | yes | yes | no |
+| Requires `meta_key` | no | for reading `t` | for reading `t` and `n` |
+| Auditable `n` | yes | yes | no |
+| Risk if `meta_key` lost | n/a | `t` irrecoverable | `t` and `n` irrecoverable |
+| Performance overhead | none | negligible (AEAD on ~10 bytes) | negligible |
+
+**Key management risk:** Losing the `meta_key` makes `t` (Partial) or both `t`/`n`
+(FullConfidentialial) irrecoverable, preventing key combination. The `meta_key` should be
+stored/backed up using the existing at-rest encryption mechanisms. You can always convert back
+to `Full` mode (with the `meta_key`) before losing it.
+
+**DKG note:** DKG threshold values (`t`/`n`) are inherently known to all participants because
+they are agreed during the DKG ceremony. The confidentiality modes do not apply to DKG shares —
+a `to_disclosure()` call on a DKG share returns an error. Future work could add "hidden
+threshold DKG" where participants don't know `t`, but that requires protocol-level changes
+(FROST-style) not just encoding changes.
+
+### Creating Shares with a Disclosure Mode
+
+There are three ways to produce shares in a given disclosure mode:
+
+**1. Direct creation via `split_with_disclosure()`:**
+
+```rust
+use multi_key::{Builder, Views, ThresholdDisclosure};
+
+let meta_key = multi_key::generate_meta_key();
+let meta_mk = Builder::new(Codec::Chacha20Poly1305)
+    .with_key_bytes(&meta_key.as_slice())
+    .try_build()?;
+
+// BLS Shamir split with FullConfidentialial disclosure
+let shares = mk.threshold_view()?.split_with_disclosure(3, 5,
+    ThresholdDisclosure::FullConfidentialial, Some(&meta_mk))?;
+```
+
+**2. Builder construction:**
+
+```rust
+let share = Builder::new(Codec::Bls12381G2PrivShare)
+    .with_disclosure(ThresholdDisclosure::Partial, Some(&meta_mk), 3, 5)
+    .with_identifier(&identifier)
+    .with_key_bytes(&key_bytes)
+    .try_build()?;
+```
+
+**3. Convert an existing share:**
+
+```rust
+let encrypted = share.disclosure_view()?
+    .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), None)?;
+```
+
+### Reading Threshold Parameters from Encrypted Shares
+
+Use `read_threshold_params()` with the `meta_key` to decrypt `t` and `n`:
+
+```rust
+let (t, n) = encrypted.disclosure_view()?
+    .read_threshold_params(Some(&meta_mk))?;
+```
+
+### Combining Encrypted Shares
+
+```rust
+let combined = mk.threshold_view()?
+    .combine_with_meta(Some(&meta_mk))?;
+```
+
+For the generic `keysplit` module, use `split_with_disclosure()` and `combine_with_meta()`:
+
+```rust
+use multi_key::keysplit;
+
+let shares = keysplit::split_with_disclosure(
+    &mk, 3, 5, ThresholdDisclosure::Partial, Some(&meta_mk), rand::rng())?;
+let combined = keysplit::combine_with_meta(&shares, Some(&meta_mk))?;
+```
+
+### Converting Between Modes
+
+The `to_disclosure()` method converts between any pair of modes. It reads the current `t`/`n`
+(decrypting if needed with `current_meta_key`), then re-stamps the attributes in the target mode
+(encrypting if needed with `meta_key`):
+
+```rust
+// Full → Partial
+let partial = full.disclosure_view()?
+    .to_disclosure(ThresholdDisclosure::Partial, Some(&meta_mk), None)?;
+
+// Partial → FullConfidentialial
+let confidential = partial.disclosure_view()?
+    .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), Some(&meta_mk))?;
+
+// FullConfidentialial → Full
+let full_again = confidential.disclosure_view()?
+    .to_disclosure(ThresholdDisclosure::Full, None, Some(&meta_mk))?;
+```
+
 ## Encryption
 
 ### At-Rest Multi-Key Encryption

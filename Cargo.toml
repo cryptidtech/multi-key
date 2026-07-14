@@ -18,6 +18,7 @@ wasm = ["getrandom/wasm_js"]
 aes-gcm = "0.10"
 bcrypt-pbkdf = "0.10"
 blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
+ciborium = "0.2"
 curve25519-dalek = { version = "5.0.0", features = ["group"] }
 # blsful configured per-target below (blst for native, rust for wasm)
 frodo-kem-rs = { version = "0.7", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }

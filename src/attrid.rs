@@ -69,6 +69,15 @@ pub enum AttrId {
     /// ‖ limit), produced by the controller's signing key. Lets a verifier reject
     /// a tampered marker before trusting it (defeats TSIG-1 marker forgery).
     ThresholdMarkerSig,
+    /// Threshold disclosure mode (varuint u8): 0=Full, 1=Partial, 2=FullConfidentialial.
+    /// Absent means Full (legacy backward-compatible).
+    ThresholdDisclosure,
+    /// AEAD-encrypted `ThresholdMetadata` CBOR blob. Present in Partial and
+    /// FullConfidentialial modes.
+    EncryptedThresholdMeta,
+    /// CBOR-encoded `ThresholdMetaCipher` (cipher codec + nonce) for decrypting
+    /// `EncryptedThresholdMeta`.
+    ThresholdMetaCipher,
 }
 
 impl AttrId {
@@ -104,6 +113,9 @@ impl AttrId {
             AttrId::ThresholdGroupPublicKey => "threshold-group-public-key",
             AttrId::ThresholdParticipants => "threshold-participants",
             AttrId::ThresholdMarkerSig => "threshold-marker-sig",
+            AttrId::ThresholdDisclosure => "threshold-disclosure",
+            AttrId::EncryptedThresholdMeta => "encrypted-threshold-meta",
+            AttrId::ThresholdMetaCipher => "threshold-meta-cipher",
         }
     }
 }
@@ -143,6 +155,9 @@ impl TryFrom<u8> for AttrId {
             21 => Ok(AttrId::ThresholdGroupPublicKey),
             22 => Ok(AttrId::ThresholdParticipants),
             23 => Ok(AttrId::ThresholdMarkerSig),
+            24 => Ok(AttrId::ThresholdDisclosure),
+            25 => Ok(AttrId::EncryptedThresholdMeta),
+            26 => Ok(AttrId::ThresholdMetaCipher),
             _ => Err(AttributesError::InvalidAttributeValue(c).into()),
         }
     }
@@ -202,6 +217,9 @@ impl TryFrom<&str> for AttrId {
             "threshold-group-public-key" => Ok(AttrId::ThresholdGroupPublicKey),
             "threshold-participants" => Ok(AttrId::ThresholdParticipants),
             "threshold-marker-sig" => Ok(AttrId::ThresholdMarkerSig),
+            "threshold-disclosure" => Ok(AttrId::ThresholdDisclosure),
+            "encrypted-threshold-meta" => Ok(AttrId::EncryptedThresholdMeta),
+            "threshold-meta-cipher" => Ok(AttrId::ThresholdMetaCipher),
             _ => Err(AttributesError::InvalidAttributeName(s.to_string()).into()),
         }
     }
