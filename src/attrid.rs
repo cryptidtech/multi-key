@@ -78,6 +78,10 @@ pub enum AttrId {
     /// CBOR-encoded `ThresholdMetaCipher` (cipher codec + nonce) for decrypting
     /// `EncryptedThresholdMeta`.
     ThresholdMetaCipher,
+    /// An algorithm string name for non-standard keys (optional)
+    AlgorithmName,
+    /// An arbitrary key type for non-standard keys (optional)
+    KeyType,
 }
 
 impl AttrId {
@@ -116,6 +120,8 @@ impl AttrId {
             AttrId::ThresholdDisclosure => "threshold-disclosure",
             AttrId::EncryptedThresholdMeta => "encrypted-threshold-meta",
             AttrId::ThresholdMetaCipher => "threshold-meta-cipher",
+            AttrId::AlgorithmName => "algorithm-name",
+            AttrId::KeyType => "key-type",
         }
     }
 }
@@ -158,6 +164,8 @@ impl TryFrom<u8> for AttrId {
             24 => Ok(AttrId::ThresholdDisclosure),
             25 => Ok(AttrId::EncryptedThresholdMeta),
             26 => Ok(AttrId::ThresholdMetaCipher),
+            27 => Ok(AttrId::AlgorithmName),
+            28 => Ok(AttrId::KeyType),
             _ => Err(AttributesError::InvalidAttributeValue(c).into()),
         }
     }
@@ -220,6 +228,8 @@ impl TryFrom<&str> for AttrId {
             "threshold-disclosure" => Ok(AttrId::ThresholdDisclosure),
             "encrypted-threshold-meta" => Ok(AttrId::EncryptedThresholdMeta),
             "threshold-meta-cipher" => Ok(AttrId::ThresholdMetaCipher),
+            "algorithm-name" => Ok(AttrId::AlgorithmName),
+            "key-type" => Ok(AttrId::KeyType),
             _ => Err(AttributesError::InvalidAttributeName(s.to_string()).into()),
         }
     }
