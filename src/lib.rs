@@ -93,10 +93,15 @@ pub use views::threshold_marker::{
     self, group_public_key, participants, set_group_public_key, set_participants, threshold_kind,
     threshold_params, MarkerView, ThresholdParticipant, ThresholdScheme,
 };
+pub use views::threshold_meta::{
+    self, decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, DisclosureView,
+    ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata, read_threshold_params,
+    stamp_disclosure_attrs,
+};
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
-    KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdKeyView, ThresholdView,
-    VerifyView, Views,
+    KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
+    ThresholdKeyView, ThresholdView, VerifyView, Views,
 };
 
 /// Key splitting / recombination (verifiable threshold shares)

@@ -33,6 +33,13 @@ pub(crate) mod slh_dsa;
 pub(crate) mod sntrup;
 /// Split (Shamir) threshold marker attributes and scheme classifier.
 pub mod threshold_marker;
+/// Threshold disclosure modes and encrypted metadata helpers.
+pub mod threshold_meta;
+pub use threshold_meta::{
+    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, DisclosureView,
+    ThresholdDisclosure, ThresholdDisclosureView, ThresholdMetaCipher, ThresholdMetadata,
+    read_threshold_params, stamp_disclosure_attrs,
+};
 pub(crate) mod x25519;
 pub(crate) mod x25519_frodokem640;
 pub(crate) mod x25519_mceliece348864;
@@ -196,10 +203,29 @@ pub trait SignView {
 pub trait ThresholdView {
     /// try to split the key into key shares given the threshold and limit
     fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error>;
+    /// Split with a specific disclosure mode for t/n.
+    fn split_with_disclosure(
+        &self,
+        threshold: usize,
+        limit: usize,
+        mode: ThresholdDisclosure,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Vec<Multikey>, Error>;
     /// add a new share and return the Multikey with the share added
     fn add_share(&self, share: &Multikey) -> Result<Multikey, Error>;
+    /// Add a share with a meta_key for decrypting threshold params.
+    fn add_share_with_meta(
+        &self,
+        share: &Multikey,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Multikey, Error>;
     /// reconstruct the key from teh shares
     fn combine(&self) -> Result<Multikey, Error>;
+    /// Combine with a meta_key for decrypting threshold params.
+    fn combine_with_meta(
+        &self,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Multikey, Error>;
 }
 
 /// trait exposing higher-level DKG-shaped read-only metadata on a Multikey
@@ -259,4 +285,6 @@ pub trait Views {
     fn threshold_view<'a>(&'a self) -> Result<Box<dyn ThresholdView + 'a>, Error>;
     /// Provide an interface to verify a Multisig and optional message
     fn verify_view<'a>(&'a self) -> Result<Box<dyn VerifyView + 'a>, Error>;
+    /// Provide an interface for threshold disclosure mode operations
+    fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error>;
 }

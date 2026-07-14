@@ -327,6 +327,23 @@ pub enum ThresholdError {
     /// Share combine failed
     #[error("Combining secret key shares failed: {0}")]
     ShareCombineFailed(String),
+    /// Threshold metadata encryption/decryption error
+    #[error("Threshold metadata error: {0}")]
+    MetaEncryption(String),
+    /// Missing threshold metadata key for decrypting t/n
+    #[error("Missing threshold metadata key")]
+    MissingMetaKey,
+    /// Threshold disclosure mode mismatch between shares
+    #[error("Threshold disclosure mode mismatch: expected {expected}, found {found}")]
+    DisclosureMismatch {
+        /// Expected disclosure mode code
+        expected: u8,
+        /// Found disclosure mode code
+        found: u8,
+    },
+    /// Duplicate share identifier in threshold data
+    #[error("Duplicate share identifier")]
+    DuplicateShare,
 }
 
 /// Verify errors created by this library

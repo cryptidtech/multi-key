@@ -49,6 +49,7 @@ pub(crate) fn nonce_size(codec: Codec) -> Result<usize, SealError> {
 
 /// Encrypt plaintext with the given AEAD codec and key.
 /// Returns `(nonce, ciphertext_with_tag)`.
+#[allow(deprecated)]
 pub(crate) fn aead_seal(
     codec: Codec,
     key: &[u8],
@@ -120,6 +121,7 @@ pub(crate) fn aead_seal(
 }
 
 /// Decrypt ciphertext with the given AEAD codec, key, and nonce.
+#[allow(deprecated)]
 pub(crate) fn aead_open(
     codec: Codec,
     key: &[u8],

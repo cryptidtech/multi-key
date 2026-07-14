@@ -4,6 +4,7 @@ use crate::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError,
         ThresholdError, VerifyError,
     },
+    views::threshold_meta::{self, ThresholdDisclosure},
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, Multikey, OpenView, SealView, SignView, ThresholdAttrView, ThresholdView,
     VerifyView, Views,
@@ -961,6 +962,145 @@ impl<'a> ThresholdView for View<'a> {
                 },
                 av.threshold()?,
             )
+        };
+
+        // check that we have enough shares to combine
+        let num_shares = threshold_data.0.len();
+        if num_shares < threshold {
+            return Err(ThresholdError::NotEnoughShares.into());
+        }
+
+        match self.mk.codec {
+            Codec::Bls12381G1Priv => {
+                let mut shares = Vec::with_capacity(threshold_data.0.len());
+                threshold_data
+                    .0
+                    .iter()
+                    .try_for_each(|(id, share)| -> Result<(), Error> {
+                        let value = bytes_to_value(share.3.as_slice())?;
+                        let vsss = Share::with_identifier_and_value(*id, value);
+                        shares.push(SecretKeyShare::<Bls12381G1Impl>(vsss));
+                        Ok(())
+                    })?;
+                let key = SecretKey::combine(shares.as_slice())
+                    .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?;
+                let key_bytes = key.to_be_bytes().to_vec();
+                Builder::new(Codec::Bls12381G1Priv)
+                    .with_comment(&self.mk.comment)
+                    .with_key_bytes(&key_bytes)
+                    .try_build()
+            }
+            Codec::Bls12381G2Priv => {
+                let mut shares = Vec::with_capacity(threshold_data.0.len());
+                threshold_data
+                    .0
+                    .iter()
+                    .try_for_each(|(id, share)| -> Result<(), Error> {
+                        let value = bytes_to_value(share.3.as_slice())?;
+                        let vsss = Share::with_identifier_and_value(*id, value);
+                        shares.push(SecretKeyShare::<Bls12381G2Impl>(vsss));
+                        Ok(())
+                    })?;
+                let key = SecretKey::combine(shares.as_slice())
+                    .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?;
+                let key_bytes = key.to_be_bytes().to_vec();
+                Builder::new(Codec::Bls12381G2Priv)
+                    .with_comment(&self.mk.comment)
+                    .with_key_bytes(&key_bytes)
+                    .try_build()
+            }
+            _ => Err(Error::UnsupportedAlgorithm(self.mk.codec.to_string())),
+        }
+    }
+
+    /// Split with a specific disclosure mode for t/n.
+    fn split_with_disclosure(
+        &self,
+        threshold: usize,
+        limit: usize,
+        mode: ThresholdDisclosure,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Vec<Multikey>, Error> {
+        // generate Full-mode shares first, then convert each to the target mode
+        let shares = self.split(threshold, limit)?;
+        shares
+            .iter()
+            .map(|s| {
+                s.disclosure_view()?
+                    .to_disclosure(mode, meta_key, None)
+            })
+            .collect()
+    }
+
+    /// Add a share with a meta_key for decrypting threshold params.
+    fn add_share_with_meta(
+        &self,
+        share: &Multikey,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Multikey, Error> {
+        // read t/n from the share using the meta_key if needed
+        let (share_t, share_n) =
+            threshold_meta::read_threshold_params(share, meta_key)?;
+
+        // get the share data
+        let (key_share, identifier) = {
+            let av = share.threshold_attr_view()?;
+            let identifier = bytes_to_identifier(av.identifier()?)?;
+            let dv = share.data_view()?;
+            let key_bytes = dv.key_bytes()?;
+            (
+                KeyShare(identifier, share_t, share_n, key_bytes.to_vec()),
+                identifier,
+            )
+        };
+
+        // update threshold data
+        let threshold_data: Vec<u8> = {
+            let av = self.mk.threshold_attr_view()?;
+            let mut tdata = match av.threshold_data() {
+                Ok(b) => ThresholdData::try_from(b)
+                    .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
+                Err(_) => ThresholdData::default(),
+            };
+            if tdata.0.contains_key(&identifier) {
+                return Err(ThresholdError::DuplicateShare.into());
+            }
+            tdata.0.insert(identifier, key_share);
+            tdata.into()
+        };
+
+        let comment = if self.mk.comment.is_empty() {
+            share.comment.clone()
+        } else {
+            self.mk.comment.clone()
+        };
+
+        let builder = Builder::new(self.mk.codec)
+            .with_comment(&comment)
+            .with_threshold(share_t)
+            .with_limit(share_n)
+            .with_threshold_data(&threshold_data);
+
+        builder.try_build()
+    }
+
+    /// Combine with a meta_key for decrypting threshold params.
+    fn combine_with_meta(
+        &self,
+        meta_key: Option<&Multikey>,
+    ) -> Result<Multikey, Error> {
+        // read threshold using meta_key if needed
+        let (threshold, _limit) =
+            threshold_meta::read_threshold_params(self.mk, meta_key)?;
+
+        // get the current threshold data
+        let threshold_data = {
+            let av = self.mk.threshold_attr_view()?;
+            match av.threshold_data() {
+                Ok(b) => ThresholdData::try_from(b)
+                    .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
+                Err(_) => ThresholdData::default(),
+            }
         };
 
         // check that we have enough shares to combine
