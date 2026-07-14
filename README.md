@@ -333,4 +333,4 @@ permits `Chacha20Poly1305` per its specification).
 [MULTICODEC]: https://github.com/multiformats/multicodec
 [SSHKEY]: https://crates.io/crates/ssh-key
 [RFC4251]: https://www.rfc-editor.org/rfc/rfc4251.html#page-11
-[MULTISIG]: https://github.com/cryptidtech/multisig
+[MULTISIG]: https://github.com/cryptidtech/provenance-specifications/blob/main/specifications/multisig.md

@@ -15,7 +15,7 @@ fn test_malformed_data() {
 /// Test truncated multikey
 #[test]
 fn test_truncated_data() {
-    let truncated = vec![0x39]; // Just sigil
+    let truncated = vec![0xBA, 0x24]; // Multikey sigil 0x123a as varuint, no payload
     let result = Multikey::try_from(truncated.as_ref());
     assert!(result.is_err());
 }
