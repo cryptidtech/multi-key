@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{mk::Attributes, AttrId, Error, Multikey};
+use crate::{error::CipherError, mk::Attributes, AttrId, Error, Multikey};
 use multi_codec::Codec;
 use rand_core::CryptoRng;
 use zeroize::Zeroizing;
@@ -24,12 +24,13 @@ impl Builder {
 
     /// initialize from a multikey with cipher attributes in it
     pub fn try_from_multikey(mut self, mk: &Multikey) -> Result<Self, Error> {
-        // try to look up the cipher codec in the multikey attributes
-        if let Some(v) = mk.attributes.get(&AttrId::CipherCodec) {
-            if let Ok(codec) = Codec::try_from(v.as_slice()) {
-                self.codec = codec;
-            }
-        }
+        // look up the cipher codec in the multikey attributes
+        let v = mk
+            .attributes
+            .get(&AttrId::CipherCodec)
+            .ok_or(CipherError::MissingCodec)?;
+        self.codec = Codec::try_from(v.as_slice())?;
+
         // try to look up the key_length in the multikey attributes
         if let Some(v) = mk.attributes.get(&AttrId::CipherKeyLen) {
             self.key_length = Some(v.clone());

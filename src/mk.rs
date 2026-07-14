@@ -33,7 +33,8 @@ use std::{collections::BTreeMap, fmt};
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
-pub const KEY_CODECS: [Codec; 7] = [
+pub const KEY_CODECS: [Codec; 8] = [
+    Codec::Identity, // used for non-standard key types
     Codec::Ed25519Priv,
     Codec::Secp256K1Priv,
     Codec::Bls12381G1Priv,
