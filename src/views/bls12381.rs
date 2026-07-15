@@ -1025,10 +1025,7 @@ impl<'a> ThresholdView for View<'a> {
         let shares = self.split(threshold, limit)?;
         shares
             .iter()
-            .map(|s| {
-                s.disclosure_view()?
-                    .to_disclosure(mode, meta_key, None)
-            })
+            .map(|s| s.disclosure_view()?.to_disclosure(mode, meta_key, None))
             .collect()
     }
 
@@ -1039,8 +1036,7 @@ impl<'a> ThresholdView for View<'a> {
         meta_key: Option<&Multikey>,
     ) -> Result<Multikey, Error> {
         // read t/n from the share using the meta_key if needed
-        let (share_t, share_n) =
-            threshold_meta::read_threshold_params(share, meta_key)?;
+        let (share_t, share_n) = threshold_meta::read_threshold_params(share, meta_key)?;
 
         // get the share data
         let (key_share, identifier) = {
@@ -1085,13 +1081,9 @@ impl<'a> ThresholdView for View<'a> {
     }
 
     /// Combine with a meta_key for decrypting threshold params.
-    fn combine_with_meta(
-        &self,
-        meta_key: Option<&Multikey>,
-    ) -> Result<Multikey, Error> {
+    fn combine_with_meta(&self, meta_key: Option<&Multikey>) -> Result<Multikey, Error> {
         // read threshold using meta_key if needed
-        let (threshold, _limit) =
-            threshold_meta::read_threshold_params(self.mk, meta_key)?;
+        let (threshold, _limit) = threshold_meta::read_threshold_params(self.mk, meta_key)?;
 
         // get the current threshold data
         let threshold_data = {

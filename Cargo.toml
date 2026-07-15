@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "1.0.5"
+version = "1.0.6"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
@@ -13,6 +13,11 @@ categories = ["cryptography", "encoding"]
 [features]
 default = ["serde"]
 wasm = ["getrandom/wasm_js"]
+# Legacy bare-ChaCha20 fallback for keys encrypted before AEAD was added.
+# When disabled (default), AEAD decryption failure is a hard error — never
+# silently downgrade to unauthenticated ChaCha20. Enable only to migrate
+# pre-AEAD keystores; a warning is emitted on every fallback.
+legacy_chacha20_fallback = []
 
 [dependencies]
 aes-gcm = "0.10"

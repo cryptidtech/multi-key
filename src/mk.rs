@@ -5,8 +5,8 @@ use crate::{
         bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
         bls12381_g1_mldsa65, chacha20, classic_mceliece, ed25519, ed25519_fndsa512, ed25519_mayo2,
         ed25519_mldsa65, fn_dsa, frodokem, mayo, ml_dsa, ml_kem, nist_p, rsa, secp256k1, slh_dsa,
-        sntrup, threshold_meta, x25519, x25519_frodokem640, x25519_mceliece348864,
-        x25519_mlkem768, x25519_sntrup761,
+        sntrup, threshold_meta, x25519, x25519_frodokem640, x25519_mceliece348864, x25519_mlkem768,
+        x25519_sntrup761,
     },
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
@@ -33,8 +33,7 @@ use std::{collections::BTreeMap, fmt};
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
-pub const KEY_CODECS: [Codec; 8] = [
-    Codec::Identity, // used for non-standard key types
+pub const KEY_CODECS: [Codec; 7] = [
     Codec::Ed25519Priv,
     Codec::Secp256K1Priv,
     Codec::Bls12381G1Priv,

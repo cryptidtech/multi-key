@@ -36,9 +36,9 @@ pub mod threshold_marker;
 /// Threshold disclosure modes and encrypted metadata helpers.
 pub mod threshold_meta;
 pub use threshold_meta::{
-    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, DisclosureView,
-    ThresholdDisclosure, ThresholdDisclosureView, ThresholdMetaCipher, ThresholdMetadata,
-    read_threshold_params, stamp_disclosure_attrs,
+    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, read_threshold_params,
+    stamp_disclosure_attrs, DisclosureView, ThresholdDisclosure, ThresholdDisclosureView,
+    ThresholdMetaCipher, ThresholdMetadata,
 };
 pub(crate) mod x25519;
 pub(crate) mod x25519_frodokem640;
@@ -222,10 +222,7 @@ pub trait ThresholdView {
     /// reconstruct the key from teh shares
     fn combine(&self) -> Result<Multikey, Error>;
     /// Combine with a meta_key for decrypting threshold params.
-    fn combine_with_meta(
-        &self,
-        meta_key: Option<&Multikey>,
-    ) -> Result<Multikey, Error>;
+    fn combine_with_meta(&self, meta_key: Option<&Multikey>) -> Result<Multikey, Error>;
 }
 
 /// trait exposing higher-level DKG-shaped read-only metadata on a Multikey
