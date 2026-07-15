@@ -54,6 +54,11 @@
 //!
 //! - **`serde`** (default): Enables serde serialization
 //! - **`wasm`**: Enables WebAssembly support with getrandom/js
+//! - **`legacy_chacha20_fallback`** (default off): Enables the legacy bare-ChaCha20
+//!   fallback on ChaCha20Poly1305 decryption failure for keys encrypted before
+//!   AEAD was added. Disabled by default — AEAD failure is a hard error so
+//!   unauthenticated ciphertext is never returned as if it were valid. Enable
+//!   only to migrate pre-AEAD keystores; a warning is emitted on every fallback.
 //!
 //! ## Security
 //!
@@ -94,9 +99,9 @@ pub use views::threshold_marker::{
     threshold_params, MarkerView, ThresholdParticipant, ThresholdScheme,
 };
 pub use views::threshold_meta::{
-    self, decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, DisclosureView,
-    ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata, read_threshold_params,
-    stamp_disclosure_attrs,
+    self, decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, read_threshold_params,
+    stamp_disclosure_attrs, DisclosureView, ThresholdDisclosure, ThresholdMetaCipher,
+    ThresholdMetadata,
 };
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,

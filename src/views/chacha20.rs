@@ -4,8 +4,11 @@ use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
     Multikey, Views,
 };
+#[cfg(feature = "legacy_chacha20_fallback")]
 use chacha20::cipher::{KeyIvInit, StreamCipher};
-use chacha20::{ChaCha20, Nonce};
+#[cfg(feature = "legacy_chacha20_fallback")]
+use chacha20::ChaCha20;
+use chacha20::Nonce;
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
 use multi_trait::TryDecodeFrom;
@@ -163,7 +166,8 @@ impl<'a> CipherView for View<'a> {
             cattr.nonce_bytes()?
         };
 
-        // create the chacha nonce from the data
+        // create the chacha nonce from the data (only used by the legacy fallback)
+        #[cfg(feature = "legacy_chacha20_fallback")]
         let n = Nonce::clone_from_slice(&nonce);
 
         // get the key data from the passed-in Multikey
@@ -176,7 +180,8 @@ impl<'a> CipherView for View<'a> {
             key
         };
 
-        // create the chacha key from the data
+        // create the chacha key from the data (only used by the legacy fallback)
+        #[cfg(feature = "legacy_chacha20_fallback")]
         let k = chacha20::Key::clone_from_slice(&key);
 
         // get the encrypted key bytes from the viewed Multikey (self)
@@ -187,29 +192,42 @@ impl<'a> CipherView for View<'a> {
 
         // Authenticated decryption (ChaCha20Poly1305): the stored ciphertext is
         // `plaintext || 16-byte Poly1305 tag`, so tampering or a wrong passphrase
-        // is rejected rather than silently yielding garbage key bytes.
-        //
-        // Legacy fallback: keys encrypted before authentication was added used
-        // bare ChaCha20 (no tag). If AEAD verification fails we retry the legacy
-        // path so existing keystores keep opening; re-encrypting a key upgrades
-        // it to the authenticated format.
+        // is rejected rather than silently yielding garbage key bytes. This is
+        // the only decryption path by default; the legacy bare-ChaCha20 fallback
+        // for pre-AEAD keystores is gated behind the `legacy_chacha20_fallback`
+        // feature flag (default off) so unauthenticated ciphertext can never be
+        // returned as if it were valid.
         let dec = {
             use chacha20poly1305::aead::{Aead, KeyInit};
             use chacha20poly1305::{ChaCha20Poly1305, Nonce as AeadNonce};
-            let opened = ChaCha20Poly1305::new_from_slice(&key)
-                .ok()
-                .and_then(|aead| {
-                    aead.decrypt(AeadNonce::from_slice(&nonce), msg.as_slice())
-                        .ok()
-                });
-            match opened {
-                Some(pt) => Zeroizing::new(pt),
-                None => {
-                    let mut chacha = ChaCha20::new(&k, &n);
-                    let mut legacy = msg.clone();
-                    chacha.apply_keystream(&mut legacy);
-                    legacy
-                }
+            match ChaCha20Poly1305::new_from_slice(&key) {
+                Ok(aead) => match aead.decrypt(AeadNonce::from_slice(&nonce), msg.as_slice()) {
+                    Ok(pt) => Zeroizing::new(pt),
+                    Err(_) => {
+                        #[cfg(feature = "legacy_chacha20_fallback")]
+                        {
+                            // Legacy fallback: keys encrypted before
+                            // authentication was added used bare ChaCha20 (no
+                            // tag). Retry the legacy path so existing keystores
+                            // keep opening; re-encrypting a key upgrades it to
+                            // the authenticated format.
+                            eprintln!(
+                                "multi-key: AEAD decryption failed, falling back to \
+                                 legacy unauthenticated ChaCha20 — re-encrypt this \
+                                 key to upgrade to authenticated ChaCha20Poly1305"
+                            );
+                            let mut chacha = ChaCha20::new(&k, &n);
+                            let mut legacy = msg.clone();
+                            chacha.apply_keystream(&mut legacy);
+                            legacy
+                        }
+                        #[cfg(not(feature = "legacy_chacha20_fallback"))]
+                        {
+                            return Err(CipherError::DecryptionFailed.into());
+                        }
+                    }
+                },
+                Err(_) => return Err(CipherError::InvalidKey.into()),
             }
         };
 

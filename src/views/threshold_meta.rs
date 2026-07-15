@@ -10,9 +10,7 @@
 //! - **[`ThresholdDisclosure::Partial`]** — n is plaintext, t is encrypted.
 //! - **[`ThresholdDisclosure::FullConfidentialial`]** — both t and n are encrypted.
 
-use crate::{
-    AttrId, Error, Multikey, Views,
-};
+use crate::{AttrId, Error, Multikey, Views};
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     ChaCha20Poly1305, Nonce,
@@ -69,9 +67,9 @@ impl TryFrom<u8> for ThresholdDisclosure {
             0 => Ok(Self::Full),
             1 => Ok(Self::Partial),
             2 => Ok(Self::FullConfidentialial),
-            _ => Err(Error::Threshold(ThresholdError::MetaEncryption(
-                format!("invalid disclosure mode: {code}"),
-            ))),
+            _ => Err(Error::Threshold(ThresholdError::MetaEncryption(format!(
+                "invalid disclosure mode: {code}"
+            )))),
         }
     }
 }
@@ -87,8 +85,7 @@ impl<'a> TryDecodeFrom<'a> for ThresholdDisclosure {
     type Error = Error;
 
     fn try_decode_from(bytes: &'a [u8]) -> Result<(Self, &'a [u8]), Self::Error> {
-        let (code, ptr) = u8::try_decode_from(bytes)
-            .map_err(Error::Multitrait)?;
+        let (code, ptr) = u8::try_decode_from(bytes).map_err(Error::Multitrait)?;
         let mode = Self::try_from(code)?;
         Ok((mode, ptr))
     }
@@ -144,15 +141,17 @@ impl ThresholdMetadata {
     /// Encode to CBOR bytes.
     pub fn to_cbor_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::new();
-        ciborium::into_writer(self, &mut buf)
-            .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR encode: {e}"))))?;
+        ciborium::into_writer(self, &mut buf).map_err(|e| {
+            Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR encode: {e}")))
+        })?;
         Ok(buf)
     }
 
     /// Decode from CBOR bytes.
     pub fn from_cbor_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        ciborium::from_reader(bytes)
-            .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR decode: {e}"))))
+        ciborium::from_reader(bytes).map_err(|e| {
+            Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR decode: {e}")))
+        })
     }
 }
 
@@ -177,22 +176,31 @@ impl ThresholdMetaCipher {
 
     /// Get the codec as a [`Codec`].
     pub fn codec(&self) -> Result<Codec, Error> {
-        Codec::try_from(self.cipher_codec)
-            .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("invalid codec: {e}"))))
+        Codec::try_from(self.cipher_codec).map_err(|e| {
+            Error::Threshold(ThresholdError::MetaEncryption(format!(
+                "invalid codec: {e}"
+            )))
+        })
     }
 
     /// Encode to CBOR bytes.
     pub fn to_cbor_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::new();
-        ciborium::into_writer(self, &mut buf)
-            .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR encode cipher: {e}"))))?;
+        ciborium::into_writer(self, &mut buf).map_err(|e| {
+            Error::Threshold(ThresholdError::MetaEncryption(format!(
+                "CBOR encode cipher: {e}"
+            )))
+        })?;
         Ok(buf)
     }
 
     /// Decode from CBOR bytes.
     pub fn from_cbor_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        ciborium::from_reader(bytes)
-            .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("CBOR decode cipher: {e}"))))
+        ciborium::from_reader(bytes).map_err(|e| {
+            Error::Threshold(ThresholdError::MetaEncryption(format!(
+                "CBOR decode cipher: {e}"
+            )))
+        })
     }
 }
 
@@ -219,8 +227,11 @@ pub fn encrypt_threshold_meta(
         Error::Threshold(ThresholdError::MetaEncryption(format!("RNG failure: {e}")))
     })?;
 
-    let cipher = ChaCha20Poly1305::new_from_slice(key)
-        .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("AEAD key init: {e}"))))?;
+    let cipher = ChaCha20Poly1305::new_from_slice(key).map_err(|e| {
+        Error::Threshold(ThresholdError::MetaEncryption(format!(
+            "AEAD key init: {e}"
+        )))
+    })?;
 
     let ciphertext = cipher
         .encrypt(
@@ -253,8 +264,11 @@ pub fn decrypt_threshold_meta(
     let codec = cipher_info.codec()?;
     match codec {
         Codec::Chacha20Poly1305 => {
-            let cipher = ChaCha20Poly1305::new_from_slice(key)
-                .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("AEAD key init: {e}"))))?;
+            let cipher = ChaCha20Poly1305::new_from_slice(key).map_err(|e| {
+                Error::Threshold(ThresholdError::MetaEncryption(format!(
+                    "AEAD key init: {e}"
+                )))
+            })?;
 
             let plaintext = cipher
                 .decrypt(
@@ -264,7 +278,9 @@ pub fn decrypt_threshold_meta(
                         aad: b"threshold-meta",
                     },
                 )
-                .map_err(|e| Error::Threshold(ThresholdError::MetaEncryption(format!("AEAD open: {e}"))))?;
+                .map_err(|e| {
+                    Error::Threshold(ThresholdError::MetaEncryption(format!("AEAD open: {e}")))
+                })?;
 
             ThresholdMetadata::from_cbor_bytes(&plaintext)
         }
@@ -277,8 +293,7 @@ pub fn decrypt_threshold_meta(
 /// Generate a random 32-byte ChaCha20-Poly1305 key.
 pub fn generate_meta_key() -> Zeroizing<Vec<u8>> {
     let mut key = Zeroizing::new(vec![0u8; 32]);
-    getrandom::fill(key.as_mut_slice())
-        .expect("getrandom failure during meta key generation");
+    getrandom::fill(key.as_mut_slice()).expect("getrandom failure during meta key generation");
     key
 }
 
@@ -343,61 +358,42 @@ pub fn read_threshold_params(
                 .ok_or(AttributesError::MissingLimit)?;
             let n = Varuint::<usize>::try_from(n.as_slice())?.to_inner();
 
-            let encrypted = mk
-                .attributes
-                .get(&AttrId::EncryptedThresholdMeta)
-                .ok_or(ThresholdError::MetaEncryption(
-                    "missing EncryptedThresholdMeta".to_string(),
-                ))?;
-            let cipher_info_bytes = mk
-                .attributes
-                .get(&AttrId::ThresholdMetaCipher)
-                .ok_or(ThresholdError::MetaEncryption(
-                    "missing ThresholdMetaCipher".to_string(),
-                ))?;
-            let cipher_info = ThresholdMetaCipher::from_cbor_bytes(cipher_info_bytes)?;
-
-            let meta_key = meta_key
-                .ok_or(ThresholdError::MissingMetaKey)?;
-            let key = extract_meta_key(meta_key)?;
-
-            let meta = decrypt_threshold_meta(encrypted, &cipher_info, &key)?;
-            let t = meta
-                .threshold
-                .ok_or(ThresholdError::MetaEncryption(
-                    "threshold not in encrypted metadata".to_string(),
-                ))? as usize;
-            Ok((t, n))
-        }
-        ThresholdDisclosure::FullConfidentialial => {
-            let encrypted = mk
-                .attributes
-                .get(&AttrId::EncryptedThresholdMeta)
-                .ok_or(ThresholdError::MetaEncryption(
-                    "missing EncryptedThresholdMeta".to_string(),
-                ))?;
-            let cipher_info_bytes = mk
-                .attributes
-                .get(&AttrId::ThresholdMetaCipher)
-                .ok_or(ThresholdError::MetaEncryption(
-                    "missing ThresholdMetaCipher".to_string(),
-                ))?;
+            let encrypted = mk.attributes.get(&AttrId::EncryptedThresholdMeta).ok_or(
+                ThresholdError::MetaEncryption("missing EncryptedThresholdMeta".to_string()),
+            )?;
+            let cipher_info_bytes = mk.attributes.get(&AttrId::ThresholdMetaCipher).ok_or(
+                ThresholdError::MetaEncryption("missing ThresholdMetaCipher".to_string()),
+            )?;
             let cipher_info = ThresholdMetaCipher::from_cbor_bytes(cipher_info_bytes)?;
 
             let meta_key = meta_key.ok_or(ThresholdError::MissingMetaKey)?;
             let key = extract_meta_key(meta_key)?;
 
             let meta = decrypt_threshold_meta(encrypted, &cipher_info, &key)?;
-            let t = meta
-                .threshold
-                .ok_or(ThresholdError::MetaEncryption(
-                    "threshold not in encrypted metadata".to_string(),
-                ))? as usize;
-            let n = meta
-                .limit
-                .ok_or(ThresholdError::MetaEncryption(
-                    "limit not in encrypted metadata".to_string(),
-                ))? as usize;
+            let t = meta.threshold.ok_or(ThresholdError::MetaEncryption(
+                "threshold not in encrypted metadata".to_string(),
+            ))? as usize;
+            Ok((t, n))
+        }
+        ThresholdDisclosure::FullConfidentialial => {
+            let encrypted = mk.attributes.get(&AttrId::EncryptedThresholdMeta).ok_or(
+                ThresholdError::MetaEncryption("missing EncryptedThresholdMeta".to_string()),
+            )?;
+            let cipher_info_bytes = mk.attributes.get(&AttrId::ThresholdMetaCipher).ok_or(
+                ThresholdError::MetaEncryption("missing ThresholdMetaCipher".to_string()),
+            )?;
+            let cipher_info = ThresholdMetaCipher::from_cbor_bytes(cipher_info_bytes)?;
+
+            let meta_key = meta_key.ok_or(ThresholdError::MissingMetaKey)?;
+            let key = extract_meta_key(meta_key)?;
+
+            let meta = decrypt_threshold_meta(encrypted, &cipher_info, &key)?;
+            let t = meta.threshold.ok_or(ThresholdError::MetaEncryption(
+                "threshold not in encrypted metadata".to_string(),
+            ))? as usize;
+            let n = meta.limit.ok_or(ThresholdError::MetaEncryption(
+                "limit not in encrypted metadata".to_string(),
+            ))? as usize;
             Ok((t, n))
         }
     }
@@ -482,10 +478,7 @@ pub trait ThresholdDisclosureView {
     fn disclosure_mode(&self) -> Result<ThresholdDisclosure, Error>;
 
     /// Read t and n, decrypting if necessary. Requires `meta_key` for encrypted modes.
-    fn read_threshold_params(
-        &self,
-        meta_key: Option<&Multikey>,
-    ) -> Result<(usize, usize), Error>;
+    fn read_threshold_params(&self, meta_key: Option<&Multikey>) -> Result<(usize, usize), Error>;
 
     /// Convert to a target disclosure mode.
     fn to_disclosure(
@@ -521,10 +514,7 @@ impl<'a> ThresholdDisclosureView for DisclosureView<'a> {
         disclosure_mode(self.mk)
     }
 
-    fn read_threshold_params(
-        &self,
-        meta_key: Option<&Multikey>,
-    ) -> Result<(usize, usize), Error> {
+    fn read_threshold_params(&self, meta_key: Option<&Multikey>) -> Result<(usize, usize), Error> {
         read_threshold_params(self.mk, meta_key)
     }
 
@@ -539,13 +529,7 @@ impl<'a> ThresholdDisclosureView for DisclosureView<'a> {
 
         // clone and stamp new attrs
         let mut new_mk = self.mk.clone();
-        stamp_disclosure_attrs(
-            &mut new_mk.attributes,
-            target,
-            t,
-            n,
-            meta_key,
-        )?;
+        stamp_disclosure_attrs(&mut new_mk.attributes, target, t, n, meta_key)?;
         Ok(new_mk)
     }
 }
@@ -605,8 +589,7 @@ mod tests {
             ThresholdDisclosure::FullConfidentialial,
         ] {
             let encoded = mode.encode_into();
-            let (decoded, rest) =
-                ThresholdDisclosure::try_decode_from(&encoded).unwrap();
+            let (decoded, rest) = ThresholdDisclosure::try_decode_from(&encoded).unwrap();
             assert_eq!(mode, decoded);
             assert!(rest.is_empty());
         }
@@ -667,7 +650,11 @@ mod tests {
             .to_disclosure(ThresholdDisclosure::Partial, Some(&meta_key), None)
             .unwrap();
         assert_eq!(
-            partial.disclosure_view().unwrap().disclosure_mode().unwrap(),
+            partial
+                .disclosure_view()
+                .unwrap()
+                .disclosure_mode()
+                .unwrap(),
             ThresholdDisclosure::Partial
         );
 
@@ -750,10 +737,11 @@ mod tests {
     #[test]
     fn test_convert_to_partial_without_meta_key() {
         let share = make_share(3, 5);
-        let result = share
-            .disclosure_view()
-            .unwrap()
-            .to_disclosure(ThresholdDisclosure::Partial, None, None);
+        let result = share.disclosure_view().unwrap().to_disclosure(
+            ThresholdDisclosure::Partial,
+            None,
+            None,
+        );
         assert!(result.is_err());
     }
 
