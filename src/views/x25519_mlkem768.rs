@@ -9,8 +9,8 @@ use crate::{
     SealView,
 };
 use ml_kem::{
-    kem::{Decapsulate, Encapsulate},
-    EncodedSizeUser, KemCore, MlKem768,
+    kem::{Decapsulate, Encapsulate, FromSeed, Kem, KeyExport},
+    MlKem768,
 };
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
@@ -101,18 +101,15 @@ impl<'a> ConvView for View<'a> {
         let x25519_pub = PublicKey::from(&x25519_secret);
 
         // ML-KEM-768 public key
-        let d: [u8; 32] = secret_bytes[X25519_SEED_LEN..X25519_SEED_LEN + MLKEM_D_LEN]
+        let mlkem_seed: [u8; 64] = secret_bytes[X25519_SEED_LEN..PRIV_SEED_LEN]
             .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid ml-kem d".into()))?;
-        let z: [u8; 32] = secret_bytes[X25519_SEED_LEN + MLKEM_D_LEN..PRIV_SEED_LEN]
-            .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid ml-kem z".into()))?;
-        let (_dk, ek) = MlKem768::generate_deterministic(&d.into(), &z.into());
+            .map_err(|_| ConversionsError::SecretKeyFailure("invalid ml-kem seed".into()))?;
+        let (_dk, ek) = MlKem768::from_seed(&mlkem_seed.into());
 
         // Concatenate: x25519_pub (32) || mlkem_pub (1184)
         let mut pub_bytes = Vec::with_capacity(PUB_KEY_LEN);
         pub_bytes.extend_from_slice(x25519_pub.as_bytes());
-        pub_bytes.extend_from_slice(&ek.as_bytes());
+        pub_bytes.extend_from_slice(ek.to_bytes().as_slice());
 
         Builder::new(Codec::X25519Mlkem768Pub)
             .with_comment(&self.mk.comment)
@@ -222,11 +219,12 @@ impl<'a> SealView for View<'a> {
             .map_err(|_| SealError::EncapsulationFailed("invalid x25519 public key".into()))?;
         let recipient_x25519_pub = PublicKey::from(x25519_pub_arr);
 
-        let mlkem_ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(
+        let mlkem_ek = <MlKem768 as Kem>::EncapsulationKey::new(
             pub_bytes[X25519_PUB_LEN..].try_into().map_err(|_| {
                 SealError::EncapsulationFailed("invalid ML-KEM-768 public key".into())
             })?,
-        );
+        )
+        .map_err(|_| SealError::EncapsulationFailed("invalid ML-KEM-768 public key".into()))?;
 
         // X25519: generate ephemeral keypair and ECDH
         let ephemeral_secret = StaticSecret::random_from_rng(&mut rand::rng());
@@ -234,10 +232,8 @@ impl<'a> SealView for View<'a> {
         let ss_x25519 = ephemeral_secret.diffie_hellman(&recipient_x25519_pub);
 
         // ML-KEM-768: encapsulate
-        let mut rng = rand_core_06::OsRng;
-        let (mlkem_ct, ss_mlkem) = mlkem_ek
-            .encapsulate(&mut rng)
-            .map_err(|_| SealError::EncapsulationFailed("ML-KEM encapsulation failed".into()))?;
+        let mut rng = rand::rng();
+        let (mlkem_ct, ss_mlkem) = mlkem_ek.encapsulate_with_rng(&mut rng);
 
         // Combine shared secrets via SHA-512
         let combined_ss = combine_shared_secrets(
@@ -309,21 +305,16 @@ impl<'a> OpenView for View<'a> {
         let ss_x25519 = x25519_secret.diffie_hellman(&ephemeral_pub);
 
         // ML-KEM-768 decapsulate
-        let d: [u8; 32] = secret_bytes[X25519_SEED_LEN..X25519_SEED_LEN + MLKEM_D_LEN]
+        let mlkem_seed: [u8; 64] = secret_bytes[X25519_SEED_LEN..PRIV_SEED_LEN]
             .try_into()
-            .map_err(|_| SealError::DecapsulationFailed("invalid ml-kem d".into()))?;
-        let z: [u8; 32] = secret_bytes[X25519_SEED_LEN + MLKEM_D_LEN..PRIV_SEED_LEN]
-            .try_into()
-            .map_err(|_| SealError::DecapsulationFailed("invalid ml-kem z".into()))?;
-        let (dk, _ek) = MlKem768::generate_deterministic(&d.into(), &z.into());
+            .map_err(|_| SealError::DecapsulationFailed("invalid ml-kem seed".into()))?;
+        let (dk, _ek) = MlKem768::from_seed(&mlkem_seed.into());
 
         let mlkem_ct = mlkem_ct_bytes
             .as_slice()
             .try_into()
             .map_err(|_| SealError::DecapsulationFailed("invalid ML-KEM ciphertext size".into()))?;
-        let ss_mlkem = dk
-            .decapsulate(&mlkem_ct)
-            .map_err(|_| SealError::DecapsulationFailed("ML-KEM decapsulation failed".into()))?;
+        let ss_mlkem = dk.decapsulate(&mlkem_ct);
 
         // Combine shared secrets via SHA-512
         let combined_ss = combine_shared_secrets(

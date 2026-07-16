@@ -72,6 +72,7 @@
 
 #![warn(missing_docs)]
 #![deny(
+    unsafe_code,
     trivial_casts,
     trivial_numeric_casts,
     unused_import_braces,
@@ -116,7 +117,7 @@ pub mod keysplit;
 pub mod mk;
 pub use mk::{
     Builder, EncodedMultikey, Multikey, FN_DSA_KEY_CODECS, KEY_CODECS, KEY_SHARE_CODECS,
-    ML_DSA_KEY_CODECS, ML_KEM_KEY_CODECS, SLH_DSA_KEY_CODECS, X25519_KEY_CODECS,
+    MAX_ATTRIBUTES, ML_DSA_KEY_CODECS, ML_KEM_KEY_CODECS, SLH_DSA_KEY_CODECS, X25519_KEY_CODECS,
 };
 
 /// Nonce type

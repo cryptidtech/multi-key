@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! X25519-sntrup761 hybrid KEM multikey view; combines X25519 ECDH with sntrup761 KEM,
-//! ChaCha20-Poly1305 AEAD, and BLAKE3 KDF.
+//! ChaCha20-Poly1305 AEAD, and a BLAKE3 combiner feeding HKDF-SHA512.
 
 use crate::{
     error::{AttributesError, ConversionsError, SealError},
@@ -250,8 +250,13 @@ impl<'a> SealView for View<'a> {
             ephemeral_pub.as_bytes(),
         );
 
+        // Derive the AEAD key from the combined shared secret via HKDF-SHA512,
+        // matching the construction used by the other hybrid KEMs.
+        let key_len = aead::key_size(aead_codec)?;
+        let aead_key = aead::derive_aead_key(&combined_ss, b"x25519-sntrup761-seal", key_len)?;
+
         // AEAD encrypt
-        let (nonce, ct_tag) = aead::aead_seal(aead_codec, &combined_ss, plaintext, aad)?;
+        let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
         Ok((
             encode_sealed(
@@ -325,10 +330,15 @@ impl<'a> OpenView for View<'a> {
             ephemeral_pub_bytes.as_slice(),
         );
 
+        // Derive the AEAD key from the combined shared secret via HKDF-SHA512,
+        // matching the construction used by the other hybrid KEMs.
+        let key_len = aead::key_size(Codec::Chacha20Poly1305)?;
+        let aead_key = aead::derive_aead_key(&combined_ss, b"x25519-sntrup761-seal", key_len)?;
+
         // AEAD decrypt
         Ok(aead::aead_open(
             Codec::Chacha20Poly1305,
-            &combined_ss,
+            &aead_key,
             &nonce,
             &ct_tag,
             aad,

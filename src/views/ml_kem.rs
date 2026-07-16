@@ -8,8 +8,8 @@ use crate::{
     SealView,
 };
 use ml_kem::{
-    kem::{Decapsulate, Encapsulate},
-    EncodedSizeUser, KemCore, MlKem1024, MlKem768,
+    kem::{Decapsulate, Encapsulate, FromSeed, Kem, KeyExport},
+    MlKem1024, MlKem768,
 };
 use multi_codec::Codec;
 use multi_hash::{mh, Multihash};
@@ -93,21 +93,19 @@ impl<'a> ConvView for View<'a> {
             return Err(ConversionsError::SecretKeyFailure("invalid seed length".into()).into());
         }
 
-        let d: [u8; 32] = secret_bytes[..32]
+        let seed: [u8; 64] = secret_bytes
+            .as_slice()
             .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
-        let z: [u8; 32] = secret_bytes[32..64]
-            .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
+            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed length".into()))?;
 
         let (public_key, codec) = match self.mk.codec {
             Codec::Mlkem768Priv => {
-                let (_dk, ek) = MlKem768::generate_deterministic(&d.into(), &z.into());
-                (ek.as_bytes().to_vec(), Codec::Mlkem768Pub)
+                let (_dk, ek) = MlKem768::from_seed(&seed.into());
+                (ek.to_bytes().to_vec(), Codec::Mlkem768Pub)
             }
             Codec::Mlkem1024Priv => {
-                let (_dk, ek) = MlKem1024::generate_deterministic(&d.into(), &z.into());
-                (ek.as_bytes().to_vec(), Codec::Mlkem1024Pub)
+                let (_dk, ek) = MlKem1024::from_seed(&seed.into());
+                (ek.to_bytes().to_vec(), Codec::Mlkem1024Pub)
             }
             _ => {
                 return Err(
@@ -192,34 +190,33 @@ impl<'a> SealView for View<'a> {
         }
 
         let pub_bytes = self.key_bytes()?;
-        let mut rng = rand_core_06::OsRng;
+        let mut rng = rand::rng();
 
-        let (kem_ct, shared_secret) =
-            match self.mk.codec {
-                Codec::Mlkem768Pub => {
-                    let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(
-                        pub_bytes.as_slice().try_into().map_err(|_| {
-                            SealError::EncapsulationFailed("invalid key size".into())
-                        })?,
-                    );
-                    let (ct, ss) = ek.encapsulate(&mut rng).map_err(|_| {
-                        SealError::EncapsulationFailed("encapsulation failed".into())
-                    })?;
-                    (ct.to_vec(), ss.to_vec())
-                }
-                Codec::Mlkem1024Pub => {
-                    let ek = <MlKem1024 as KemCore>::EncapsulationKey::from_bytes(
-                        pub_bytes.as_slice().try_into().map_err(|_| {
-                            SealError::EncapsulationFailed("invalid key size".into())
-                        })?,
-                    );
-                    let (ct, ss) = ek.encapsulate(&mut rng).map_err(|_| {
-                        SealError::EncapsulationFailed("encapsulation failed".into())
-                    })?;
-                    (ct.to_vec(), ss.to_vec())
-                }
-                _ => return Err(SealError::NotEncapsulationKey.into()),
-            };
+        let (kem_ct, shared_secret) = match self.mk.codec {
+            Codec::Mlkem768Pub => {
+                let ek = <MlKem768 as Kem>::EncapsulationKey::new(
+                    pub_bytes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| SealError::EncapsulationFailed("invalid key size".into()))?,
+                )
+                .map_err(|_| SealError::EncapsulationFailed("invalid encapsulation key".into()))?;
+                let (ct, ss) = ek.encapsulate_with_rng(&mut rng);
+                (ct.to_vec(), ss.to_vec())
+            }
+            Codec::Mlkem1024Pub => {
+                let ek = <MlKem1024 as Kem>::EncapsulationKey::new(
+                    pub_bytes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| SealError::EncapsulationFailed("invalid key size".into()))?,
+                )
+                .map_err(|_| SealError::EncapsulationFailed("invalid encapsulation key".into()))?;
+                let (ct, ss) = ek.encapsulate_with_rng(&mut rng);
+                (ct.to_vec(), ss.to_vec())
+            }
+            _ => return Err(SealError::NotEncapsulationKey.into()),
+        };
 
         // Derive AEAD key from shared secret via HKDF
         let key_len = aead::key_size(aead_codec)?;
@@ -258,32 +255,26 @@ impl<'a> OpenView for View<'a> {
             return Err(ConversionsError::SecretKeyFailure("invalid seed length".into()).into());
         }
 
-        let d: [u8; 32] = secret_bytes[..32]
+        let seed: [u8; 64] = secret_bytes
+            .as_slice()
             .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
-        let z: [u8; 32] = secret_bytes[32..64]
-            .try_into()
-            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
+            .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed length".into()))?;
 
         let shared_secret = match self.mk.codec {
             Codec::Mlkem768Priv => {
-                let (dk, _ek) = MlKem768::generate_deterministic(&d.into(), &z.into());
+                let (dk, _ek) = MlKem768::from_seed(&seed.into());
                 let ct = kem_ct.as_slice().try_into().map_err(|_| {
                     SealError::DecapsulationFailed("invalid ciphertext size".into())
                 })?;
-                let ss = dk
-                    .decapsulate(&ct)
-                    .map_err(|_| SealError::DecapsulationFailed("decapsulation failed".into()))?;
+                let ss = dk.decapsulate(&ct);
                 ss.to_vec()
             }
             Codec::Mlkem1024Priv => {
-                let (dk, _ek) = MlKem1024::generate_deterministic(&d.into(), &z.into());
+                let (dk, _ek) = MlKem1024::from_seed(&seed.into());
                 let ct = kem_ct.as_slice().try_into().map_err(|_| {
                     SealError::DecapsulationFailed("invalid ciphertext size".into())
                 })?;
-                let ss = dk
-                    .decapsulate(&ct)
-                    .map_err(|_| SealError::DecapsulationFailed("decapsulation failed".into()))?;
+                let ss = dk.decapsulate(&ct);
                 ss.to_vec()
             }
             _ => return Err(SealError::NotDecapsulationKey.into()),

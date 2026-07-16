@@ -220,14 +220,18 @@ impl<'a> ConvView for View<'a> {
 
 impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
-        if self.is_secret_key() {
-            return Err(ConversionsError::SecretKeyFailure(
-                "ML-DSA public key derivation not yet implemented".into(),
-            )
-            .into());
-        }
-        let bytes = self.key_bytes()?;
-        Ok(mh::Builder::new_from_bytes(codec, bytes.as_slice())?.try_build()?)
+        let pub_bytes = if self.is_secret_key() {
+            // Derive the public key and fingerprint that, mirroring the
+            // Ed25519 / BLS / SLH-DSA views. Earlier revisions returned an
+            // "not yet implemented" error here even though `to_public_key()`
+            // was implemented, which broke fingerprinting of secret keys.
+            let pk = self.mk.conv_view()?.to_public_key()?;
+            let dv = pk.data_view()?;
+            dv.key_bytes()?
+        } else {
+            self.key_bytes()?
+        };
+        Ok(mh::Builder::new_from_bytes(codec, pub_bytes.as_slice())?.try_build()?)
     }
 }
 

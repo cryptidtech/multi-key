@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /// Errors created by this library
+#[must_use]
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -59,6 +60,14 @@ pub enum Error {
     /// Duplicate attribute error
     #[error("Duplicate Multikey attribute: {0}")]
     DuplicateAttribute(u8),
+    /// Attribute count exceeds the configured maximum
+    ///
+    /// Returned by [`crate::mk::Multikey::try_decode_from`] when the number of
+    /// attributes declared in the wire data exceeds
+    /// [`crate::mk::MAX_ATTRIBUTES`]. Bounds the work a crafted input can
+    /// force the decoder to perform and mitigates CWE-400.
+    #[error("attribute count {0} exceeds maximum {1}")]
+    TooManyAttributes(usize, usize),
     /// Incorrect Multikey sigil
     #[error("Missing Multikey sigil")]
     MissingSigil,
@@ -288,6 +297,13 @@ pub enum SealError {
     /// Key derivation failed
     #[error("Key derivation failed: {0}")]
     KeyDerivationFailed(String),
+    /// RNG failure during sealing
+    ///
+    /// Returned when the OS RNG (`getrandom`) fails to produce randomness
+    /// (e.g. on constrained targets without entropy). Propagated from the
+    /// sealing path instead of panicking.
+    #[error("RNG failure: {0}")]
+    RngFailure(String),
 }
 
 /// Sign errors created by this library
@@ -303,6 +319,13 @@ pub enum SignError {
     /// Missing scheme
     #[error("Missing signature scheme")]
     MissingScheme,
+    /// RNG failure during signing
+    ///
+    /// Returned when the OS RNG (`getrandom`) fails to produce randomness
+    /// (e.g. on constrained targets without entropy). Propagated from the
+    /// signing path instead of panicking.
+    #[error("RNG failure: {0}")]
+    RngFailure(String),
 }
 
 /// Threshold errors created by this library
@@ -363,6 +386,7 @@ pub enum VerifyError {
 
 impl Error {
     /// Get the error kind as a string
+    #[must_use]
     pub fn kind(&self) -> &str {
         match self {
             Self::Attributes(_) => "Attributes",
@@ -383,6 +407,7 @@ impl Error {
             Self::Multihash(_) => "Multihash",
             Self::Utf8(_) => "Utf8",
             Self::DuplicateAttribute(_) => "DuplicateAttribute",
+            Self::TooManyAttributes(_, _) => "TooManyAttributes",
             Self::MissingSigil => "MissingSigil",
             Self::UnsupportedAlgorithm(_) => "UnsupportedAlgorithm",
         }

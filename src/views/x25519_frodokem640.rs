@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! X25519-FrodoKEM-640 hybrid KEM multikey view (X-Wing-like); combines X25519 ECDH
-//! with FrodoKEM-640 (AES or SHAKE), ChaCha20-Poly1305 AEAD, and BLAKE3 KDF.
+//! with FrodoKEM-640 (AES or SHAKE), ChaCha20-Poly1305 AEAD, and a BLAKE3 combiner
+//! feeding HKDF-SHA512.
 //!
 //! Private key layout: `x25519_seed (32) || frodokem_secret_key`.
 //! Public key layout (classical-first): `x25519_pub (32) || frodokem_public_key`.
@@ -295,7 +296,12 @@ impl<'a> SealView for View<'a> {
             ephemeral_pub.as_bytes(),
         );
 
-        let (nonce, ct_tag) = aead::aead_seal(aead_codec, &combined_ss, plaintext, aad)?;
+        // Derive the AEAD key from the combined shared secret via HKDF-SHA512,
+        // matching the construction used by the other hybrid KEMs.
+        let key_len = aead::key_size(aead_codec)?;
+        let aead_key = aead::derive_aead_key(&combined_ss, b"x25519-frodokem640-seal", key_len)?;
+
+        let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
         Ok((
             encode_sealed(ephemeral_pub.as_bytes(), frodo_ct.as_ref(), &nonce, &ct_tag),
@@ -359,9 +365,14 @@ impl<'a> OpenView for View<'a> {
             ephemeral_pub_bytes.as_slice(),
         );
 
+        // Derive the AEAD key from the combined shared secret via HKDF-SHA512,
+        // matching the construction used by the other hybrid KEMs.
+        let key_len = aead::key_size(Codec::Chacha20Poly1305)?;
+        let aead_key = aead::derive_aead_key(&combined_ss, b"x25519-frodokem640-seal", key_len)?;
+
         Ok(aead::aead_open(
             Codec::Chacha20Poly1305,
-            &combined_ss,
+            &aead_key,
             &nonce,
             &ct_tag,
             aad,

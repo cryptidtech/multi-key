@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
@@ -20,25 +20,25 @@ wasm = ["getrandom/wasm_js"]
 legacy_chacha20_fallback = []
 
 [dependencies]
-aes-gcm = "0.10"
-bcrypt-pbkdf = "0.10"
+aes-gcm = "0.11"
+bcrypt-pbkdf = "0.11"
 blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
 ciborium = "0.2"
 curve25519-dalek = { version = "5.0.0", features = ["group"] }
 # blsful configured per-target below (blst for native, rust for wasm)
 frodo-kem-rs = { version = "0.7", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
-chacha20 = "0.9"
-chacha20poly1305 = "0.10"
+chacha20 = "0.10"
+chacha20poly1305 = "0.11"
 ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"] }
 elliptic-curve = "0.14"
 fn-dsa = "0.3"
 getrandom = { version = "0.4", features = ["sys_rng"] }
 hex = "0.4"
-hkdf = "0.12"
+hkdf = "0.13"
 k256 = { version = "0.14", features = ["ecdh"] }
 mceliece348864 = { version = "1.0" }
 ml-dsa = "0.1.1"
-ml-kem = { version = "0.2", features = ["deterministic"] }
+ml-kem = "0.3"
 multi-base = "1.0"
 multi-codec = "1.0"
 multi-hash = "1.0"
@@ -48,7 +48,7 @@ multi-util = "1.0"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
-poly1305 = "0.8"
+poly1305 = "0.9"
 pq-mayo = "0.5.0"
 # RustCrypto 0.14 stack (vsss-rs 6, elliptic-curve 0.14, ed25519-dalek 3) is on
 # rand_core 0.10; pin the rand ecosystem to the matching majors so RNGs thread
@@ -66,11 +66,12 @@ rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
 sec1 = "0.8"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
 serde_cbor = "0.11"
-sha2 = "0.10"
+sha2 = "0.11"
 signature = "3"
 slh-dsa = "0.2.0-rc.5"
 sntrup = "0.3.0"
 ssh-encoding = "0.3"
+subtle = "2"
 thiserror = { version = "2.0" }
 typenum = "1.17"
 unsigned-varint = { version = "0.8", features = ["std"] }
