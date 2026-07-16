@@ -165,7 +165,9 @@ impl<'a> TryDecodeFrom<'a> for ThresholdData {
                 let mut p = ptr;
                 for _ in 0..*num_shares {
                     let (share, ptr) = KeyShare::try_decode_from(p)?;
-                    shares.insert(share.0, share);
+                    if shares.insert(share.0, share).is_some() {
+                        return Err(ThresholdError::DuplicateShare.into());
+                    }
                     p = ptr;
                 }
                 (shares, p)
@@ -923,15 +925,20 @@ impl<'a> ThresholdView for View<'a> {
         let threshold_data: Vec<u8> = {
             let av = self.mk.threshold_attr_view()?;
             let mut tdata = match av.threshold_data() {
-                Ok(b) => ThresholdData::try_from(b).unwrap_or_default(),
+                Ok(b) => ThresholdData::try_from(b)
+                    .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
                 Err(_) => ThresholdData::default(),
             };
+            // detect a duplicate share identifier and refuse to silently overwrite it
+            if tdata.0.contains_key(&identifier) {
+                return Err(ThresholdError::DuplicateShare.into());
+            }
             // insert the share data
             tdata.0.insert(identifier, key_share);
             tdata.into()
         };
 
-        // if this multikey doesn't already have the threshold/limi set, then
+        // if this multikey doesn't already have the threshold/limit set, then
         // set it to match the values from the first share
         let av = share.threshold_attr_view()?;
         let threshold = av.threshold().unwrap_or(threshold);
@@ -939,7 +946,7 @@ impl<'a> ThresholdView for View<'a> {
         let comment = if self.mk.comment.is_empty() {
             share.comment.clone()
         } else {
-            String::default()
+            self.mk.comment.clone()
         };
 
         Builder::new(self.mk.codec)
@@ -957,7 +964,8 @@ impl<'a> ThresholdView for View<'a> {
             let av = self.mk.threshold_attr_view()?;
             (
                 match av.threshold_data() {
-                    Ok(b) => ThresholdData::try_from(b).unwrap_or_default(),
+                    Ok(b) => ThresholdData::try_from(b)
+                        .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
                     Err(_) => ThresholdData::default(),
                 },
                 av.threshold()?,
@@ -1147,6 +1155,17 @@ impl<'a> ThresholdView for View<'a> {
 
 impl<'a> VerifyView for View<'a> {
     /// try to verify a Multisig using the Multikey
+    ///
+    /// # Curve selection (M1)
+    ///
+    /// The BLS curve (G1 vs G2) is selected by the multikey codec tag
+    /// (`Bls12381G1Pub` / `Bls12381G2Pub` / `*Share`), not by the signature
+    /// byte length. The 48-byte (G1 point) and 96-byte (G2 point) lengths are
+    /// used only to slice the canonical signature into the correct group
+    /// encoding for the curve already chosen by the codec. A 48-byte G2 or
+    /// 96-byte G1 signature is therefore rejected with a deserialization
+    /// error rather than being misverified on the wrong curve. This avoids the
+    /// downgrade heuristic described in the security audit (M1).
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
         let attr = self.mk.attr_view()?;
         let pubmk = if attr.is_secret_key() {

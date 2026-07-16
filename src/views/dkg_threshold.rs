@@ -13,6 +13,8 @@
 use crate::error::AttributesError;
 use crate::Error;
 use crate::{AttrId, AttrView, Multikey, ThresholdAttrView, ThresholdKeyView};
+use multi_trait::TryDecodeFrom;
+use multi_util::Varuint;
 
 /// Read-only DKG threshold view over a [`Multikey`].
 pub(crate) struct View<'a> {
@@ -29,9 +31,16 @@ impl<'a> TryFrom<&'a Multikey> for View<'a> {
 
 impl<'a> AttrView for View<'a> {
     fn is_encrypted(&self) -> bool {
-        // Encryption status is recorded on the multikey itself, not on the view;
-        // a DKG share is conceptually a secret-bearing share, so report false
-        // here and let the multikey's own AttrView impl be authoritative.
+        // A DKG share may itself be encrypted (the `KeyIsEncrypted` attribute is
+        // stamped on the multikey). Earlier revisions hardcoded `false`, which
+        // meant callers using `threshold_attr_view()` alone saw an unencrypted
+        // share even when it was sealed. Read the attribute directly so the
+        // status is authoritative regardless of which view the caller holds.
+        if let Some(v) = self.mk.attributes.get(&AttrId::KeyIsEncrypted) {
+            if let Ok((b, _)) = Varuint::<bool>::try_decode_from(v.as_slice()) {
+                return b.to_inner();
+            }
+        }
         false
     }
 
@@ -40,7 +49,11 @@ impl<'a> AttrView for View<'a> {
     }
 
     fn is_secret_key(&self) -> bool {
-        false
+        // A DKG private share is a secret-bearing key share; treat it as a
+        // secret key for status purposes so callers gating on `is_secret_key()`
+        // (e.g. before signing or exporting) do not silently treat a
+        // secret share as public.
+        true
     }
 
     fn is_secret_key_share(&self) -> bool {

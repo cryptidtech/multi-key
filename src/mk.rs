@@ -30,6 +30,7 @@ use ssh_key::{
     EcdsaCurve, PrivateKey, PublicKey,
 };
 use std::{collections::BTreeMap, fmt};
+use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
@@ -128,6 +129,14 @@ pub const KEY_SHARE_CODECS: [Codec; 4] = [
 /// the multicodec sigil for multikey
 pub const SIGIL: Codec = Codec::Multikey;
 
+/// Maximum number of attributes a single decoded [`Multikey`] will accept.
+///
+/// Every legitimate multikey carries at most a handful of attributes (key
+/// data, threshold metadata, cipher info, …). The 256 ceiling comfortably
+/// covers every codec this crate emits while bounding the work a crafted
+/// input can force the decoder to perform (mitigates CWE-400).
+pub const MAX_ATTRIBUTES: usize = 256;
+
 /// A base encoded Multikey structure
 pub type EncodedMultikey = BaseEncoded<Multikey>;
 
@@ -140,6 +149,17 @@ pub struct Multikey {
     /// key codec
     pub(crate) codec: Codec,
     /// the comment for the key
+    ///
+    /// # Zeroization
+    ///
+    /// The comment is **not** zeroized on drop. It is stored as a plain
+    /// [`String`] so it can be serialized, compared, and surfaced in SSH/key
+    /// output without the deref-coercion friction a [`Zeroizing<String>`]
+    /// wrapper would introduce across the ~120 call sites that read it. If a
+    /// caller places sensitive material in the comment, they must zeroize that
+    /// material themselves before it leaves scope; the key *material* (in
+    /// `attributes`) is wrapped in [`Zeroizing`] and is zeroized on drop. See
+    /// the security audit finding R6 for the rationale.
     pub comment: String,
     /// codec-specific attributes, sorted by key
     pub attributes: Attributes,
@@ -166,6 +186,26 @@ impl EncodingInfo for Multikey {
     /// Same
     fn encoding(&self) -> Base {
         Self::preferred_encoding()
+    }
+}
+
+/// Constant-time equality for [`Multikey`] (R7).
+///
+/// The derived [`PartialEq`] short-circuits on the first differing byte,
+/// which leaks timing information when key material (or metadata derived
+/// from it) is compared in a security-sensitive context. This
+/// [`ConstantTimeEq`] impl compares the canonical wire encoding
+/// (`sigil || codec || comment || attributes`) in constant time so callers
+/// that need a side-channel-resistant comparison (e.g. comparing two
+/// fingerprints or two secret keys) can use `mk1.ct_eq(&mk2)` instead of
+/// `mk1 == mk2`. The wire encoding is what gets hashed into a fingerprint,
+/// so comparing it is equivalent to comparing the canonical form.
+impl ConstantTimeEq for Multikey {
+    fn ct_eq(&self, other: &Self) -> subtle::Choice {
+        // Compare the canonical wire encoding byte-for-byte in constant time.
+        let a: Vec<u8> = self.clone().into();
+        let b: Vec<u8> = other.clone().into();
+        a.ct_eq(&b)
     }
 }
 
@@ -214,6 +254,11 @@ impl<'a> TryDecodeFrom<'a> for Multikey {
         let comment = String::from_utf8(comment.to_inner())?;
         // decode the number of codec-specific attributes
         let (num_attr, ptr) = Varuint::<usize>::try_decode_from(ptr)?;
+        // reject attribute counts that exceed the configured maximum to bound
+        // the work a crafted input can force the decoder to perform (CWE-400)
+        if *num_attr > MAX_ATTRIBUTES {
+            return Err(Error::TooManyAttributes(*num_attr, MAX_ATTRIBUTES));
+        }
         // decode the codec-specific values
         let (attributes, ptr) = match *num_attr {
             0 => (Attributes::default(), ptr),
@@ -1442,7 +1487,11 @@ impl Builder {
                 out
             }
             Codec::Rsa2048Priv => {
-                let key = ::rsa::RsaPrivateKey::new(&mut rsa::OsRng, 2048)
+                // Probe the OS RNG up front so an entropy failure surfaces as an
+                // error instead of a panic inside UnwrapErr during keygen.
+                rsa::OsRng::check_entropy()
+                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 2048)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
@@ -1450,7 +1499,9 @@ impl Builder {
                     .to_vec()
             }
             Codec::Rsa3072Priv => {
-                let key = ::rsa::RsaPrivateKey::new(&mut rsa::OsRng, 3072)
+                rsa::OsRng::check_entropy()
+                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 3072)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
@@ -1458,7 +1509,9 @@ impl Builder {
                     .to_vec()
             }
             Codec::Rsa4096Priv => {
-                let key = ::rsa::RsaPrivateKey::new(&mut rsa::OsRng, 4096)
+                rsa::OsRng::check_entropy()
+                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 4096)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
