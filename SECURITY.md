@@ -24,7 +24,6 @@ future.
 
 This crate depends on the following release-candidate (RC) crates:
 
-- `rsa = "0.10.0-rc.18"` — RSA signature scheme
 - `slh-dsa = "0.2.0-rc.5"` — SLH-DSA post-quantum signatures
 - `vsss-rs = "6.0.0-rc2"` — verifiable secret sharing (transitive via
   `blsful`)
@@ -37,6 +36,24 @@ on each release and will be upgraded to stable when available. Consumers
 should be aware that RC APIs may change before stabilisation. Coordinate
 with `multi-sig` (which depends on the same `blsful` and `ssh-key`
 versions) when upgrading.
+
+## RSA Implementation: `sad-rsa` (Marvin Attack Mitigation)
+
+This crate uses [`sad-rsa`](https://crates.io/crates/sad-rsa) (`0.2.3`)
+instead of the upstream `rsa` crate to mitigate RUSTSEC-2023-0071 (Marvin
+Attack: potential key recovery through timing sidechannels).
+
+`sad-rsa` is a hardened fork of `rsa` that implements **implicit rejection**
+for PKCS#1 v1.5 decryption, making valid and invalid ciphertexts
+indistinguishable to attackers. The API is fully compatible with `rsa`.
+
+This crate uses RSA for:
+- RSA key generation (`RsaPrivateKey::new` for 2048/3072/4096-bit keys)
+- PKCS#1 encoding (`pkcs1::EncodeRsaPrivateKey`)
+- RSA-PSS signing and verification (`pss::SigningKey`, `pss::VerifyingKey`)
+- RSA-OAEP encryption/decryption for hybrid key encapsulation
+
+RSA key material is wrapped in `Zeroizing<Vec<u8>>` and zeroized on drop.
 
 ## Comment Field Zeroization (R6)
 

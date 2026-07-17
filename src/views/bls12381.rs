@@ -705,7 +705,10 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms = ms::Builder::new_from_bls_signature(&signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_with_codec(
+                    Codec::Bls12381G1Msig,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -726,8 +729,12 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms =
-                    ms::Builder::new_from_bls_signature_share(threshold, limit, &signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_share_with_codec(
+                    Codec::Bls12381G1ShareMsig,
+                    threshold,
+                    limit,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -752,7 +759,10 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms = ms::Builder::new_from_bls_signature(&signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_with_codec(
+                    Codec::Bls12381G2Msig,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -772,8 +782,12 @@ impl<'a> SignView for View<'a> {
                 let signature = secret_key
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
-                let mut ms =
-                    ms::Builder::new_from_bls_signature_share(threshold, limit, &signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_share_with_codec(
+                    Codec::Bls12381G2ShareMsig,
+                    threshold,
+                    limit,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }

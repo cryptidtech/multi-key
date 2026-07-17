@@ -141,11 +141,11 @@ impl<'a> MarkerView<'a> {
             .attributes
             .get(&AttrId::ThresholdParticipants)
             .ok_or(AttributesError::MissingThresholdParticipants)?;
-        let map: BTreeMap<Vec<u8>, ThresholdParticipant> = serde_cbor::from_slice(v.as_slice())
+        let map: BTreeMap<Vec<u8>, ThresholdParticipant> = ciborium::from_reader(v.as_slice())
             .map_err(|e| AttributesError::ThresholdMarkerCbor(e.to_string()))?;
         // CBOR-01: bound the registry size. A t-of-n threshold key has at most
         // `Limit` participants; reject an oversized map (decode amplification /
-        // attacker-influenced blob) well below serde_cbor's generic map cap.
+        // attacker-influenced blob) well below ciborium's generic map cap.
         const MAX_THRESHOLD_PARTICIPANTS: usize = 1024;
         if map.len() > MAX_THRESHOLD_PARTICIPANTS {
             return Err(AttributesError::ThresholdMarkerCbor(
@@ -203,7 +203,8 @@ pub fn set_participants(
     mk: &mut Multikey,
     participants: &BTreeMap<Vec<u8>, ThresholdParticipant>,
 ) -> Result<(), Error> {
-    let bytes = serde_cbor::to_vec(participants)
+    let mut bytes = Vec::new();
+    ciborium::into_writer(participants, &mut bytes)
         .map_err(|e| AttributesError::ThresholdMarkerCbor(e.to_string()))?;
     mk.attributes
         .insert(AttrId::ThresholdParticipants, bytes.into());
@@ -232,8 +233,10 @@ pub fn canonical_marker_bytes(mk: &Multikey) -> Result<Vec<u8>, Error> {
     let threshold = mv.threshold()?;
     let limit = mv.participant_count()?;
     let payload = (group, participants, threshold, limit);
-    serde_cbor::to_vec(&payload)
-        .map_err(|e| AttributesError::ThresholdMarkerCbor(e.to_string()).into())
+    let mut buf = Vec::new();
+    ciborium::into_writer(&payload, &mut buf)
+        .map_err(|e| Error::Attributes(AttributesError::ThresholdMarkerCbor(e.to_string())))?;
+    Ok(buf)
 }
 
 /// Authenticate the marker bundle: sign `canonical_marker_bytes(mk)` with

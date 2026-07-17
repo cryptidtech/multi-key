@@ -13,6 +13,13 @@ mod tests {
     use multi_util::BaseEncoded;
     use serde::{Deserialize, Serialize};
     use serde_test::{Configure, Token, assert_tokens};
+
+    /// Serialize a value to CBOR bytes using `ciborium`.
+    fn cbor_to_vec<T: Serialize>(value: &T) -> Vec<u8> {
+        let mut buf = Vec::new();
+        ciborium::into_writer(value, &mut buf).expect("CBOR serialize");
+        buf
+    }
     use std::collections::BTreeMap;
 
     #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -46,8 +53,8 @@ mod tests {
         w1.map.insert(skh, sk);
         w1.map.insert(pkh, pk);
 
-        let b = serde_cbor::to_vec(&w1).unwrap();
-        let w2 = serde_cbor::from_slice(b.as_slice()).unwrap();
+        let b = cbor_to_vec(&w1);
+        let w2 = ciborium::from_reader(b.as_slice()).unwrap();
         assert_eq!(w1, w2);
         let s = serde_json::to_string(&w1).unwrap();
         let w3 = serde_json::from_str(&s).unwrap();

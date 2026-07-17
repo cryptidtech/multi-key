@@ -41,6 +41,19 @@ fn err<E: core::fmt::Display>(e: E) -> Error {
     Error::KeySplit(e.to_string())
 }
 
+/// Serialize a value to CBOR bytes using `ciborium` (replaces the
+/// unmaintained `serde_cbor` dependency).
+fn cbor_to_vec<T: Serialize>(value: &T) -> Result<Vec<u8>, Error> {
+    let mut buf = Vec::new();
+    ciborium::into_writer(value, &mut buf).map_err(err)?;
+    Ok(buf)
+}
+
+/// Deserialize a value from CBOR bytes using `ciborium`.
+fn cbor_from_slice<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {
+    ciborium::from_reader(bytes).map_err(err)
+}
+
 /// Sharing scheme tag stored in each share payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Scheme {
@@ -392,7 +405,7 @@ fn build_payloads(
 }
 
 fn wrap_share(orig: &Multikey, payload: &SharePayload) -> Result<Multikey, Error> {
-    let cbor = serde_cbor::to_vec(payload).map_err(err)?;
+    let cbor = cbor_to_vec(payload)?;
     let mut attributes = Attributes::new();
     attributes.insert(AttrId::KeyData, Zeroizing::new(cbor));
     Ok(Multikey {
@@ -410,7 +423,7 @@ fn unwrap_share(mk: &Multikey) -> Result<SharePayload, Error> {
         .attributes
         .get(&AttrId::KeyData)
         .ok_or_else(|| err("share missing key data"))?;
-    serde_cbor::from_slice(kd.as_slice()).map_err(err)
+    cbor_from_slice(kd.as_slice())
 }
 
 // ---- public API -------------------------------------------------------------
@@ -668,14 +681,8 @@ mod tests {
         let original = secret(&mk);
         let shares = split(&mk, 2, 3, rand::rng()).unwrap();
 
-        let cbor: Vec<Vec<u8>> = shares
-            .iter()
-            .map(|s| serde_cbor::to_vec(s).unwrap())
-            .collect();
-        let from_cbor: Vec<Multikey> = cbor
-            .iter()
-            .map(|b| serde_cbor::from_slice(b).unwrap())
-            .collect();
+        let cbor: Vec<Vec<u8>> = shares.iter().map(|s| cbor_to_vec(s).unwrap()).collect();
+        let from_cbor: Vec<Multikey> = cbor.iter().map(|b| cbor_from_slice(b).unwrap()).collect();
         assert_eq!(
             secret(&combine(&from_cbor[0..2]).unwrap()),
             original,

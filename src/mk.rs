@@ -1515,9 +1515,10 @@ impl Builder {
                 // error instead of a panic inside UnwrapErr during keygen.
                 rsa::OsRng::check_entropy()
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 2048)
-                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
+                let key =
+                    ::sad_rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 2048)
+                        .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                ::sad_rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
                     .as_bytes()
                     .to_vec()
@@ -1525,9 +1526,10 @@ impl Builder {
             Codec::Rsa3072Priv => {
                 rsa::OsRng::check_entropy()
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 3072)
-                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
+                let key =
+                    ::sad_rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 3072)
+                        .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                ::sad_rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
                     .as_bytes()
                     .to_vec()
@@ -1535,9 +1537,10 @@ impl Builder {
             Codec::Rsa4096Priv => {
                 rsa::OsRng::check_entropy()
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                let key = ::rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 4096)
-                    .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
-                ::rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
+                let key =
+                    ::sad_rsa::RsaPrivateKey::new(&mut rand_core::UnwrapErr(rsa::OsRng), 4096)
+                        .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
+                ::sad_rsa::pkcs1::EncodeRsaPrivateKey::to_pkcs1_der(&key)
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?
                     .as_bytes()
                     .to_vec()
