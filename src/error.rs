@@ -62,12 +62,25 @@ pub enum Error {
     DuplicateAttribute(u8),
     /// Attribute count exceeds the configured maximum
     ///
-    /// Returned by [`crate::mk::Multikey::try_decode_from`] when the number of
+    /// Returned by `Multikey::try_decode_from` when the number of
     /// attributes declared in the wire data exceeds
     /// [`crate::mk::MAX_ATTRIBUTES`]. Bounds the work a crafted input can
     /// force the decoder to perform and mitigates CWE-400.
     #[error("attribute count {0} exceeds maximum {1}")]
     TooManyAttributes(usize, usize),
+    /// Decoded size exceeds the configured maximum
+    ///
+    /// Returned by `Multikey::try_decode_from` when the total decoded byte
+    /// count exceeds [`crate::mk::MAX_DECODED_SIZE`]. Bounds the worst-case
+    /// allocation for untrusted wire data and mitigates CWE-400 (Uncontrolled
+    /// Resource Consumption).
+    #[error("decoded size {claimed} exceeds maximum {max}")]
+    InputTooLarge {
+        /// The number of bytes claimed by the wire data
+        claimed: usize,
+        /// The configured maximum decoded size
+        max: usize,
+    },
     /// Incorrect Multikey sigil
     #[error("Missing Multikey sigil")]
     MissingSigil,
@@ -408,6 +421,7 @@ impl Error {
             Self::Utf8(_) => "Utf8",
             Self::DuplicateAttribute(_) => "DuplicateAttribute",
             Self::TooManyAttributes(_, _) => "TooManyAttributes",
+            Self::InputTooLarge { .. } => "InputTooLarge",
             Self::MissingSigil => "MissingSigil",
             Self::UnsupportedAlgorithm(_) => "UnsupportedAlgorithm",
         }

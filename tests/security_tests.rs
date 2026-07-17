@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Security-focused tests for multi-key
+#![allow(clippy::redundant_clone, clippy::doc_markdown)]
 
 use multi_codec::Codec;
 use multi_key::{Builder, Error, Multikey};
@@ -86,7 +87,7 @@ fn test_private_key_zeroization() {
 #[cfg(not(feature = "legacy_chacha20_fallback"))]
 #[test]
 fn test_chacha20_aead_tamper_rejected() {
-    use multi_key::{cipher, kdf, Builder, Views};
+    use multi_key::{Builder, Views, cipher, kdf};
 
     let plain =
         hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2").unwrap();
@@ -147,7 +148,7 @@ fn test_chacha20_aead_tamper_rejected() {
 #[cfg(feature = "legacy_chacha20_fallback")]
 #[test]
 fn test_chacha20_legacy_fallback_downgrades_on_tamper() {
-    use multi_key::{cipher, kdf, Builder, Views};
+    use multi_key::{Builder, Views, cipher, kdf};
 
     let plain =
         hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2").unwrap();

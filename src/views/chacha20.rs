@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    error::{AttributesError, CipherError, KdfError},
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
     Multikey, Views,
+    error::{AttributesError, CipherError, KdfError},
 };
-#[cfg(feature = "legacy_chacha20_fallback")]
-use chacha20::cipher::{KeyIvInit, StreamCipher};
 #[cfg(feature = "legacy_chacha20_fallback")]
 use chacha20::ChaCha20;
 use chacha20::Nonce;
+#[cfg(feature = "legacy_chacha20_fallback")]
+use chacha20::cipher::{KeyIvInit, StreamCipher};
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
 use zeroize::Zeroizing;

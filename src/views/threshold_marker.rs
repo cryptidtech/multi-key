@@ -17,7 +17,7 @@
 //! split codecs (`Bls12381G1PrivShare`/`PubShare`, `Bls12381G2PrivShare`/
 //! `PubShare`) and the DKG codecs (`*ThreshPrivShare`/`*ThreshPubShare`).
 
-use crate::{error::AttributesError, AttrId, Error, Multikey};
+use crate::{AttrId, Error, Multikey, error::AttributesError};
 use multi_codec::Codec;
 use multi_util::Varuint;
 use serde::{Deserialize, Serialize};

@@ -6,19 +6,19 @@
 //! Public encoding is classical-first: ed25519_pub (32) || fn_dsa_verifying_key.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use fn_dsa::{
-    sign_key_size, signature_size, vrfy_key_size, SigningKey as _, SigningKeyStandard,
-    VerifyingKey as _, VerifyingKeyStandard, DOMAIN_NONE, FN_DSA_LOGN_512, HASH_ID_RAW,
+    DOMAIN_NONE, FN_DSA_LOGN_512, HASH_ID_RAW, SigningKey as _, SigningKeyStandard,
+    VerifyingKey as _, VerifyingKeyStandard, sign_key_size, signature_size, vrfy_key_size,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use zeroize::Zeroizing;
 
 const LOGN: u32 = FN_DSA_LOGN_512;
@@ -285,10 +285,11 @@ mod tests {
         pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
 
         // wrong message must fail
-        assert!(pk
-            .verify_view()
-            .unwrap()
-            .verify(&sig, Some(b"wrong message"))
-            .is_err());
+        assert!(
+            pk.verify_view()
+                .unwrap()
+                .verify(&sig, Some(b"wrong message"))
+                .is_err()
+        );
     }
 }

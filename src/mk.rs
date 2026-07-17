@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
+    ThresholdKeyView, ThresholdView, VerifyView, Views,
     error::{AttributesError, CipherError, ConversionsError, KdfError, SealError},
     views::{
         bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
@@ -8,26 +11,23 @@ use crate::{
         sntrup, threshold_meta, x25519, x25519_frodokem640, x25519_mceliece348864, x25519_mlkem768,
         x25519_sntrup761,
     },
-    AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
-    ThresholdKeyView, ThresholdView, VerifyView, Views,
 };
 
 use ::fn_dsa::{
-    sign_key_size, vrfy_key_size, KeyPairGenerator, KeyPairGeneratorStandard, FN_DSA_LOGN_1024,
-    FN_DSA_LOGN_512,
+    FN_DSA_LOGN_512, FN_DSA_LOGN_1024, KeyPairGenerator, KeyPairGeneratorStandard, sign_key_size,
+    vrfy_key_size,
 };
-use elliptic_curve::sec1::ToSec1Point;
 use elliptic_curve::Generate;
+use elliptic_curve::sec1::ToSec1Point;
 use multi_base::Base;
 use multi_codec::Codec;
 use multi_trait::{EncodeInto, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
 use rand_core::CryptoRng;
 use ssh_key::{
+    EcdsaCurve, PrivateKey, PublicKey,
     private::{EcdsaKeypair, KeypairData},
     public::{EcdsaPublicKey, KeyData},
-    EcdsaCurve, PrivateKey, PublicKey,
 };
 use std::{collections::BTreeMap, fmt};
 use subtle::ConstantTimeEq;
@@ -137,6 +137,16 @@ pub const SIGIL: Codec = Codec::Multikey;
 /// input can force the decoder to perform (mitigates CWE-400).
 pub const MAX_ATTRIBUTES: usize = 256;
 
+/// Maximum total decoded size (in bytes) a single [`Multikey`] will accept
+/// when decoding from untrusted wire data.
+///
+/// The 16 MiB ceiling comfortably exceeds every legitimate multikey payload
+/// in this stack while bounding the worst-case allocation an attacker can
+/// trigger with a crafted length prefix. Each `Varbytes` attribute payload
+/// is also individually capped by [`multi_util::varbytes::MAX_DECODED_SIZE`]
+/// via the `Varbytes::try_decode_from` path. Mitigates CWE-400.
+pub const MAX_DECODED_SIZE: usize = 16 * 1024 * 1024;
+
 /// A base encoded Multikey structure
 pub type EncodedMultikey = BaseEncoded<Multikey>;
 
@@ -242,6 +252,9 @@ impl<'a> TryDecodeFrom<'a> for Multikey {
     type Error = Error;
 
     fn try_decode_from(bytes: &'a [u8]) -> Result<(Self, &'a [u8]), Self::Error> {
+        // Track total consumed bytes to enforce MAX_DECODED_SIZE (CWE-400).
+        let start_len = bytes.len();
+
         // decode the sigil
         let (sigil, ptr) = Codec::try_decode_from(bytes)?;
         if sigil != SIGIL {
@@ -268,8 +281,19 @@ impl<'a> TryDecodeFrom<'a> for Multikey {
                 for _ in 0..*num_attr {
                     let (id, ptr) = AttrId::try_decode_from(p)?;
                     let (attr, ptr) = Varbytes::try_decode_from(ptr)?;
+                    // Per-attribute size is already capped by Varbytes'
+                    // MAX_DECODED_SIZE (16 MiB). The total decoded-size cap
+                    // below provides a second layer of protection.
                     if attributes.insert(id, (*attr).clone().into()).is_some() {
                         return Err(Error::DuplicateAttribute(id.code()));
+                    }
+                    // Enforce total decoded size cap
+                    let consumed = start_len - ptr.len();
+                    if consumed > MAX_DECODED_SIZE {
+                        return Err(Error::InputTooLarge {
+                            claimed: consumed,
+                            max: MAX_DECODED_SIZE,
+                        });
                     }
                     p = ptr;
                 }
@@ -1610,7 +1634,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1629,7 +1653,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1648,11 +1672,11 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().into();
+                    let identifier: Vec<u8> = key_share.0.0.to_be_bytes().into();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
@@ -1674,7 +1698,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1693,11 +1717,11 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().into();
+                    let identifier: Vec<u8> = key_share.0.0.to_be_bytes().into();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
@@ -1720,7 +1744,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1739,7 +1763,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1759,7 +1783,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1778,7 +1802,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1798,7 +1822,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1817,7 +1841,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1836,7 +1860,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1855,7 +1879,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1874,7 +1898,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1893,7 +1917,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1912,7 +1936,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1931,7 +1955,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1950,7 +1974,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1969,7 +1993,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -1988,7 +2012,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2007,7 +2031,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2028,7 +2052,7 @@ impl Builder {
                         return Err(ConversionsError::UnsupportedAlgorithm(
                             sshkey.algorithm().to_string(),
                         )
-                        .into())
+                        .into());
                     }
                 };
                 let mut attributes = Attributes::new();
@@ -2105,7 +2129,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2124,7 +2148,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2143,11 +2167,11 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().into();
+                    let identifier: Vec<u8> = key_share.0.0.to_be_bytes().into();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
@@ -2169,7 +2193,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2188,11 +2212,11 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().into();
+                    let identifier: Vec<u8> = key_share.0.0.to_be_bytes().into();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
@@ -2215,7 +2239,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2234,7 +2258,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2254,7 +2278,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2273,7 +2297,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2293,7 +2317,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2312,7 +2336,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2331,7 +2355,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2350,7 +2374,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2369,7 +2393,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2388,7 +2412,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2407,7 +2431,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2426,7 +2450,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2445,7 +2469,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2464,7 +2488,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2483,7 +2507,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2502,7 +2526,7 @@ impl Builder {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
                             )
-                            .into())
+                            .into());
                         }
                     };
                     let mut attributes = Attributes::new();
@@ -2523,7 +2547,7 @@ impl Builder {
                         return Err(ConversionsError::UnsupportedAlgorithm(
                             sshkey.algorithm().to_string(),
                         )
-                        .into())
+                        .into());
                     }
                 };
                 let mut attributes = Attributes::new();
@@ -3577,5 +3601,41 @@ mod tests {
         let kd = mk.data_view().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
+    }
+
+    #[test]
+    fn test_too_many_attributes_rejected() {
+        use multi_trait::EncodeInto;
+        // Craft a multikey that claims more than MAX_ATTRIBUTES attributes.
+        let mut bad = Vec::new();
+        let sigil_bytes: Vec<u8> = Codec::Multikey.into();
+        bad.extend(sigil_bytes); // sigil
+        let codec_bytes: Vec<u8> = Codec::Ed25519Priv.into();
+        bad.extend(codec_bytes); // codec
+        let msg = Varbytes::new(Vec::new());
+        bad.extend(msg.encode_into()); // empty comment
+        bad.extend(Varuint(MAX_ATTRIBUTES + 1).encode_into()); // too many attrs
+
+        let result = Multikey::try_from(bad.as_slice());
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::TooManyAttributes(n, max) => {
+                assert_eq!(n, MAX_ATTRIBUTES + 1);
+                assert_eq!(max, MAX_ATTRIBUTES);
+            }
+            e => panic!("Expected TooManyAttributes, got: {e:?}"),
+        }
+    }
+
+    #[test]
+    fn test_valid_roundtrip_with_caps() {
+        // Sanity: a well-formed multikey still round-trips with the caps.
+        let mk = Builder::new(Codec::Ed25519Pub)
+            .with_key_bytes(&[0u8; 32])
+            .try_build()
+            .unwrap();
+        let v: Vec<u8> = mk.clone().into();
+        let mk2 = Multikey::try_from(v.as_slice()).unwrap();
+        assert_eq!(mk, mk2);
     }
 }

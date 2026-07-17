@@ -4,8 +4,8 @@
 //! Keys and ciphertexts are passed as raw byte slices; shared secrets are
 //! returned as `Vec<u8>` wrapped in [`zeroize::Zeroizing`].
 use frodo_kem_rs::Algorithm;
-use getrandom::rand_core::UnwrapErr;
 use getrandom::SysRng;
+use getrandom::rand_core::UnwrapErr;
 use zeroize::Zeroizing;
 
 fn rng() -> UnwrapErr<SysRng> {

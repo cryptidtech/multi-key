@@ -4,15 +4,15 @@
 //! Verify: verify Ed25519(m, s1) && verify Mayo2(m || s1, s2)
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use pq_mayo::{KeyPair, Mayo2};
 use zeroize::Zeroizing;
 
@@ -394,11 +394,12 @@ mod tests {
         let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
 
         // Tamper with message
-        assert!(pk
-            .verify_view()
-            .unwrap()
-            .verify(&sig, Some(b"wrong message"))
-            .is_err());
+        assert!(
+            pk.verify_view()
+                .unwrap()
+                .verify(&sig, Some(b"wrong message"))
+                .is_err()
+        );
     }
 
     #[test]

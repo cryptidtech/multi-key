@@ -8,18 +8,18 @@
 
 use super::bls12381_hybrid as bls;
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use fn_dsa::{
-    sign_key_size, signature_size, vrfy_key_size, SigningKey as _, SigningKeyStandard,
-    VerifyingKey as _, VerifyingKeyStandard, DOMAIN_NONE, FN_DSA_LOGN_512, HASH_ID_RAW,
+    DOMAIN_NONE, FN_DSA_LOGN_512, HASH_ID_RAW, SigningKey as _, SigningKeyStandard,
+    VerifyingKey as _, VerifyingKeyStandard, sign_key_size, signature_size, vrfy_key_size,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use zeroize::Zeroizing;
 
 const LOGN: u32 = FN_DSA_LOGN_512;
@@ -261,10 +261,11 @@ mod tests {
         let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
         pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
 
-        assert!(pk
-            .verify_view()
-            .unwrap()
-            .verify(&sig, Some(b"wrong message"))
-            .is_err());
+        assert!(
+            pk.verify_view()
+                .unwrap()
+                .verify(&sig, Some(b"wrong message"))
+                .is_err()
+        );
     }
 }

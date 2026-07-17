@@ -4,13 +4,13 @@
 //! Supports sntrup761, sntrup857, sntrup953, sntrup1013, and sntrup1277.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SealError},
-    views::{aead, Views},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
+    error::{AttributesError, ConversionsError, SealError},
+    views::{Views, aead},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use zeroize::Zeroizing;
@@ -535,11 +535,12 @@ mod tests {
             .unwrap();
 
         // seal with private key should fail
-        assert!(sk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::Xchacha20Poly1305, b"")
-            .is_err());
+        assert!(
+            sk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::Xchacha20Poly1305, b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -571,10 +572,11 @@ mod tests {
         let pk = sk.conv_view().unwrap().to_public_key().unwrap();
 
         // AES-128-GCM is not allowed for sntrup (not PQ-safe)
-        assert!(pk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::AesGcm128, b"")
-            .is_err());
+        assert!(
+            pk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::AesGcm128, b"")
+                .is_err()
+        );
     }
 }

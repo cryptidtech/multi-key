@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{error::CipherError, mk::Attributes, AttrId, Error, Multikey};
+use crate::{AttrId, Error, Multikey, error::CipherError, mk::Attributes};
 use multi_codec::Codec;
 use rand_core::CryptoRng;
 use zeroize::Zeroizing;
@@ -82,7 +82,7 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{kdf, mk, Views};
+    use crate::{Views, kdf, mk};
 
     #[test]
     fn test_chacha20() {

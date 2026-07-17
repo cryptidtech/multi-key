@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    error::{AttributesError, CipherError, ConversionsError, KdfError, SignError, VerifyError},
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, Multikey, SignView, VerifyView, Views,
+    error::{AttributesError, CipherError, ConversionsError, KdfError, SignError, VerifyError},
 };
 use ed25519_dalek::{
-    Signature, Signer, SigningKey, VerifyingKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
+    PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, Signature, Signer, SigningKey, VerifyingKey,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
 use zeroize::Zeroizing;

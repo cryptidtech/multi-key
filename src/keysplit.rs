@@ -30,8 +30,8 @@ use multi_util::CodecInfo;
 use rand_core::CryptoRng;
 use serde::{Deserialize, Serialize};
 use vsss_rs::{
-    feldman, DefaultShare, FeldmanVerifierSet, Gf256, IdentifierPrimeField, ReadableShareSet,
-    ShareVerifierGroup, ValueGroup,
+    DefaultShare, FeldmanVerifierSet, Gf256, IdentifierPrimeField, ReadableShareSet,
+    ShareVerifierGroup, ValueGroup, feldman,
 };
 use zeroize::Zeroizing;
 
@@ -515,7 +515,7 @@ mod tests {
     use super::*;
     use crate::mk;
 
-    fn gen(codec: Codec) -> Multikey {
+    fn gen_key(codec: Codec) -> Multikey {
         Builder::new_from_random_bytes(codec, &mut rand::rng())
             .unwrap_or_else(|e| panic!("{codec:?} keygen: {e}"))
             .try_build()
@@ -530,7 +530,7 @@ mod tests {
     /// reconstructed key is byte-identical to the original. Run for both 2-of-3
     /// and 3-of-5 with disjoint/non-contiguous subsets.
     fn assert_roundtrip(codec: Codec) {
-        let mk = gen(codec);
+        let mk = gen_key(codec);
         let original = secret(&mk);
 
         // 2-of-3
@@ -634,7 +634,7 @@ mod tests {
     #[test]
     fn ed25519_x25519_carry_verifiable_dual() {
         for &codec in &[Codec::Ed25519Priv, Codec::X25519Priv] {
-            let shares = split(&gen(codec), 2, 4, rand::rng()).unwrap();
+            let shares = split(&gen_key(codec), 2, 4, rand::rng()).unwrap();
             for s in &shares {
                 let p = unwrap_share(s).unwrap();
                 assert_eq!(p.scheme, Scheme::Gf256, "{codec:?} primary is gf256 seed");
@@ -654,7 +654,7 @@ mod tests {
             Codec::Bls12381G1Priv,
             Codec::Bls12381G2Priv,
         ] {
-            let shares = split(&gen(codec), 2, 3, rand::rng()).unwrap();
+            let shares = split(&gen_key(codec), 2, 3, rand::rng()).unwrap();
             let p = unwrap_share(&shares[0]).unwrap();
             assert_eq!(p.scheme, Scheme::Feldman, "{codec:?}");
             assert!(p.verifiers.is_some(), "{codec:?} has Feldman commitments");
@@ -664,7 +664,7 @@ mod tests {
     // ── Serialization: a KeySplitShare is a Multikey; CBOR + JSON round-trip ──
     #[test]
     fn share_survives_cbor_and_json() {
-        let mk = gen(Codec::P256Priv);
+        let mk = gen_key(Codec::P256Priv);
         let original = secret(&mk);
         let shares = split(&mk, 2, 3, rand::rng()).unwrap();
 
@@ -700,7 +700,7 @@ mod tests {
     // ── Negative tests ──
     #[test]
     fn tampered_feldman_share_fails_verify() {
-        let mk = gen(Codec::P256Priv);
+        let mk = gen_key(Codec::P256Priv);
         let shares = split(&mk, 2, 3, rand::rng()).unwrap();
         let mut p = unwrap_share(&shares[0]).unwrap();
         p.value[0] ^= 0xff;
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn tampered_dual_fails_verify() {
-        let mk = gen(Codec::Ed25519Priv);
+        let mk = gen_key(Codec::Ed25519Priv);
         let shares = split(&mk, 2, 3, rand::rng()).unwrap();
         let mut p = unwrap_share(&shares[0]).unwrap();
         p.dual.as_mut().unwrap().value[0] ^= 0xff;
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn below_threshold_does_not_recover() {
-        let mk = gen(Codec::P256Priv);
+        let mk = gen_key(Codec::P256Priv);
         let original = secret(&mk);
         let shares = split(&mk, 3, 5, rand::rng()).unwrap();
         if let Ok(got) = combine(&shares[0..2]) {
@@ -733,14 +733,14 @@ mod tests {
 
     #[test]
     fn mixed_and_empty_and_public_rejected() {
-        let a = split(&gen(Codec::P256Priv), 2, 3, rand::rng()).unwrap();
-        let b = split(&gen(Codec::Secp256K1Priv), 2, 3, rand::rng()).unwrap();
+        let a = split(&gen_key(Codec::P256Priv), 2, 3, rand::rng()).unwrap();
+        let b = split(&gen_key(Codec::Secp256K1Priv), 2, 3, rand::rng()).unwrap();
         assert!(
             combine(&[a[0].clone(), b[0].clone()]).is_err(),
             "mixed codecs"
         );
         assert!(combine(&[]).is_err(), "empty set");
-        let pk = gen(Codec::P256Priv)
+        let pk = gen_key(Codec::P256Priv)
             .conv_view()
             .unwrap()
             .to_public_key()
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn invalid_params_rejected() {
-        let mk = gen(Codec::P256Priv);
+        let mk = gen_key(Codec::P256Priv);
         assert!(split(&mk, 1, 3, rand::rng()).is_err(), "threshold < 2");
         assert!(split(&mk, 4, 3, rand::rng()).is_err(), "threshold > limit");
     }

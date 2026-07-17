@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{error::KdfError, mk::Attributes, AttrId, Error, Multikey};
+use crate::{AttrId, Error, Multikey, error::KdfError, mk::Attributes};
 use multi_codec::Codec;
 use multi_util::Varuint;
 use rand_core::CryptoRng;
@@ -90,7 +90,7 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cipher, Views};
+    use crate::{Views, cipher};
 
     #[test]
     fn test_bcrypt() {

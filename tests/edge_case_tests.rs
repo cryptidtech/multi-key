@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Edge case tests for multi-key
+#![allow(clippy::explicit_iter_loop, clippy::uninlined_format_args)]
 
 use multi_codec::Codec;
-use multi_key::{Builder, Multikey, KEY_CODECS};
+use multi_key::{Builder, KEY_CODECS, Multikey};
 use multi_trait::Null;
 
 /// Test null multikey

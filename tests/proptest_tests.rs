@@ -2,7 +2,7 @@
 //! Property-based tests for multi-key
 
 use multi_codec::Codec;
-use multi_key::{Builder, Multikey, KEY_CODECS};
+use multi_key::{Builder, KEY_CODECS, Multikey};
 use multi_trait::TryDecodeFrom;
 use proptest::prelude::*;
 

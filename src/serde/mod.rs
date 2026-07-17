@@ -5,14 +5,14 @@ mod ser;
 
 #[cfg(test)]
 mod tests {
-    use crate::{cipher, kdf, nonce, Builder, EncodedMultikey, Multikey, Views};
+    use crate::{Builder, EncodedMultikey, Multikey, Views, cipher, kdf, nonce};
     use multi_base::Base;
     use multi_codec::Codec;
     use multi_hash::EncodedMultihash;
     use multi_trait::Null;
     use multi_util::BaseEncoded;
     use serde::{Deserialize, Serialize};
-    use serde_test::{assert_tokens, Configure, Token};
+    use serde_test::{Configure, Token, assert_tokens};
     use std::collections::BTreeMap;
 
     #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

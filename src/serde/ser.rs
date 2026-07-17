@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{mk, nonce, AttrId, Multikey, Nonce};
+use crate::{AttrId, Multikey, Nonce, mk, nonce};
 use multi_util::{EncodedVarbytes, EncodingInfo, Varbytes};
 use serde::ser::{self, SerializeStruct};
 

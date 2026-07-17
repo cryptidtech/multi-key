@@ -1,7 +1,8 @@
 [package]
 name = "multi-key"
-version = "1.0.7"
-edition = "2021"
+version = "1.0.8"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
 repository = "https://github.com/cryptidtech/multi-key.git"
@@ -98,3 +99,11 @@ serde_test = "1.0"
 name = "multikey_bench"
 harness = false
 path = "benches/multikey_bench.rs"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+[lints.rust]
+unsafe_code = "deny"

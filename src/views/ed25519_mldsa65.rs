@@ -5,20 +5,20 @@
 //! Public encoding is classical-first: ed25519_pub (32) || mldsa65_pub.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use ml_dsa::{
-    signature::{Keypair, Signer as MldsaSigner, Verifier as MldsaVerifier},
     EncodedSignature, EncodedVerifyingKey, MlDsa65, Seed as MldsaSeed, Signature as MldsaSig,
     SigningKey as MldsaSigningKey, VerifyingKey as MldsaVerifyingKey,
+    signature::{Keypair, Signer as MldsaSigner, Verifier as MldsaVerifier},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use zeroize::Zeroizing;
 
 const ED25519_SEED_LEN: usize = 32;
@@ -295,11 +295,12 @@ mod tests {
         pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
 
         // wrong message must fail
-        assert!(pk
-            .verify_view()
-            .unwrap()
-            .verify(&sig, Some(b"wrong message"))
-            .is_err());
+        assert!(
+            pk.verify_view()
+                .unwrap()
+                .verify(&sig, Some(b"wrong message"))
+                .is_err()
+        );
     }
 
     #[test]

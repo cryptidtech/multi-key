@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{error::KdfError, AttrId, Error, KdfAttrView, KdfView, Multikey, Views};
+use crate::{AttrId, Error, KdfAttrView, KdfView, Multikey, Views, error::KdfError};
 use multi_codec::Codec;
 use multi_util::Varuint;
 use zeroize::Zeroizing;

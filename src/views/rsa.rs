@@ -2,22 +2,23 @@
 //! RSA-2048/3072/4096 multikey view — signing (PSS SHA-256) + encryption (RSA-OAEP + AEAD).
 
 use crate::{
+    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
-    views::{aead, Views},
-    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
+    views::{Views, aead},
 };
 
 use ::rsa::sha2::Sha256;
 use ::rsa::{
+    Oaep, RsaPrivateKey, RsaPublicKey,
     pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPublicKey},
-    pss, Oaep, RsaPrivateKey, RsaPublicKey,
+    pss,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};

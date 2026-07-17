@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{error::NonceError, Error};
+use crate::{Error, error::NonceError};
 use core::fmt;
 use multi_base::Base;
 use multi_codec::Codec;
@@ -168,7 +168,7 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mk, Views};
+    use crate::{Views, mk};
 
     #[test]
     fn test_random() {

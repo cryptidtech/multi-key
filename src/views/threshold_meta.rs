@@ -17,14 +17,14 @@
 // historical `multi_key::ThresholdDisclosure` / `multi_key::encrypt_threshold_meta`
 // public API keeps working for downstream callers.
 pub use multi_sig::{
-    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, ThresholdDisclosure,
-    ThresholdMetaCipher, ThresholdMetadata,
+    ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata, decrypt_threshold_meta,
+    encrypt_threshold_meta, generate_meta_key,
 };
 
 use crate::{
+    AttrId, Error, Multikey, Views,
     error::{AttributesError, ThresholdError},
     mk::Attributes,
-    AttrId, Error, Multikey, Views,
 };
 use multi_trait::{EncodeInto, TryDecodeFrom};
 use multi_util::Varuint;
@@ -205,7 +205,7 @@ pub fn stamp_disclosure_attrs(
         _ => {
             return Err(Error::Threshold(ThresholdError::MetaEncryption(format!(
                 "unsupported disclosure mode: {mode}"
-            ))))
+            ))));
         }
     }
     Ok(())
