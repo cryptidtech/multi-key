@@ -2,18 +2,18 @@
 //! FN-DSA (Falcon) 512/1024 multikey view; FIPS 206 (draft).
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use fn_dsa::{
-    signature_size, vrfy_key_size, SigningKey, SigningKeyStandard, VerifyingKey,
-    VerifyingKeyStandard, DOMAIN_NONE, FN_DSA_LOGN_1024, FN_DSA_LOGN_512, HASH_ID_RAW,
+    DOMAIN_NONE, FN_DSA_LOGN_512, FN_DSA_LOGN_1024, HASH_ID_RAW, SigningKey, SigningKeyStandard,
+    VerifyingKey, VerifyingKeyStandard, signature_size, vrfy_key_size,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Views as _};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Views as _, ms};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 

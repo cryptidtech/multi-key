@@ -1,7 +1,8 @@
 [package]
 name = "multi-key"
-version = "1.0.7"
-edition = "2021"
+version = "1.0.8"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
 repository = "https://github.com/cryptidtech/multi-key.git"
@@ -62,10 +63,9 @@ rand_core = "0.10"
 # 0.6 (fn-dsa exposes its own RngCore/CryptoRng traits); keep a 0.6 OsRng for
 # those sites while the curve stack above uses rand_core 0.10.
 rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
-rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
+sad-rsa = { version = "0.2.3", features = ["sha2"] }
 sec1 = "0.8"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
-serde_cbor = "0.11"
 sha2 = "0.11"
 signature = "3"
 slh-dsa = "0.2.0-rc.5"
@@ -85,12 +85,11 @@ ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["allo
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 blsful = { version = "4.0.0-rc1", default-features = false, features = ["blst"] }
-ssh-key = { version = "0.7.0-rc.11", features = ["alloc", "crypto", "ed25519"] }
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 proptest = "1.4"
-serde_cbor = "0.11"
 serde_json = "1.0"
 serde_test = "1.0"
 
@@ -98,3 +97,11 @@ serde_test = "1.0"
 name = "multikey_bench"
 harness = false
 path = "benches/multikey_bench.rs"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+[lints.rust]
+unsafe_code = "deny"

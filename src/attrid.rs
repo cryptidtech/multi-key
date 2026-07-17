@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{error::AttributesError, Error};
+use crate::{Error, error::AttributesError};
 use multi_trait::{EncodeInto, TryDecodeFrom};
 use std::fmt;
 

@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, ThresholdAttrView, ThresholdView,
+    VerifyView, Views,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError,
         ThresholdError, VerifyError,
     },
     views::threshold_meta::{self, ThresholdDisclosure},
-    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, ThresholdAttrView, ThresholdView,
-    VerifyView, Views,
 };
 use blsful::{
+    Bls12381G1Impl, Bls12381G2Impl, PublicKey, PublicKeyShare, SECRET_KEY_BYTES, SecretKey,
+    SecretKeyShare, Signature, SignatureSchemes, SignatureShare, TimeCryptCiphertext,
     inner_types::{G1Projective, G2Projective, Scalar},
     vsss_rs::{IdentifierPrimeField, Share, ValueGroup},
-    Bls12381G1Impl, Bls12381G2Impl, PublicKey, PublicKeyShare, SecretKey, SecretKeyShare,
-    Signature, SignatureSchemes, SignatureShare, TimeCryptCiphertext, SECRET_KEY_BYTES,
 };
 use elliptic_curve::group::GroupEncoding;
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, views::bls12381::SchemeTypeId, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms, views::bls12381::SchemeTypeId};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
 use rand_core::Rng;
@@ -81,7 +81,7 @@ impl From<KeyShare> for Vec<u8> {
     fn from(val: KeyShare) -> Self {
         let mut v = Vec::default();
         // add in the share identifier
-        v.extend_from_slice(&val.0 .0.to_be_bytes());
+        v.extend_from_slice(&val.0.0.to_be_bytes());
         // add in the threshold
         v.append(&mut Varuint(val.1).into());
         // add in the limit
@@ -418,13 +418,13 @@ impl<'a> ConvView for View<'a> {
                 let public_key = secret_key
                     .public_key()
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
-                let key_bytes = public_key.0 .0.value().0.to_bytes().as_ref().to_vec();
+                let key_bytes = public_key.0.0.value().0.to_bytes().as_ref().to_vec();
                 Builder::new(Codec::Bls12381G1PubShare)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)
                     .with_threshold(threshold)
                     .with_limit(limit)
-                    .with_identifier(&public_key.0 .0.identifier().0.to_be_bytes())
+                    .with_identifier(&public_key.0.0.identifier().0.to_be_bytes())
                     .try_build()
             }
             Codec::Bls12381G2Priv => {
@@ -463,13 +463,13 @@ impl<'a> ConvView for View<'a> {
                 let public_key = secret_key
                     .public_key()
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
-                let key_bytes = public_key.0 .0.value().0.to_bytes().as_ref().to_vec();
+                let key_bytes = public_key.0.0.value().0.to_bytes().as_ref().to_vec();
                 Builder::new(Codec::Bls12381G2PubShare)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)
                     .with_threshold(threshold)
                     .with_limit(limit)
-                    .with_identifier(&public_key.0 .0.identifier().0.to_be_bytes())
+                    .with_identifier(&public_key.0.0.identifier().0.to_be_bytes())
                     .try_build()
             }
             _ => Err(ConversionsError::UnsupportedCodec(self.mk.codec).into()),
@@ -705,7 +705,10 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms = ms::Builder::new_from_bls_signature(&signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_with_codec(
+                    Codec::Bls12381G1Msig,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -726,8 +729,12 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms =
-                    ms::Builder::new_from_bls_signature_share(threshold, limit, &signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_share_with_codec(
+                    Codec::Bls12381G1ShareMsig,
+                    threshold,
+                    limit,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -752,7 +759,10 @@ impl<'a> SignView for View<'a> {
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
 
-                let mut ms = ms::Builder::new_from_bls_signature(&signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_with_codec(
+                    Codec::Bls12381G2Msig,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -772,8 +782,12 @@ impl<'a> SignView for View<'a> {
                 let signature = secret_key
                     .sign(sig_scheme, msg)
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
-                let mut ms =
-                    ms::Builder::new_from_bls_signature_share(threshold, limit, &signature)?;
+                let mut ms = ms::Builder::new_from_bls_signature_share_with_codec(
+                    Codec::Bls12381G2ShareMsig,
+                    threshold,
+                    limit,
+                    &signature,
+                )?;
                 if combined {
                     ms = ms.with_message_bytes(&msg);
                 }
@@ -895,7 +909,7 @@ impl<'a> ThresholdView for View<'a> {
         match self.mk.codec {
             Codec::Bls12381G1Priv | Codec::Bls12381G2Priv => {}
             Codec::Bls12381G1Pub | Codec::Bls12381G2Pub => {
-                return Err(ThresholdError::NotASecretKey.into())
+                return Err(ThresholdError::NotASecretKey.into());
             }
             Codec::Bls12381G1PubShare
             | Codec::Bls12381G1PrivShare

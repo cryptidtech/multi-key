@@ -2,22 +2,23 @@
 //! RSA-2048/3072/4096 multikey view — signing (PSS SHA-256) + encryption (RSA-OAEP + AEAD).
 
 use crate::{
+    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
-    views::{aead, Views},
-    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
+    views::{Views, aead},
 };
 
-use ::rsa::sha2::Sha256;
-use ::rsa::{
+use ::sad_rsa::sha2::Sha256;
+use ::sad_rsa::{
+    Oaep, RsaPrivateKey, RsaPublicKey,
     pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPublicKey},
-    pss, Oaep, RsaPrivateKey, RsaPublicKey,
+    pss,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};
@@ -26,9 +27,9 @@ use zeroize::Zeroizing;
 
 /// Error returned by [`OsRng`] when [`getrandom`] fails to produce entropy.
 ///
-/// `OsRng` implements [`rsa::rand_core::TryRng`] with this as its
-/// [`TryRng::Error`](rsa::rand_core::TryRng::Error) so that RNG failures are
-/// surfaced through the `Result` returned by the rsa signing/encryption APIs
+/// `OsRng` implements [`sad_rsa::rand_core::TryRng`] with this as its
+/// [`TryRng::Error`](sad_rsa::rand_core::TryRng::Error) so that RNG failures are
+/// surfaced through the `Result` returned by the sad_rsa signing/encryption APIs
 /// instead of panicking.
 #[derive(Debug)]
 pub(crate) struct RngError(pub String);
@@ -41,7 +42,7 @@ impl fmt::Display for RngError {
 
 impl std::error::Error for RngError {}
 
-/// OsRng compatible with rsa 0.10 (rand_core 0.10) using getrandom 0.4.
+/// OsRng compatible with sad_rsa 0.10 (rand_core 0.10) using getrandom 0.4.
 ///
 /// Unlike an `Infallible` RNG, this propagates [`getrandom`] failures via
 /// [`RngError`] so callers (e.g. [`SignView::sign`], [`SealView::seal`])
@@ -49,7 +50,7 @@ impl std::error::Error for RngError {}
 /// instead of panicking.
 pub(crate) struct OsRng;
 
-impl ::rsa::rand_core::TryRng for OsRng {
+impl ::sad_rsa::rand_core::TryRng for OsRng {
     type Error = RngError;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -70,11 +71,11 @@ impl ::rsa::rand_core::TryRng for OsRng {
     }
 }
 
-impl ::rsa::rand_core::TryCryptoRng for OsRng {}
+impl ::sad_rsa::rand_core::TryCryptoRng for OsRng {}
 
 impl OsRng {
     /// Probe the OS RNG with a single byte so callers that need an infallible
-    /// [`rsa::rand_core::CryptoRng`] (e.g. [`rsa::RsaPrivateKey::new`]) can
+    /// [`sad_rsa::rand_core::CryptoRng`] (e.g. [`sad_rsa::RsaPrivateKey::new`]) can
     /// detect an entropy failure up front and surface it as an error instead
     /// of panicking inside [`rand_core::UnwrapErr`].
     pub(crate) fn check_entropy() -> Result<(), RngError> {
@@ -348,7 +349,7 @@ impl<'a> SignView for View<'a> {
         let private_key = RsaPrivateKey::from_pkcs1_der(&secret_bytes)
             .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
 
-        use ::rsa::signature::RandomizedSigner;
+        use ::sad_rsa::signature::RandomizedSigner;
         let signing_key = pss::SigningKey::<Sha256>::new(private_key);
         let signature = signing_key
             .try_sign_with_rng(&mut OsRng, msg)
@@ -368,7 +369,7 @@ impl<'a> SignView for View<'a> {
                 SignError::SigningFailed(e.to_string())
             })?;
 
-        use ::rsa::signature::SignatureEncoding;
+        use ::sad_rsa::signature::SignatureEncoding;
         let sig_bytes = signature.to_bytes();
 
         let mut ms = ms::Builder::new(Codec::Rs256Msig).with_signature_bytes(&sig_bytes);
@@ -408,7 +409,7 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        use ::rsa::signature::Verifier;
+        use ::sad_rsa::signature::Verifier;
         let verifying_key = pss::VerifyingKey::<Sha256>::new(public_key);
         let signature = pss::Signature::try_from(sig.as_slice())
             .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
@@ -483,7 +484,7 @@ impl<'a> SealView for View<'a> {
         // Generate random AEAD key
         let key_len = aead::key_size(aead_codec)?;
         let mut aead_key = vec![0u8; key_len];
-        use ::rsa::rand_core::TryRng;
+        use ::sad_rsa::rand_core::TryRng;
         OsRng
             .try_fill_bytes(&mut aead_key)
             .map_err(|e| SealError::RngFailure(e.to_string()))?;
@@ -495,7 +496,7 @@ impl<'a> SealView for View<'a> {
         let padding = Oaep::<Sha256>::new();
         let rsa_ct = public_key
             .encrypt(
-                &mut ::rsa::rand_core::UnwrapErr(&mut OsRng),
+                &mut ::sad_rsa::rand_core::UnwrapErr(&mut OsRng),
                 padding,
                 &aead_key,
             )

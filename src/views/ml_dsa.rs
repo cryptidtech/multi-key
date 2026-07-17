@@ -2,19 +2,19 @@
 //! ML-DSA 65/87 multikey view; FIPS 204.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use ml_dsa::{
-    signature::{Keypair, Signer, Verifier},
     EncodedSignature, EncodedVerifyingKey, MlDsa65, MlDsa87, Seed, Signature, SigningKey,
     VerifyingKey,
+    signature::{Keypair, Signer, Verifier},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Views as _};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Views as _, ms};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 

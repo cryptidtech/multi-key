@@ -2,14 +2,14 @@
 //! MAYO-1/2/3/5 multikey view; post-quantum multivariate signature.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
+    views::Views,
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Views as _};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Views as _, ms};
 use pq_mayo::{KeyPair, Mayo1, Mayo2, Mayo3, Mayo5, Signature, VerifyingKey};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
@@ -420,11 +420,12 @@ mod tests {
         pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
 
         // wrong message must fail
-        assert!(pk
-            .verify_view()
-            .unwrap()
-            .verify(&sig, Some(b"tampered"))
-            .is_err());
+        assert!(
+            pk.verify_view()
+                .unwrap()
+                .verify(&sig, Some(b"tampered"))
+                .is_err()
+        );
     }
 
     #[test]

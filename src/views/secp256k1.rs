@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
     views::aead,
-    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
 };
 
-use elliptic_curve::sec1::ToSec1Point;
 use elliptic_curve::Generate;
+use elliptic_curve::sec1::ToSec1Point;
 use k256::ecdsa::{
-    signature::{Signer, Verifier},
     Signature, SigningKey, VerifyingKey,
+    signature::{Signer, Verifier},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};
@@ -558,10 +558,11 @@ mod ecies_tests {
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
-        assert!(sk2
-            .open_view()
-            .unwrap()
-            .open(&sealed, ephemeral.as_ref(), b"")
-            .is_err());
+        assert!(
+            sk2.open_view()
+                .unwrap()
+                .open(&sealed, ephemeral.as_ref(), b"")
+                .is_err()
+        );
     }
 }

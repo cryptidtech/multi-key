@@ -10,8 +10,8 @@
 //! - [`AttrId::DkgIdentifier`]  → [`identifier`](ThresholdAttrView::identifier)
 //! - [`AttrId::DkgGroupPublicKey`] → [`threshold_data`](ThresholdAttrView::threshold_data)
 
-use crate::error::AttributesError;
 use crate::Error;
+use crate::error::AttributesError;
 use crate::{AttrId, AttrView, Multikey, ThresholdAttrView, ThresholdKeyView};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;

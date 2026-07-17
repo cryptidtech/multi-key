@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Performance benchmarks for multi-key
+#![allow(clippy::semicolon_if_nothing_returned)]
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use multi_codec::Codec;
 use multi_key::{Builder, Multikey};
 use std::hint::black_box;

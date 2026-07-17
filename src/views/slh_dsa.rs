@@ -2,16 +2,16 @@
 //! SLH-DSA multikey view; FIPS 205. Supports all 12 parameter sets (Sha2_128f/s through Shake256f/s).
 
 use crate::{
-    error::{AttributesError, ConversionsError, SignError, VerifyError},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView, Views,
+    error::{AttributesError, ConversionsError, SignError, VerifyError},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::ms;
+use multi_hash::{Multihash, mh};
 use multi_sig::Views as _;
-use slh_dsa::signature::{Keypair, Signer, Verifier};
+use multi_sig::ms;
 use slh_dsa::ParameterSet;
+use slh_dsa::signature::{Keypair, Signer, Verifier};
 use slh_dsa::{
     Sha2_128f, Sha2_128s, Sha2_192f, Sha2_192s, Sha2_256f, Sha2_256s, Shake128f, Shake128s,
     Shake192f, Shake192s, Shake256f, Shake256s, Signature, SigningKey, VerifyingKey,

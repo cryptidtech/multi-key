@@ -1,16 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    AttrId, Multikey, Nonce,
     mk::{self, Attributes},
-    nonce, AttrId, Multikey, Nonce,
+    nonce,
 };
 use core::fmt;
 use multi_codec::Codec;
 use multi_util::EncodedVarbytes;
 use serde::{
-    de::{Error, MapAccess, Visitor},
     Deserialize, Deserializer,
+    de::{Error, MapAccess, Visitor},
 };
 use zeroize::Zeroizing;
+
+/// Visitor that accepts borrowed bytes, owned bytes, and byte buffers.
+/// Used by the non-human-readable `Deserialize` paths so that deserializers
+/// which cannot lend borrowed slices (e.g. `ciborium`) still work.
+struct ByteBufVisitor;
+
+impl<'de> Visitor<'de> for ByteBufVisitor {
+    type Value = Vec<u8>;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("byte buffer")
+    }
+
+    fn visit_borrowed_bytes<E: Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
+        Ok(v.to_vec())
+    }
+
+    fn visit_bytes<E: Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+        Ok(v.to_vec())
+    }
+
+    fn visit_byte_buf<E: Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+        Ok(v)
+    }
+}
 
 /// Deserialize instance of [`crate::Nonce`]
 impl<'de> Deserialize<'de> for Nonce {
@@ -59,8 +85,8 @@ impl<'de> Deserialize<'de> for Nonce {
         if deserializer.is_human_readable() {
             deserializer.deserialize_struct(nonce::SIGIL.as_str(), FIELDS, NonceVisitor)
         } else {
-            let b: &'de [u8] = Deserialize::deserialize(deserializer)?;
-            Ok(Self::try_from(b).map_err(D::Error::custom)?)
+            let b = deserializer.deserialize_byte_buf(ByteBufVisitor)?;
+            Ok(Self::try_from(b.as_slice()).map_err(D::Error::custom)?)
         }
     }
 }
@@ -197,8 +223,8 @@ impl<'de> Deserialize<'de> for Multikey {
         if deserializer.is_human_readable() {
             deserializer.deserialize_struct(mk::SIGIL.as_str(), FIELDS, MultikeyVisitor)
         } else {
-            let b: &'de [u8] = Deserialize::deserialize(deserializer)?;
-            Ok(Self::try_from(b).map_err(D::Error::custom)?)
+            let b = deserializer.deserialize_byte_buf(ByteBufVisitor)?;
+            Ok(Self::try_from(b.as_slice()).map_err(D::Error::custom)?)
         }
     }
 }

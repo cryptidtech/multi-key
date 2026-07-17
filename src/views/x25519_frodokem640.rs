@@ -7,13 +7,13 @@
 //! Public key layout (classical-first): `x25519_pub (32) || frodokem_public_key`.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SealError},
-    views::{aead, Views},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
+    error::{AttributesError, ConversionsError, SealError},
+    views::{Views, aead},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use x25519_dalek::{PublicKey, StaticSecret};

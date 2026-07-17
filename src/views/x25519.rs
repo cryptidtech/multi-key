@@ -2,13 +2,13 @@
 //! X25519 ECIES multikey view; Curve25519 Diffie-Hellman key agreement + AEAD.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SealError},
-    views::{aead, Views},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
+    error::{AttributesError, ConversionsError, SealError},
+    views::{Views, aead},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use x25519_dalek::{PublicKey, StaticSecret};
@@ -377,11 +377,12 @@ mod tests {
             .unwrap();
 
         // Opening with wrong key should fail
-        assert!(sk2
-            .open_view()
-            .unwrap()
-            .open(&sealed, ephemeral.as_ref(), b"")
-            .is_err());
+        assert!(
+            sk2.open_view()
+                .unwrap()
+                .open(&sealed, ephemeral.as_ref(), b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -392,11 +393,12 @@ mod tests {
             .try_build()
             .unwrap();
 
-        assert!(sk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::Chacha20Poly1305, b"")
-            .is_err());
+        assert!(
+            sk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::Chacha20Poly1305, b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -414,10 +416,11 @@ mod tests {
             .seal(b"data", Codec::Chacha20Poly1305, b"")
             .unwrap();
 
-        assert!(pk
-            .open_view()
-            .unwrap()
-            .open(&sealed, ephemeral.as_ref(), b"")
-            .is_err());
+        assert!(
+            pk.open_view()
+                .unwrap()
+                .open(&sealed, ephemeral.as_ref(), b"")
+                .is_err()
+        );
     }
 }

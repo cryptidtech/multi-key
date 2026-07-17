@@ -5,8 +5,8 @@
 //! public key = 96 bytes (G2 point), signature = 48 bytes (G1 point). The hybrid
 //! schemes use a fixed `Basic` signature scheme.
 
-use crate::error::{ConversionsError, SignError, VerifyError};
 use crate::Error;
+use crate::error::{ConversionsError, SignError, VerifyError};
 use blsful::inner_types::{G1Projective, GroupEncoding};
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey, Signature, SignatureSchemes};
 

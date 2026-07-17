@@ -3,13 +3,13 @@
 //! ChaCha20-Poly1305 AEAD, and a BLAKE3 combiner feeding HKDF-SHA512.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SealError},
-    views::{aead, Views},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
+    error::{AttributesError, ConversionsError, SealError},
+    views::{Views, aead},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use sntrup::sntrup761::{self, EncapsulationKey};
@@ -466,11 +466,12 @@ mod tests {
             .try_build()
             .unwrap();
 
-        assert!(sk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::Chacha20Poly1305, b"")
-            .is_err());
+        assert!(
+            sk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::Chacha20Poly1305, b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -501,15 +502,17 @@ mod tests {
         let pk = sk.conv_view().unwrap().to_public_key().unwrap();
 
         // Only ChaCha20-Poly1305 is allowed
-        assert!(pk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::AesGcm128, b"")
-            .is_err());
-        assert!(pk
-            .seal_view()
-            .unwrap()
-            .seal(b"data", Codec::Xchacha20Poly1305, b"")
-            .is_err());
+        assert!(
+            pk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::AesGcm128, b"")
+                .is_err()
+        );
+        assert!(
+            pk.seal_view()
+                .unwrap()
+                .seal(b"data", Codec::Xchacha20Poly1305, b"")
+                .is_err()
+        );
     }
 }

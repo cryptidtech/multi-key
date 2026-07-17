@@ -2,19 +2,19 @@
 //! NIST P-256, P-384, P-521 ECDSA multikey view.
 
 use crate::{
+    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
     views::aead,
-    AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
 };
 
-use elliptic_curve::sec1::ToSec1Point;
 use elliptic_curve::Generate;
+use elliptic_curve::sec1::ToSec1Point;
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
-use multi_sig::{ms, Multisig, Views as SigViews};
+use multi_hash::{Multihash, mh};
+use multi_sig::{Multisig, Views as SigViews, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use multi_util::Varuint;
@@ -207,7 +207,7 @@ impl<'a> ConvView for View<'a> {
             _ => {
                 return Err(
                     ConversionsError::SecretKeyFailure("not a NIST-P secret key".into()).into(),
-                )
+                );
             }
         };
 
@@ -344,7 +344,7 @@ impl<'a> SignView for View<'a> {
 
         let sig_bytes = match self.mk.codec {
             Codec::P256Priv => {
-                use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+                use p256::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P256_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 let signature: Signature = sk
@@ -353,7 +353,7 @@ impl<'a> SignView for View<'a> {
                 signature.to_bytes().to_vec()
             }
             Codec::P384Priv => {
-                use p384::ecdsa::{signature::Signer, Signature, SigningKey};
+                use p384::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P384_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 let signature: Signature = sk
@@ -362,7 +362,7 @@ impl<'a> SignView for View<'a> {
                 signature.to_bytes().to_vec()
             }
             Codec::P521Priv => {
-                use p521::ecdsa::{signature::Signer, Signature, SigningKey};
+                use p521::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P521_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 let signature: Signature = sk
@@ -410,7 +410,7 @@ impl<'a> VerifyView for View<'a> {
 
         match pubmk.codec {
             Codec::P256Pub => {
-                use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+                use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
                 let signature = Signature::from_slice(&sig)
@@ -419,7 +419,7 @@ impl<'a> VerifyView for View<'a> {
                     .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
             }
             Codec::P384Pub => {
-                use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+                use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
                 let signature = Signature::from_slice(&sig)
@@ -428,7 +428,7 @@ impl<'a> VerifyView for View<'a> {
                     .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
             }
             Codec::P521Pub => {
-                use p521::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+                use p521::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
                 let signature = Signature::from_slice(&sig)
@@ -737,10 +737,11 @@ mod ecies_tests {
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
-        assert!(sk2
-            .open_view()
-            .unwrap()
-            .open(&sealed, ephemeral.as_ref(), b"")
-            .is_err());
+        assert!(
+            sk2.open_view()
+                .unwrap()
+                .open(&sealed, ephemeral.as_ref(), b"")
+                .is_err()
+        );
     }
 }

@@ -2,13 +2,13 @@
 //! FrodoKEM AES/SHAKE multikey view.
 
 use crate::{
-    error::{AttributesError, ConversionsError, SealError},
-    views::{aead, Views},
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
+    error::{AttributesError, ConversionsError, SealError},
+    views::{Views, aead},
 };
 use multi_codec::Codec;
-use multi_hash::{mh, Multihash};
+use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use zeroize::Zeroizing;
@@ -81,7 +81,7 @@ fn public_from_private(codec: Codec, secret_bytes: &[u8]) -> Result<Vec<u8>, Err
         _ => {
             return Err(
                 ConversionsError::SecretKeyFailure("not a FrodoKEM private key".into()).into(),
-            )
+            );
         }
     }
     .map_err(|e| ConversionsError::SecretKeyFailure(e).into())
