@@ -1466,7 +1466,9 @@ impl<'a> SealView for View<'a> {
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let mut out = Vec::new();
                 out.append(&mut Varbytes::new(id.to_vec()).into());
-                out.extend_from_slice(&Vec::from(&ct));
+                let ct_bytes: Vec<u8> = Vec::try_from(&ct)
+                    .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+                out.extend_from_slice(&ct_bytes);
                 Ok((out, None))
             }
             Codec::Bls12381G2Pub => {
@@ -1477,7 +1479,9 @@ impl<'a> SealView for View<'a> {
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let mut out = Vec::new();
                 out.append(&mut Varbytes::new(id.to_vec()).into());
-                out.extend_from_slice(&Vec::from(&ct));
+                let ct_bytes: Vec<u8> = Vec::try_from(&ct)
+                    .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+                out.extend_from_slice(&ct_bytes);
                 Ok((out, None))
             }
             _ => Err(SealError::NotEncapsulationKey.into()),

@@ -5,15 +5,11 @@
 
 # Multi-Key
 
-A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and
-[nonce specification][NONCE]. The published crate is **`multi-key`** (depend on it as
-`multi-key = "1.0"` in `Cargo.toml` and import it as `multi_key` in Rust, e.g.
-`use multi_key::Builder;`).
+A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and [nonce specification][NONCE]. The published crate is **`multi-key`**. Depend on it as `multi-key = "1.0"` in `Cargo.toml`. Import it as `multi_key` in Rust, for example `use multi_key::Builder;`.
 
 ## Current Status
 
-This implementation of the multikey specification supports an extensive set of public key
-and secret key cryptography keys spanning classical, post-quantum, and hybrid schemes:
+This implementation of the multikey specification supports an extensive set of public key and secret key cryptography keys. These span classical, post-quantum, and hybrid schemes:
 
 - **Classical signing** — Ed25519, secp256k1, NIST P-256/P-384/P-521, RSA-2048/3072/4096,
   and BLS12-381 G1/G2.
@@ -24,49 +20,27 @@ and secret key cryptography keys spanning classical, post-quantum, and hybrid sc
 - **Hybrid KEMs** — combinations of X25519 with a PQ KEM.
 - **Secret-key / symmetric** — ChaCha20-Poly1305 keys.
 
-See the [Supported Key Formats](#supported-key-formats) section below for the exhaustive
-list of codecs.
+See the [Supported Key Formats](#supported-key-formats) section below for the exhaustive list of codecs.
 
-This implementation supports encrypting and decrypting keys at rest using
-ChaCha20-Poly1305 AEAD with keys derived via the bcrypt PBKDF from a preimage. A legacy
-bare-ChaCha20 fallback is honored on decrypt so older keystores continue to work;
-re-encrypting upgrades them to the authenticated AEAD format.
+This implementation supports encrypting and decrypting keys at rest with ChaCha20-Poly1305 AEAD. The keys are derived via the bcrypt PBKDF from a preimage. A legacy bare-ChaCha20 fallback is honored on decrypt so older keystores continue to work. Re-encrypting upgrades them to the authenticated AEAD format.
 
-KEM-based message encryption uses `SealView`/`OpenView` with a choice of four AEAD codecs
-(ChaCha20-Poly1305, XChaCha20-Poly1305, AES-GCM-128, AES-GCM-256) and HKDF-SHA512 to derive
-the AEAD key from the KEM shared secret.
+KEM-based message encryption uses `SealView` and `OpenView` with a choice of four AEAD codecs (ChaCha20-Poly1305, XChaCha20-Poly1305, AES-GCM-128, AES-GCM-256). HKDF-SHA512 derives the AEAD key from the KEM shared secret.
 
 For threshold cryptography, this implementation supports three mechanisms:
 
 1. **BLS12-381 Shamir splitting** of G1/G2 keys, including threshold signing and verifying.
-2. **Distributed Key Generation (DKG)** threshold shares for Ed25519, P-256, P-384,
-   secp256k1, BLS12-381, and Ed448, with an authenticated threshold marker bundle (TSIG-1).
-3. A generic **`keysplit`** module providing verifiable Feldman VSS for ECC keys, gf256
-   byte-sharing for RSA and all PQ/hybrid keys, and a dual mode (gf256 + Feldman) for
-   Ed25519/X25519.
+2. **Distributed Key Generation (DKG)** threshold shares for Ed25519, P-256, P-384, secp256k1, BLS12-381, and Ed448, with an authenticated threshold marker bundle (TSIG-1).
+3. A generic **`keysplit`** module that provides verifiable Feldman VSS for ECC keys, gf256 byte-sharing for RSA and all PQ and hybrid keys, and a dual mode (gf256 + Feldman) for Ed25519 and X25519.
 
-This crate also supports converting to and from SSH format keys using the
-[`ssh-key`][SSHKEY] crate, giving full OpenSSH compatibility for reading OpenSSH serialized
-keys and converting them to Multi-Key format. This includes non-standard SSH key protocols
-such as secp256k1 and BLS12-381 G1/G2 keys through the [RFC 4251][RFC4251] standard for
-"additional algorithms" names using the `@multikey` domain suffix. See the
-[SSH Key Conversions](#ssh-key-conversions) section for the full table.
+This crate also supports converting to and from SSH format keys with the [`ssh-key`][SSHKEY] crate. This gives full OpenSSH compatibility for reading OpenSSH serialized keys and converting them to Multi-Key format. This includes non-standard SSH key protocols such as secp256k1 and BLS12-381 G1/G2 keys. These use the [RFC 4251][RFC4251] standard for "additional algorithms" names with the `@multikey` domain suffix. See the [SSH Key Conversions](#ssh-key-conversions) section for the full table.
 
-For the technical details of the design of the multikey or nonce format, please refer to
-the specifications linked above.
+For the technical details of the design of the multikey or nonce format, refer to the specifications linked above.
 
 ## Introduction
 
-This is a Rust implementation of a multicodec format for cryptographic keys. The design of
-the format is intentionally abstract to support any kind of cryptographic key in any state
-(e.g. encrypted or unencrypted). This format is best thought of as a container of key
-material with abstract, algorithm-specific views and a generic, self-describing data storage
-format.
+This is a Rust implementation of a multicodec format for cryptographic keys. The design of the format is intentionally abstract. It supports any kind of cryptographic key in any state (for example, encrypted or unencrypted). The format is a container of key material with abstract, algorithm-specific views and a generic, self-describing data storage format.
 
-Every piece of data in the serialized Multi-Key object either has a known fixed size or a
-self-describing variable size, such that software processing these objects does not need to
-support all encryption algorithms to accurately calculate the size of the serialized object
-and skip over it if needed.
+Every piece of data in the serialized Multi-Key object either has a known fixed size or a self-describing variable size. Software that processes these objects does not need to support all encryption algorithms to calculate the size of the serialized object and skip over it.
 
 ## Supported Key Formats
 
@@ -147,52 +121,30 @@ identifiers come from the [multicodec][MULTICODEC] registry and are surfaced as
 
 ## Views on the Multi-Key Data
 
-To provide an abstract interface to cryptographic keys for all algorithms, this crate
-provides "views" on the Multi-Key data. These are read-only abstract interfaces to the
-Multi-Key attributes with implementations for different supporting algorithms.
+To provide an abstract interface to cryptographic keys for all algorithms, this crate gives "views" on the Multi-Key data. These are read-only abstract interfaces to the Multi-Key attributes with implementations for different supporting algorithms.
 
-Currently the set of views provides generic access to the general attributes
-(`multi_key::AttrView`) of the Multi-Key, the key data (`multi_key::DataView`), as well as
-views on the KDF attributes (`multi_key::KdfAttrView`) and cipher attributes
-(`multi_key::CipherAttrView`) for encrypted Multi-Keys. For algorithms that support
-threshold operations there is a threshold attributes view
-(`multi_key::ThresholdAttrView`) and a higher-level DKG metadata view
-(`multi_key::ThresholdKeyView`).
+The set of views provides generic access to the general attributes (`multi_key::AttrView`) of the Multi-Key, the key data (`multi_key::DataView`), and views on the KDF attributes (`multi_key::KdfAttrView`) and cipher attributes (`multi_key::CipherAttrView`) for encrypted Multi-Keys. For algorithms that support threshold operations, there is a threshold attributes view (`multi_key::ThresholdAttrView`) and a higher-level DKG metadata view (`multi_key::ThresholdKeyView`).
 
 For operations you can do with a Multi-Key, there is:
 
-- a cipher view (`multi_key::CipherView`) for encrypting/decrypting a Multi-Key at rest,
-- a conversion view (`multi_key::ConvView`) for converting the Multi-Key to other formats
-  (e.g. to/from SSH key format, and secret keys to public keys),
-- a fingerprint view (`multi_key::FingerprintView`) for getting a key fingerprint using a
-  given hashing codec,
-- a KDF view (`multi_key::KdfView`) for generating cipher keys for use by a cipher view to
-  encrypt/decrypt the Multi-Key,
-- a seal view (`multi_key::SealView`) and open view (`multi_key::OpenView`) for KEM-based
-  message encryption/decryption,
+- a cipher view (`multi_key::CipherView`) for encrypting and decrypting a Multi-Key at rest,
+- a conversion view (`multi_key::ConvView`) for converting the Multi-Key to other formats (for example, to and from SSH key format, and secret keys to public keys),
+- a fingerprint view (`multi_key::FingerprintView`) for getting a key fingerprint with a given hashing codec,
+- a KDF view (`multi_key::KdfView`) for generating cipher keys for use by a cipher view to encrypt or decrypt the Multi-Key,
+- a seal view (`multi_key::SealView`) and open view (`multi_key::OpenView`) for KEM-based message encryption and decryption,
 - a threshold view (`multi_key::ThresholdView`) for key splitting and combining keys,
-- a sign view (`multi_key::SignView`) and verify view (`multi_key::VerifyView`) for
-  creating and verifying [`Multisig`][MULTISIG] digital signatures.
+- a sign view (`multi_key::SignView`) and verify view (`multi_key::VerifyView`) for creating and verifying [`Multisig`][MULTISIG] digital signatures.
 
 Two additional modules provide threshold functionality outside the view traits:
 
-- `multi_key::keysplit` — generic verifiable threshold key splitting (Feldman VSS, gf256,
-  dual) exposed as free `split`/`combine`/`verify_share` functions.
-- `multi_key::threshold_marker` — DKG marker stamping/reading and TSIG-1 marker
-  authentication, including the `MarkerView` trait and `threshold_kind`/`threshold_params`
-  helpers.
+- `multi_key::keysplit` — generic verifiable threshold key splitting (Feldman VSS, gf256, dual) exposed as free `split`, `combine`, and `verify_share` functions.
+- `multi_key::threshold_marker` — DKG marker stamping and reading and TSIG-1 marker authentication, including the `MarkerView` trait and `threshold_kind` and `threshold_params` helpers.
 
-It is important to note that the operations that seem to mutate the Multi-Key (e.g. encrypt,
-decrypt, convert, etc.) in fact do a copy-on-write (CoW) operation and return a new
-Multi-Key with the mutation applied.
+Operations that seem to mutate the Multi-Key (for example, encrypt, decrypt, convert) in fact do a copy-on-write (CoW) operation. They return a new Multi-Key with the mutation applied.
 
 ## SSH Key Conversions
 
-This crate converts to and from the SSH key format using the [`ssh-key`][SSHKEY] crate.
-Standard SSH algorithms are handled natively; non-standard algorithms use the [RFC 4251][RFC4251]
-"additional algorithms" mechanism with an `ssh_key::Algorithm::Other` opaque key and an
-algorithm name ending in the literal `@multikey` suffix (this is a wire-format identifier,
-distinct from the crate name).
+This crate converts to and from the SSH key format with the [`ssh-key`][SSHKEY] crate. Standard SSH algorithms are handled natively. Non-standard algorithms use the [RFC 4251][RFC4251] "additional algorithms" mechanism with an `ssh_key::Algorithm::Other` opaque key and an algorithm name ending in the literal `@multikey` suffix. This is a wire-format identifier, distinct from the crate name.
 
 ### Native SSH algorithms (no `@multikey` suffix)
 
@@ -234,38 +186,25 @@ distinct from the crate name).
 | SLH-DSA SHAKE 256f | `slh-dsa-shake-256f@multikey` |
 | SLH-DSA SHAKE 256s | `slh-dsa-shake-256s@multikey` |
 
-The import direction (`Builder::new_from_ssh_public_key` /
-`Builder::new_from_ssh_private_key`) supports all of the algorithms above.
+The import direction (`Builder::new_from_ssh_public_key` and `Builder::new_from_ssh_private_key`) supports all of the algorithms above.
 
 ### Key types that do not support SSH conversion
 
-All KEM-only and hybrid key types explicitly reject SSH conversion and return
-`UnsupportedAlgorithm`. These include: X25519, ML-KEM, all sntrup sizes, Classic McEliece,
-all FrodoKEM variants, the BLS12-381 TimeCrypt KEM, and all hybrid signing and hybrid KEM
-schemes.
+All KEM-only and hybrid key types explicitly reject SSH conversion and return `UnsupportedAlgorithm`. These include X25519, ML-KEM, all sntrup sizes, Classic McEliece, all FrodoKEM variants, the BLS12-381 TimeCrypt KEM, and all hybrid signing and hybrid KEM schemes.
 
 ## Threshold Operations
 
 ### BLS12-381 Shamir Splitting
 
-`ThresholdView::split(threshold, limit)` splits a `Bls12381G1Priv` or `Bls12381G2Priv` into
-`Bls12381G1PrivShare` / `Bls12381G2PrivShare` shares using `blsful`'s `SecretKey::split`.
-Shares are recombined with `combine`, and threshold signing/verifying is supported on the
-share codecs. Requires `2 <= threshold <= limit <= 255`.
+`ThresholdView::split(threshold, limit)` splits a `Bls12381G1Priv` or `Bls12381G2Priv` into `Bls12381G1PrivShare` or `Bls12381G2PrivShare` shares with `blsful`'s `SecretKey::split`. Shares are recombined with `combine`. Threshold signing and verifying is supported on the share codecs. Requires `2 <= threshold <= limit <= 255`.
 
 ### DKG Threshold Shares
 
-The DKG share codecs (`Ed25519Thresh*`, `P256Thresh*`, `P384Thresh*`, `Secp256K1Thresh*`,
-`Bls12381Thresh*`, `Ed448Thresh*`) carry DKG metadata attributes (`DkgThreshold`, `DkgLimit`,
-`DkgIdentifier`, `DkgGroupPublicKey`, `DkgOwnerId`). The `ThresholdKeyView` trait exposes
-`group_pubkey()`, `is_threshold_key()`, `participant_count()`, `threshold()`, and
-`owner_vlad()`. The `threshold_marker` module stamps and authenticates a marker bundle
-(TSIG-1) with a controller signing key via `sign_marker` / `verify_marker`.
+The DKG share codecs (`Ed25519Thresh*`, `P256Thresh*`, `P384Thresh*`, `Secp256K1Thresh*`, `Bls12381Thresh*`, `Ed448Thresh*`) carry DKG metadata attributes (`DkgThreshold`, `DkgLimit`, `DkgIdentifier`, `DkgGroupPublicKey`, `DkgOwnerId`). The `ThresholdKeyView` trait exposes `group_pubkey()`, `is_threshold_key()`, `participant_count()`, `threshold()`, and `owner_vlad()`. The `threshold_marker` module stamps and authenticates a marker bundle (TSIG-1) with a controller signing key via `sign_marker` and `verify_marker`.
 
 ### Generic `keysplit` Module
 
-`multi_key::keysplit` provides scheme-aware verifiable threshold splitting for any key type
-as free functions (`split`, `combine`, `verify_share`) producing `KeySplitShare` Multi-Keys:
+`multi_key::keysplit` provides scheme-aware verifiable threshold splitting for any key type as free functions (`split`, `combine`, `verify_share`) that produce `KeySplitShare` Multi-Keys:
 
 - **Feldman VSS** — secp256k1, P-256/P-384/P-521, BLS12-381 G1/G2 (verifiable, with
   commitments).
@@ -276,10 +215,7 @@ as free functions (`split`, `combine`, `verify_share`) producing `KeySplitShare`
 
 ## Threshold Confidentiality
 
-By default, threshold `t` and share count `n` are stored as **plaintext** attributes on every
-key share — any observer of a share learns the threshold parameters. This crate supports three
-configurable disclosure modes that control the confidentiality of `t` and `n`, applicable to
-BLS12-381 Shamir shares and the generic `keysplit` module.
+By default, threshold `t` and share count `n` are stored as **plaintext** attributes on every key share. Any observer of a share learns the threshold parameters. This crate supports three configurable disclosure modes that control the confidentiality of `t` and `n`. These apply to BLS12-381 Shamir shares and the generic `keysplit` module.
 
 ### Disclosure Modes
 
@@ -289,27 +225,15 @@ BLS12-381 Shamir shares and the generic `keysplit` module.
 | `Partial` (1) | encrypted (AEAD) | plaintext attribute | key-holder only | everyone (auditable) |
 | `FullConfidentialial` (2) | encrypted (AEAD) | encrypted (AEAD) | key-holder only | key-holder only |
 
-The encrypted values are sealed with **ChaCha20-Poly1305 AEAD** and stored as a CBOR-encoded
-`ThresholdMetadata` blob in `AttrId::EncryptedThresholdMeta`. The cipher parameters (codec +
-nonce) are recorded in `AttrId::ThresholdMetaCipher` so the blob is self-describing for
-decryption. A separate **meta key** (a 32-byte symmetric `Multikey` with
-`Codec::Chacha20Poly1305`) is required to encrypt/decrypt the metadata.
+The encrypted values are sealed with **ChaCha20-Poly1305 AEAD**. They are stored as a CBOR-encoded `ThresholdMetadata` blob in `AttrId::EncryptedThresholdMeta`. The cipher parameters (codec and nonce) are recorded in `AttrId::ThresholdMetaCipher` so the blob is self-describing for decryption. A separate **meta key** (a 32-byte symmetric `Multikey` with `Codec::Chacha20Poly1305`) is required to encrypt and decrypt the metadata.
 
 ### When to Use Each Mode
 
-- **`Full`** — Use when `t` and `n` are not sensitive. This is the default and is
-  backward-compatible with all existing shares. Appropriate for open governance systems where
-  the threshold structure is public knowledge.
+- **`Full`** — Use when `t` and `n` are not sensitive. This is the default. It is backward-compatible with all existing shares. It is appropriate for open governance systems where the threshold structure is public knowledge.
 
-- **`Partial`** — Use when the total number of participants `n` should be auditable (e.g. for
-  governance transparency) but the threshold `t` should be hidden from share holders and
-  observers. Hiding `t` means an adversary who compromises some shares does not know how many
-  more they need to reconstruct the key. The `meta_key` is required to read `t` but `n` is
-  freely readable.
+- **`Partial`** — Use when the total number of participants `n` should be auditable (for example, for governance transparency) but the threshold `t` should be hidden from share holders and observers. Hiding `t` means an adversary who compromises some shares does not know how many more they need to reconstruct the key. The `meta_key` is required to read `t`. The value `n` is freely readable.
 
-- **`FullConfidentialial`** — Use when both `t` and `n` must be kept secret. An observer who
-  sees a share cannot determine the group size or how many shares are needed. This is the
-  strongest confidentiality mode. The `meta_key` is required to read both `t` and `n`.
+- **`FullConfidentialial`** — Use when both `t` and `n` must be kept secret. An observer who sees a share cannot determine the group size or how many shares are needed. This is the strongest confidentiality mode. The `meta_key` is required to read both `t` and `n`.
 
 ### Trade-offs
 
@@ -323,16 +247,9 @@ decryption. A separate **meta key** (a 32-byte symmetric `Multikey` with
 | Risk if `meta_key` lost | n/a | `t` irrecoverable | `t` and `n` irrecoverable |
 | Performance overhead | none | negligible (AEAD on ~10 bytes) | negligible |
 
-**Key management risk:** Losing the `meta_key` makes `t` (Partial) or both `t`/`n`
-(FullConfidentialial) irrecoverable, preventing key combination. The `meta_key` should be
-stored/backed up using the existing at-rest encryption mechanisms. You can always convert back
-to `Full` mode (with the `meta_key`) before losing it.
+**Key management risk.** Losing the `meta_key` makes `t` (Partial) or both `t` and `n` (FullConfidentialial) irrecoverable. This prevents key combination. The `meta_key` should be stored or backed up with the existing at-rest encryption mechanisms. You can always convert back to `Full` mode (with the `meta_key`) before you lose it.
 
-**DKG note:** DKG threshold values (`t`/`n`) are inherently known to all participants because
-they are agreed during the DKG ceremony. The confidentiality modes do not apply to DKG shares —
-a `to_disclosure()` call on a DKG share returns an error. Future work could add "hidden
-threshold DKG" where participants don't know `t`, but that requires protocol-level changes
-(FROST-style) not just encoding changes.
+**DKG note.** DKG threshold values (`t` and `n`) are inherently known to all participants because they are agreed during the DKG ceremony. The confidentiality modes do not apply to DKG shares. A `to_disclosure()` call on a DKG share returns an error. Future work could add "hidden threshold DKG" where participants do not know `t`. That requires protocol-level changes (FROST-style), not just encoding changes.
 
 ### Creating Shares with a Disclosure Mode
 
@@ -398,9 +315,7 @@ let combined = keysplit::combine_with_meta(&shares, Some(&meta_mk))?;
 
 ### Converting Between Modes
 
-The `to_disclosure()` method converts between any pair of modes. It reads the current `t`/`n`
-(decrypting if needed with `current_meta_key`), then re-stamps the attributes in the target mode
-(encrypting if needed with `meta_key`):
+The `to_disclosure()` method converts between any pair of modes. It reads the current `t` and `n` (decrypting if needed with `current_meta_key`), then re-stamps the attributes in the target mode (encrypting if needed with `meta_key`):
 
 ```rust
 // Full → Partial
@@ -420,16 +335,11 @@ let full_again = confidential.disclosure_view()?
 
 ### At-Rest Multi-Key Encryption
 
-Multi-Keys can be encrypted at rest using **ChaCha20-Poly1305** AEAD (`CipherView`) with the
-cipher key derived from a preimage via the **bcrypt PBKDF** (`KdfView`, 32-byte salt,
-configurable rounds). A legacy bare-ChaCha20 fallback is honored on decrypt so keystores
-encrypted before AEAD was added continue to work; re-encrypting upgrades them to the
-authenticated format.
+Multi-Keys can be encrypted at rest with **ChaCha20-Poly1305** AEAD (`CipherView`). The cipher key is derived from a preimage via the **bcrypt PBKDF** (`KdfView`, 32-byte salt, configurable rounds). A legacy bare-ChaCha20 fallback is honored on decrypt so keystores encrypted before AEAD was added continue to work. Re-encrypting upgrades them to the authenticated format.
 
 ### KEM Seal / Open
 
-KEM-based message encryption uses `SealView` / `OpenView`. The KEM shared secret is
-expanded into an AEAD key via **HKDF-SHA512**, then one of four AEAD codecs may be used:
+KEM-based message encryption uses `SealView` and `OpenView`. The KEM shared secret is expanded into an AEAD key via **HKDF-SHA512**. Then one of four AEAD codecs may be used:
 
 | AEAD codec | Key size | Nonce size |
 |---|---|---|
@@ -438,8 +348,7 @@ expanded into an AEAD key via **HKDF-SHA512**, then one of four AEAD codecs may 
 | `AesGcm128` | 16 bytes | 12 bytes |
 | `AesGcm256` | 32 bytes | 12 bytes |
 
-Individual KEM views may restrict the allowed AEAD codec (e.g. X25519-ML-KEM-768 only
-permits `Chacha20Poly1305` per its specification).
+Individual KEM views may restrict the allowed AEAD codec. For example, X25519-ML-KEM-768 only permits `Chacha20Poly1305` per its specification.
 
 ## Cargo Features
 
@@ -453,8 +362,7 @@ permits `Chacha20Poly1305` per its specification).
 - Private keys are wrapped in `Zeroizing` buffers and automatically zeroized on drop.
 - `Debug` output for private key material is redacted.
 - All views are thread-safe (`Send` + `Sync`) for concurrent operations.
-- Mutation operations use copy-on-write semantics, returning a new `Multi-Key` rather than
-  mutating in place.
+- Mutation operations use copy-on-write semantics. They return a new `Multi-Key` rather than mutating in place.
 
 ## Links
 

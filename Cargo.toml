@@ -1,8 +1,8 @@
 [package]
 name = "multi-key"
-version = "1.0.8"
+version = "1.0.9"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
 repository = "https://github.com/cryptidtech/multi-key.git"
@@ -27,12 +27,12 @@ blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
 ciborium = "0.2"
 curve25519-dalek = { version = "5.0.0", features = ["group"] }
 # blsful configured per-target below (blst for native, rust for wasm)
-frodo-kem-rs = { version = "0.7", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
+frodo-kem-rs = { version = "0.9", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
 chacha20 = "0.10"
 chacha20poly1305 = "0.11"
 ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"] }
 elliptic-curve = "0.14"
-fn-dsa = "0.3"
+fn-dsa = "0.4"
 getrandom = { version = "0.4", features = ["sys_rng"] }
 hex = "0.4"
 hkdf = "0.13"
@@ -41,11 +41,11 @@ mceliece348864 = { version = "1.0" }
 ml-dsa = "0.1.1"
 ml-kem = "0.3"
 multi-base = "1.0"
-multi-codec = "1.0"
-multi-hash = "1.0"
-multi-sig = "1.0"
+multi-codec = "1.1"
+multi-hash = "1.0.7"
+multi-sig = "1.1.0"
 multi-trait = "1.0"
-multi-util = "1.0"
+multi-util = "1.1"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
@@ -75,16 +75,19 @@ subtle = "2"
 thiserror = { version = "2.0" }
 typenum = "1.17"
 unsigned-varint = { version = "0.8", features = ["std"] }
-vsss-rs = "6.0.0-rc2"
+vsss-rs = "6.0"
 x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
 zeroize = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-blsful = { version = "4.0.0-rc1", default-features = false, features = ["rust"] }
+blsful = { version = "4.0.0", default-features = false, features = ["rust"] }
+# getrandom 0.2 is pulled transitively by rand_core 0.6 (bls12_381_plus, PQC
+# crates). On wasm32 it needs the "js" feature to compile.
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-blsful = { version = "4.0.0-rc1", default-features = false, features = ["blst"] }
+blsful = { version = "4.0.0", default-features = false, features = ["blst"] }
 ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
 
 [dev-dependencies]
