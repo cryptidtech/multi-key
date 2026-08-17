@@ -23,6 +23,8 @@ pub(crate) mod ed25519_mldsa65;
 pub(crate) mod fn_dsa;
 pub(crate) mod frodokem;
 pub(crate) mod frodokem_helper;
+#[cfg(feature = "lamport")]
+pub(crate) mod lamport;
 pub(crate) mod mayo;
 pub(crate) mod ml_dsa;
 pub(crate) mod ml_kem;
@@ -45,6 +47,8 @@ pub(crate) mod x25519_frodokem640;
 pub(crate) mod x25519_mceliece348864;
 pub(crate) mod x25519_mlkem768;
 pub(crate) mod x25519_sntrup761;
+#[cfg(feature = "xmss")]
+pub(crate) mod xmss;
 
 // shared AEAD helper used by ml_kem, sntrup, classic_mceliece, x25519, and hybrid KEM views
 pub(crate) mod aead;
@@ -229,8 +233,8 @@ pub trait ThresholdView {
 /// that participates in a threshold (t-of-n) key.
 ///
 /// This is intentionally narrower than [`ThresholdAttrView`]: it returns
-/// already-decoded values (u16, owning Vec<u8>) suitable for direct consumption
-/// by application code, and includes [`is_threshold_key`] for cheap discrimination.
+/// already-decoded values (u16, owning `Vec<u8>`) suitable for direct consumption
+/// by application code, and includes `is_threshold_key` for cheap discrimination.
 pub trait ThresholdKeyView {
     /// Get the group public key bytes for the t-of-n key.
     fn group_pubkey(&self) -> Result<Vec<u8>, Error>;

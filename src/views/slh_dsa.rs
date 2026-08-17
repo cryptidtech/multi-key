@@ -58,36 +58,36 @@ where
 fn is_slh_dsa_priv(codec: Codec) -> bool {
     matches!(
         codec,
-        Codec::SlhdsaSha2128FPriv
-            | Codec::SlhdsaSha2128SPriv
-            | Codec::SlhdsaSha2192FPriv
-            | Codec::SlhdsaSha2192SPriv
-            | Codec::SlhdsaSha2256FPriv
-            | Codec::SlhdsaSha2256SPriv
-            | Codec::SlhdsaShake128FPriv
-            | Codec::SlhdsaShake128SPriv
-            | Codec::SlhdsaShake192FPriv
-            | Codec::SlhdsaShake192SPriv
-            | Codec::SlhdsaShake256FPriv
-            | Codec::SlhdsaShake256SPriv
+        Codec::SlhDsaSha2128FPriv
+            | Codec::SlhDsaSha2128SPriv
+            | Codec::SlhDsaSha2192FPriv
+            | Codec::SlhDsaSha2192SPriv
+            | Codec::SlhDsaSha2256FPriv
+            | Codec::SlhDsaSha2256SPriv
+            | Codec::SlhDsaShake128FPriv
+            | Codec::SlhDsaShake128SPriv
+            | Codec::SlhDsaShake192FPriv
+            | Codec::SlhDsaShake192SPriv
+            | Codec::SlhDsaShake256FPriv
+            | Codec::SlhDsaShake256SPriv
     )
 }
 
 fn is_slh_dsa_pub(codec: Codec) -> bool {
     matches!(
         codec,
-        Codec::SlhdsaSha2128FPub
-            | Codec::SlhdsaSha2128SPub
-            | Codec::SlhdsaSha2192FPub
-            | Codec::SlhdsaSha2192SPub
-            | Codec::SlhdsaSha2256FPub
-            | Codec::SlhdsaSha2256SPub
-            | Codec::SlhdsaShake128FPub
-            | Codec::SlhdsaShake128SPub
-            | Codec::SlhdsaShake192FPub
-            | Codec::SlhdsaShake192SPub
-            | Codec::SlhdsaShake256FPub
-            | Codec::SlhdsaShake256SPub
+        Codec::SlhDsaSha2128FPub
+            | Codec::SlhDsaSha2128SPub
+            | Codec::SlhDsaSha2192FPub
+            | Codec::SlhDsaSha2192SPub
+            | Codec::SlhDsaSha2256FPub
+            | Codec::SlhDsaSha2256SPub
+            | Codec::SlhDsaShake128FPub
+            | Codec::SlhDsaShake128SPub
+            | Codec::SlhDsaShake192FPub
+            | Codec::SlhDsaShake192SPub
+            | Codec::SlhDsaShake256FPub
+            | Codec::SlhDsaShake256SPub
     )
 }
 
@@ -143,113 +143,113 @@ impl<'a> ConvView for View<'a> {
         };
 
         let (public_key, codec) = match self.mk.codec {
-            Codec::SlhdsaSha2128FPriv => (
+            Codec::SlhDsaSha2128FPriv => (
                 SigningKey::<Sha2_128f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2128FPub,
+                Codec::SlhDsaSha2128FPub,
             ),
-            Codec::SlhdsaSha2128SPriv => (
+            Codec::SlhDsaSha2128SPriv => (
                 SigningKey::<Sha2_128s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2128SPub,
+                Codec::SlhDsaSha2128SPub,
             ),
-            Codec::SlhdsaSha2192FPriv => (
+            Codec::SlhDsaSha2192FPriv => (
                 SigningKey::<Sha2_192f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2192FPub,
+                Codec::SlhDsaSha2192FPub,
             ),
-            Codec::SlhdsaSha2192SPriv => (
+            Codec::SlhDsaSha2192SPriv => (
                 SigningKey::<Sha2_192s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2192SPub,
+                Codec::SlhDsaSha2192SPub,
             ),
-            Codec::SlhdsaSha2256FPriv => (
+            Codec::SlhDsaSha2256FPriv => (
                 SigningKey::<Sha2_256f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2256FPub,
+                Codec::SlhDsaSha2256FPub,
             ),
-            Codec::SlhdsaSha2256SPriv => (
+            Codec::SlhDsaSha2256SPriv => (
                 SigningKey::<Sha2_256s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaSha2256SPub,
+                Codec::SlhDsaSha2256SPub,
             ),
-            Codec::SlhdsaShake128FPriv => (
+            Codec::SlhDsaShake128FPriv => (
                 SigningKey::<Shake128f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake128FPub,
+                Codec::SlhDsaShake128FPub,
             ),
-            Codec::SlhdsaShake128SPriv => (
+            Codec::SlhDsaShake128SPriv => (
                 SigningKey::<Shake128s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake128SPub,
+                Codec::SlhDsaShake128SPub,
             ),
-            Codec::SlhdsaShake192FPriv => (
+            Codec::SlhDsaShake192FPriv => (
                 SigningKey::<Shake192f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake192FPub,
+                Codec::SlhDsaShake192FPub,
             ),
-            Codec::SlhdsaShake192SPriv => (
+            Codec::SlhDsaShake192SPriv => (
                 SigningKey::<Shake192s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake192SPub,
+                Codec::SlhDsaShake192SPub,
             ),
-            Codec::SlhdsaShake256FPriv => (
+            Codec::SlhDsaShake256FPriv => (
                 SigningKey::<Shake256f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake256FPub,
+                Codec::SlhDsaShake256FPub,
             ),
-            Codec::SlhdsaShake256SPriv => (
+            Codec::SlhDsaShake256SPriv => (
                 SigningKey::<Shake256s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?
                     .verifying_key()
                     .to_vec(),
-                Codec::SlhdsaShake256SPub,
+                Codec::SlhDsaShake256SPub,
             ),
             _ => {
                 return Err(
@@ -276,18 +276,18 @@ impl<'a> ConvView for View<'a> {
 
         // Determine algorithm name based on codec
         let algorithm_name = match pk.codec {
-            Codec::SlhdsaSha2128FPub => ALGORITHM_NAME_SHA2_128F,
-            Codec::SlhdsaSha2128SPub => ALGORITHM_NAME_SHA2_128S,
-            Codec::SlhdsaSha2192FPub => ALGORITHM_NAME_SHA2_192F,
-            Codec::SlhdsaSha2192SPub => ALGORITHM_NAME_SHA2_192S,
-            Codec::SlhdsaSha2256FPub => ALGORITHM_NAME_SHA2_256F,
-            Codec::SlhdsaSha2256SPub => ALGORITHM_NAME_SHA2_256S,
-            Codec::SlhdsaShake128FPub => ALGORITHM_NAME_SHAKE_128F,
-            Codec::SlhdsaShake128SPub => ALGORITHM_NAME_SHAKE_128S,
-            Codec::SlhdsaShake192FPub => ALGORITHM_NAME_SHAKE_192F,
-            Codec::SlhdsaShake192SPub => ALGORITHM_NAME_SHAKE_192S,
-            Codec::SlhdsaShake256FPub => ALGORITHM_NAME_SHAKE_256F,
-            Codec::SlhdsaShake256SPub => ALGORITHM_NAME_SHAKE_256S,
+            Codec::SlhDsaSha2128FPub => ALGORITHM_NAME_SHA2_128F,
+            Codec::SlhDsaSha2128SPub => ALGORITHM_NAME_SHA2_128S,
+            Codec::SlhDsaSha2192FPub => ALGORITHM_NAME_SHA2_192F,
+            Codec::SlhDsaSha2192SPub => ALGORITHM_NAME_SHA2_192S,
+            Codec::SlhDsaSha2256FPub => ALGORITHM_NAME_SHA2_256F,
+            Codec::SlhDsaSha2256SPub => ALGORITHM_NAME_SHA2_256S,
+            Codec::SlhDsaShake128FPub => ALGORITHM_NAME_SHAKE_128F,
+            Codec::SlhDsaShake128SPub => ALGORITHM_NAME_SHAKE_128S,
+            Codec::SlhDsaShake192FPub => ALGORITHM_NAME_SHAKE_192F,
+            Codec::SlhDsaShake192SPub => ALGORITHM_NAME_SHAKE_192S,
+            Codec::SlhDsaShake256FPub => ALGORITHM_NAME_SHAKE_256F,
+            Codec::SlhDsaShake256SPub => ALGORITHM_NAME_SHAKE_256S,
             _ => return Err(ConversionsError::UnsupportedCodec(pk.codec).into()),
         };
 
@@ -318,18 +318,18 @@ impl<'a> ConvView for View<'a> {
 
         // Determine algorithm name based on codec
         let algorithm_name = match self.mk.codec {
-            Codec::SlhdsaSha2128FPriv => ALGORITHM_NAME_SHA2_128F,
-            Codec::SlhdsaSha2128SPriv => ALGORITHM_NAME_SHA2_128S,
-            Codec::SlhdsaSha2192FPriv => ALGORITHM_NAME_SHA2_192F,
-            Codec::SlhdsaSha2192SPriv => ALGORITHM_NAME_SHA2_192S,
-            Codec::SlhdsaSha2256FPriv => ALGORITHM_NAME_SHA2_256F,
-            Codec::SlhdsaSha2256SPriv => ALGORITHM_NAME_SHA2_256S,
-            Codec::SlhdsaShake128FPriv => ALGORITHM_NAME_SHAKE_128F,
-            Codec::SlhdsaShake128SPriv => ALGORITHM_NAME_SHAKE_128S,
-            Codec::SlhdsaShake192FPriv => ALGORITHM_NAME_SHAKE_192F,
-            Codec::SlhdsaShake192SPriv => ALGORITHM_NAME_SHAKE_192S,
-            Codec::SlhdsaShake256FPriv => ALGORITHM_NAME_SHAKE_256F,
-            Codec::SlhdsaShake256SPriv => ALGORITHM_NAME_SHAKE_256S,
+            Codec::SlhDsaSha2128FPriv => ALGORITHM_NAME_SHA2_128F,
+            Codec::SlhDsaSha2128SPriv => ALGORITHM_NAME_SHA2_128S,
+            Codec::SlhDsaSha2192FPriv => ALGORITHM_NAME_SHA2_192F,
+            Codec::SlhDsaSha2192SPriv => ALGORITHM_NAME_SHA2_192S,
+            Codec::SlhDsaSha2256FPriv => ALGORITHM_NAME_SHA2_256F,
+            Codec::SlhDsaSha2256SPriv => ALGORITHM_NAME_SHA2_256S,
+            Codec::SlhDsaShake128FPriv => ALGORITHM_NAME_SHAKE_128F,
+            Codec::SlhDsaShake128SPriv => ALGORITHM_NAME_SHAKE_128S,
+            Codec::SlhDsaShake192FPriv => ALGORITHM_NAME_SHAKE_192F,
+            Codec::SlhDsaShake192SPriv => ALGORITHM_NAME_SHAKE_192S,
+            Codec::SlhDsaShake256FPriv => ALGORITHM_NAME_SHAKE_256F,
+            Codec::SlhDsaShake256SPriv => ALGORITHM_NAME_SHAKE_256S,
             _ => return Err(ConversionsError::UnsupportedCodec(self.mk.codec).into()),
         };
 
@@ -400,89 +400,89 @@ impl<'a> SignView for View<'a> {
             kd.secret_bytes()?
         };
         let (signature, codec) = match self.mk.codec {
-            Codec::SlhdsaSha2128FPriv => {
+            Codec::SlhDsaSha2128FPriv => {
                 let signing_key = SigningKey::<Sha2_128f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2128FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2128FMsig)
             }
-            Codec::SlhdsaSha2128SPriv => {
+            Codec::SlhDsaSha2128SPriv => {
                 let signing_key = SigningKey::<Sha2_128s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2128SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2128SMsig)
             }
-            Codec::SlhdsaSha2192FPriv => {
+            Codec::SlhDsaSha2192FPriv => {
                 let signing_key = SigningKey::<Sha2_192f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2192FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2192FMsig)
             }
-            Codec::SlhdsaSha2192SPriv => {
+            Codec::SlhDsaSha2192SPriv => {
                 let signing_key = SigningKey::<Sha2_192s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2192SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2192SMsig)
             }
-            Codec::SlhdsaSha2256FPriv => {
+            Codec::SlhDsaSha2256FPriv => {
                 let signing_key = SigningKey::<Sha2_256f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2256FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2256FMsig)
             }
-            Codec::SlhdsaSha2256SPriv => {
+            Codec::SlhDsaSha2256SPriv => {
                 let signing_key = SigningKey::<Sha2_256s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaSha2256SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaSha2256SMsig)
             }
-            Codec::SlhdsaShake128FPriv => {
+            Codec::SlhDsaShake128FPriv => {
                 let signing_key = SigningKey::<Shake128f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake128FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake128FMsig)
             }
-            Codec::SlhdsaShake128SPriv => {
+            Codec::SlhDsaShake128SPriv => {
                 let signing_key = SigningKey::<Shake128s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake128SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake128SMsig)
             }
-            Codec::SlhdsaShake192FPriv => {
+            Codec::SlhDsaShake192FPriv => {
                 let signing_key = SigningKey::<Shake192f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake192FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake192FMsig)
             }
-            Codec::SlhdsaShake192SPriv => {
+            Codec::SlhDsaShake192SPriv => {
                 let signing_key = SigningKey::<Shake192s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake192SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake192SMsig)
             }
-            Codec::SlhdsaShake256FPriv => {
+            Codec::SlhDsaShake256FPriv => {
                 let signing_key = SigningKey::<Shake256f>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake256FMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake256FMsig)
             }
-            Codec::SlhdsaShake256SPriv => {
+            Codec::SlhDsaShake256SPriv => {
                 let signing_key = SigningKey::<Shake256s>::try_from(secret_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::SecretKeyFailure("invalid secret key length".into())
                     })?;
-                (signing_key.sign(msg).to_vec(), Codec::SlhdsaShake256SMsig)
+                (signing_key.sign(msg).to_vec(), Codec::SlhDsaShake256SMsig)
             }
             _ => {
                 return Err(
@@ -523,7 +523,7 @@ impl<'a> VerifyView for View<'a> {
         let sig_bytes = sv.sig_bytes()?;
 
         match self.mk.codec {
-            Codec::SlhdsaSha2128FPriv | Codec::SlhdsaSha2128FPub => {
+            Codec::SlhDsaSha2128FPriv | Codec::SlhDsaSha2128FPub => {
                 let verifying_key = VerifyingKey::<Sha2_128f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -534,7 +534,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaSha2128SPriv | Codec::SlhdsaSha2128SPub => {
+            Codec::SlhDsaSha2128SPriv | Codec::SlhDsaSha2128SPub => {
                 let verifying_key = VerifyingKey::<Sha2_128s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -545,7 +545,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaSha2192FPriv | Codec::SlhdsaSha2192FPub => {
+            Codec::SlhDsaSha2192FPriv | Codec::SlhDsaSha2192FPub => {
                 let verifying_key = VerifyingKey::<Sha2_192f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -556,7 +556,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaSha2192SPriv | Codec::SlhdsaSha2192SPub => {
+            Codec::SlhDsaSha2192SPriv | Codec::SlhDsaSha2192SPub => {
                 let verifying_key = VerifyingKey::<Sha2_192s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -567,7 +567,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaSha2256FPriv | Codec::SlhdsaSha2256FPub => {
+            Codec::SlhDsaSha2256FPriv | Codec::SlhDsaSha2256FPub => {
                 let verifying_key = VerifyingKey::<Sha2_256f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -578,7 +578,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaSha2256SPriv | Codec::SlhdsaSha2256SPub => {
+            Codec::SlhDsaSha2256SPriv | Codec::SlhDsaSha2256SPub => {
                 let verifying_key = VerifyingKey::<Sha2_256s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -589,7 +589,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake128FPriv | Codec::SlhdsaShake128FPub => {
+            Codec::SlhDsaShake128FPriv | Codec::SlhDsaShake128FPub => {
                 let verifying_key = VerifyingKey::<Shake128f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -600,7 +600,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake128SPriv | Codec::SlhdsaShake128SPub => {
+            Codec::SlhDsaShake128SPriv | Codec::SlhDsaShake128SPub => {
                 let verifying_key = VerifyingKey::<Shake128s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -611,7 +611,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake192FPriv | Codec::SlhdsaShake192FPub => {
+            Codec::SlhDsaShake192FPriv | Codec::SlhDsaShake192FPub => {
                 let verifying_key = VerifyingKey::<Shake192f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -622,7 +622,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake192SPriv | Codec::SlhdsaShake192SPub => {
+            Codec::SlhDsaShake192SPriv | Codec::SlhDsaShake192SPub => {
                 let verifying_key = VerifyingKey::<Shake192s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -633,7 +633,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake256FPriv | Codec::SlhdsaShake256FPub => {
+            Codec::SlhDsaShake256FPriv | Codec::SlhDsaShake256FPub => {
                 let verifying_key = VerifyingKey::<Shake256f>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())
@@ -644,7 +644,7 @@ impl<'a> VerifyView for View<'a> {
                     .verify(msg_bytes, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()).into())
             }
-            Codec::SlhdsaShake256SPriv | Codec::SlhdsaShake256SPub => {
+            Codec::SlhDsaShake256SPriv | Codec::SlhDsaShake256SPub => {
                 let verifying_key = VerifyingKey::<Shake256s>::try_from(key_bytes.as_slice())
                     .map_err(|_| {
                         ConversionsError::PublicKeyFailure("invalid public key length".into())

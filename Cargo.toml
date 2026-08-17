@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "1.0.9"
+version = "1.1.0"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
@@ -12,18 +12,20 @@ keywords = ["multiformats", "multikey", "crypto", "post-quantum"]
 categories = ["cryptography", "encoding"]
 
 [features]
-default = ["serde"]
+default = ["serde", "lamport", "xmss"]
 wasm = ["getrandom/wasm_js"]
 # Legacy bare-ChaCha20 fallback for keys encrypted before AEAD was added.
 # When disabled (default), AEAD decryption failure is a hard error — never
 # silently downgrade to unauthenticated ChaCha20. Enable only to migrate
 # pre-AEAD keystores; a warning is emitted on every fallback.
 legacy_chacha20_fallback = []
+lamport = ["dep:lamport_signature_plus", "dep:sha3", "dep:blake2", "dep:shake"]
+xmss = ["dep:xmss"]
 
 [dependencies]
 aes-gcm = "0.11"
 bcrypt-pbkdf = "0.11"
-blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
+blake3 = { version = "1.8", features = ["traits-preview", "zeroize"] }
 ciborium = "0.2"
 curve25519-dalek = { version = "5.0.0", features = ["group"] }
 # blsful configured per-target below (blst for native, rust for wasm)
@@ -40,28 +42,20 @@ k256 = { version = "0.14", features = ["ecdh"] }
 mceliece348864 = { version = "1.0" }
 ml-dsa = "0.1.1"
 ml-kem = "0.3"
-multi-base = "1.0"
-multi-codec = "1.1"
-multi-hash = "1.0.7"
-multi-sig = "1.1.0"
-multi-trait = "1.0"
-multi-util = "1.1"
+multi-base = { package = "bs-multibase", version = "0.7.0", path = "../bettersign/crates/multibase", default-features = false }
+multi-codec = { package = "bs-multicodec", version = "0.7.0", path = "../bettersign/crates/multicodec" }
+multi-hash = { package = "bs-multihash", version = "0.7.0", path = "../bettersign/crates/multihash" }
+multi-sig = { path = "../multi-sig" }
+multi-trait = { package = "bs-multitrait", version = "0.7.0", path = "../bettersign/crates/multitrait", default-features = false }
+multi-util = { package = "bs-multiutil", version = "0.7.0", path = "../bettersign/crates/multiutil" }
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 poly1305 = "0.9"
 pq-mayo = "0.5.0"
-# RustCrypto 0.14 stack (vsss-rs 6, elliptic-curve 0.14, ed25519-dalek 3) is on
-# rand_core 0.10; pin the rand ecosystem to the matching majors so RNGs thread
-# through cleanly (overrides the workspace rand 0.8 used by not-yet-migrated crates).
 rand = "0.10"
-# rand_chacha stays 0.3 (rand_core 0.6): the only ChaCha use is deterministic
-# PQC keygen (classic-mceliece), which is on the rand_core 0.6 island below.
 rand_chacha = "0.3"
 rand_core = "0.10"
-# The PQC crates (fn-dsa, ml-dsa, ml-kem, slh-dsa, sntrup) are still on rand_core
-# 0.6 (fn-dsa exposes its own RngCore/CryptoRng traits); keep a 0.6 OsRng for
-# those sites while the curve stack above uses rand_core 0.10.
 rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
 sad-rsa = { version = "0.2.3", features = ["sha2"] }
 sec1 = "0.8"
@@ -78,11 +72,16 @@ unsigned-varint = { version = "0.8", features = ["std"] }
 vsss-rs = "6.0"
 x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
 zeroize = "1"
+# Lamport support (feature-gated, default-enabled)
+lamport_signature_plus = { version = "0.5.0-rc2", optional = true }
+sha3 = { version = "0.12", optional = true }
+blake2 = { version = "0.11.0-rc.6", optional = true }
+shake = { version = "0.1", optional = true }
+# XMSS support (feature-gated, default-enabled)
+xmss = { version = "0.1.0-pre.0", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 blsful = { version = "4.0.0", default-features = false, features = ["rust"] }
-# getrandom 0.2 is pulled transitively by rand_core 0.6 (bls12_381_plus, PQC
-# crates). On wasm32 it needs the "js" feature to compile.
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
 
@@ -105,6 +104,7 @@ path = "benches/multikey_bench.rs"
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
 
 [lints.rust]
 unsafe_code = "deny"
