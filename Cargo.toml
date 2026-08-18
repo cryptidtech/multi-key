@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
@@ -42,17 +42,17 @@ k256 = { version = "0.14", features = ["ecdh"] }
 mceliece348864 = { version = "1.0" }
 ml-dsa = "0.1.1"
 ml-kem = "0.3"
-multi-base = { package = "bs-multibase", version = "0.7.0", path = "../bettersign/crates/multibase", default-features = false }
-multi-codec = { package = "bs-multicodec", version = "0.7.0", path = "../bettersign/crates/multicodec" }
-multi-hash = { package = "bs-multihash", version = "0.7.0", path = "../bettersign/crates/multihash" }
-multi-sig = { path = "../multi-sig" }
-multi-trait = { package = "bs-multitrait", version = "0.7.0", path = "../bettersign/crates/multitrait", default-features = false }
-multi-util = { package = "bs-multiutil", version = "0.7.0", path = "../bettersign/crates/multiutil" }
+multi-base = { version = "1.0", default-features = false }
+multi-codec = "1.2"
+multi-hash = "1.1"
+multi-sig = "1.2"
+multi-trait = { version = "1.0", default-features = false }
+multi-util = "1.1"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 poly1305 = "0.9"
-pq-mayo = "0.5.0"
+pq-mayo = "0.6.0"
 rand = "0.10"
 rand_chacha = "0.3"
 rand_core = "0.10"
@@ -63,7 +63,7 @@ serde = { version = "1.0", default-features = false, features = ["alloc", "deriv
 sha2 = "0.11"
 signature = "3"
 slh-dsa = "0.2.0-rc.5"
-sntrup = "0.3.0"
+sntrup = "0.4.0"
 ssh-encoding = "0.3"
 subtle = "2"
 thiserror = { version = "2.0" }

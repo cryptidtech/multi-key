@@ -474,6 +474,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -624,6 +665,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -819,6 +901,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -956,6 +1079,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -1197,6 +1361,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -1332,6 +1537,47 @@ impl Views for Multikey {
             | Codec::Rsa3072Priv
             | Codec::Rsa4096Pub
             | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportSha3256Pub
+            | Codec::LamportSha3256Priv
+            | Codec::LamportSha3256PrivShare
+            | Codec::LamportSha3384Pub
+            | Codec::LamportSha3384Priv
+            | Codec::LamportSha3384PrivShare
+            | Codec::LamportSha3512Pub
+            | Codec::LamportSha3512Priv
+            | Codec::LamportSha3512PrivShare
+            | Codec::LamportSha2256Pub
+            | Codec::LamportSha2256Priv
+            | Codec::LamportSha2256PrivShare
+            | Codec::LamportSha2384Pub
+            | Codec::LamportSha2384Priv
+            | Codec::LamportSha2384PrivShare
+            | Codec::LamportSha2512Pub
+            | Codec::LamportSha2512Priv
+            | Codec::LamportSha2512PrivShare
+            | Codec::LamportBlake2B512Pub
+            | Codec::LamportBlake2B512Priv
+            | Codec::LamportBlake2B512PrivShare
+            | Codec::LamportBlake2S256Pub
+            | Codec::LamportBlake2S256Priv
+            | Codec::LamportBlake2S256PrivShare
+            | Codec::LamportBlake3256Pub
+            | Codec::LamportBlake3256Priv
+            | Codec::LamportBlake3256PrivShare
+            | Codec::LamportShake128Pub
+            | Codec::LamportShake128Priv
+            | Codec::LamportShake128PrivShare
+            | Codec::LamportShake256Pub
+            | Codec::LamportShake256Priv
+            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "xmss")]
+            Codec::XmssSha210256Pub
+            | Codec::XmssSha210256Priv
+            | Codec::XmssSha216256Pub
+            | Codec::XmssSha216256Priv
+            | Codec::XmssSha220256Pub
+            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }

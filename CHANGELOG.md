@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-08-18
+
+### Fixed
+
+- Completed the Lamport and XMSS codec dispatch arms in `sign_view`, `verify_view`, `conv_view`, `data_view`, `attr_view`, and `fingerprint_view` in `src/mk.rs`. The `1.1.0` commit added these arms only to a subset of the view dispatch tables; the remaining match blocks returned `UnsupportedCodec` for Lamport/XMSS codecs. All six view functions now route Lamport and XMSS codecs to their views.
+
+### Changed
+
+- Switched the `multi-*` dependencies from the `bs-*` workspace path deps back to the published crates.io versions: `multi-base` 1.0, `multi-codec` 1.2, `multi-hash` 1.1, `multi-sig` 1.2, `multi-trait` 1.0, `multi-util` 1.1. The `multi-codec 1.2` release publishes the expanded codec table (Lamport and XMSS variants) and the `SlhDsa`/`MlDsa` casing that `1.1.0` consumed via the `bs-multicodec` path dep.
+- Bumped `pq-mayo` from `0.5.0` to `0.6.0`.
+- Bumped `sntrup` from `0.3.0` to `0.4.0`.
+- Version bumped from `1.1.0` to `1.1.1` (patch: feature completion and dependency finalization, no breaking change).
+
+### CI
+
+- Restructured the `rust.yml` workflow. Removed the cross-platform build matrix (i686, macOS, Windows) and the `wasm_builds` and `test` matrix jobs. The `build` job now runs on `ubuntu-latest` with fmt check, clippy `-D warnings`, build, and test. Added a `coverage` job using `cargo-llvm-cov` with Codecov upload. Switched push and pull-request branch targets from `main` to `master`.
+
 ## [1.1.0] - 2026-08-13
 
 ### Added
@@ -182,6 +199,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Major dependency updates: ed25519-dalek 3, blsful 4, elliptic-curve 0.14, vsss-rs 6, ssh-key 0.7.
 - Initial published release on crates.io as `multi-key`.
 
+[1.1.1]: https://github.com/cryptidtech/multi-key/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/cryptidtech/multi-key/compare/v1.0.9...v1.1.0
 [1.0.9]: https://github.com/cryptidtech/multi-key/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/cryptidtech/multi-key/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/cryptidtech/multi-key/compare/v1.0.6...v1.0.7
