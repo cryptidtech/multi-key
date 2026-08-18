@@ -609,6 +609,7 @@ mod tests {
         assert_all(&mk::MAYO_KEY_CODECS);
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn roundtrip_slh_dsa() {
         assert_all(&mk::SLH_DSA_KEY_CODECS);

@@ -21,6 +21,10 @@ wasm = ["getrandom/wasm_js"]
 legacy_chacha20_fallback = []
 lamport = ["dep:lamport_signature_plus", "dep:sha3", "dep:blake2", "dep:shake"]
 xmss = ["dep:xmss"]
+# Tests that take over 60 seconds in debug builds (SLH-DSA, Classic McEliece,
+# XMSS). Excluded from the default `cargo test` run; enable with
+# `cargo test --features slow-tests` to run the full suite.
+slow-tests = []
 
 [dependencies]
 aes-gcm = "0.11"

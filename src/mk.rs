@@ -3564,6 +3564,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_slh_dsa_random() {
         for codec in SLH_DSA_KEY_CODECS {
@@ -3594,6 +3595,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_slh_dsa_encoded_random() {
         for codec in SLH_DSA_KEY_CODECS {
@@ -3609,6 +3611,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_slh_dsa_signing_detached_roundtrip() {
         // SLH-DSA signing uses large stack buffers internally (Merkle trees, WOTS+).
@@ -3651,6 +3654,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_slh_dsa_signing_merged_roundtrip() {
         // SLH-DSA signing uses large stack buffers internally (Merkle trees, WOTS+).

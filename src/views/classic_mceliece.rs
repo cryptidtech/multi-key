@@ -285,6 +285,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_mceliece_public_key_derivation() {
         for codec in MCELIECE_KEY_CODECS {
