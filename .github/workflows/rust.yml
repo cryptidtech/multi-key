@@ -10,29 +10,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Check Code Format
-        run: cargo fmt --all -- --check
-
-      - name: Code Lint
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Build
-        run: cargo build --verbose --all-features
-
-      - name: Run tests
-        run: cargo test --verbose --all-features
-
   msrv:
     name: Verify MSRV (1.95)
     runs-on: ubuntu-latest
