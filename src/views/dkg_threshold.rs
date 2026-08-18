@@ -36,10 +36,10 @@ impl<'a> AttrView for View<'a> {
         // meant callers using `threshold_attr_view()` alone saw an unencrypted
         // share even when it was sealed. Read the attribute directly so the
         // status is authoritative regardless of which view the caller holds.
-        if let Some(v) = self.mk.attributes.get(&AttrId::KeyIsEncrypted) {
-            if let Ok((b, _)) = Varuint::<bool>::try_decode_from(v.as_slice()) {
-                return b.to_inner();
-            }
+        if let Some(v) = self.mk.attributes.get(&AttrId::KeyIsEncrypted)
+            && let Ok((b, _)) = Varuint::<bool>::try_decode_from(v.as_slice())
+        {
+            return b.to_inner();
         }
         false
     }
