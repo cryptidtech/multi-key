@@ -391,9 +391,12 @@ pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, E
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "slow-tests")]
     use super::*;
+    #[cfg(feature = "slow-tests")]
     use crate::Builder;
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_xmss_sign_verify_and_index() {
         // Only h=10 is exercised: h=16/20 keygen builds a 2^h Merkle tree (minutes).
@@ -422,6 +425,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_xmss_sign_advance_persists_index() {
         let mut rng = rand::rng();

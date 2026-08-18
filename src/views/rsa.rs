@@ -124,10 +124,10 @@ impl<'a> TryFrom<&'a Multikey> for View<'a> {
 
 impl<'a> AttrView for View<'a> {
     fn is_encrypted(&self) -> bool {
-        if let Some(v) = self.mk.attributes.get(&AttrId::KeyIsEncrypted) {
-            if let Ok((b, _)) = Varuint::<bool>::try_decode_from(v.as_slice()) {
-                return b.to_inner();
-            }
+        if let Some(v) = self.mk.attributes.get(&AttrId::KeyIsEncrypted)
+            && let Ok((b, _)) = Varuint::<bool>::try_decode_from(v.as_slice())
+        {
+            return b.to_inner();
         }
         false
     }

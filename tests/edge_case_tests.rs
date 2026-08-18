@@ -29,11 +29,11 @@ fn test_all_key_codecs() {
 #[test]
 fn test_clone() {
     let mut rng = rand::rng();
-    if let Ok(builder) = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng) {
-        if let Ok(mk1) = builder.try_build() {
-            let mk2 = mk1.clone();
-            assert_eq!(mk1, mk2);
-        }
+    if let Ok(builder) = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+        && let Ok(mk1) = builder.try_build()
+    {
+        let mk2 = mk1.clone();
+        assert_eq!(mk1, mk2);
     }
 }
 
