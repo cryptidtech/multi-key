@@ -6,14 +6,14 @@
 //! [`Multikey`] with the metadata needed to drive a BLS threshold-signing
 //! ceremony for a Shamir-split key:
 //!
-//! - [`AttrId::ThresholdGroupPublicKey`] — the group/combined BLS public key
-//!   bytes (the split analogue of [`AttrId::DkgGroupPublicKey`]).
-//! - [`AttrId::ThresholdParticipants`] — a CBOR map keyed by share-identifier
+//! - `AttrId::ThresholdGroupPublicKey` — the group/combined BLS public key
+//!   bytes (the split analogue of `AttrId::DkgGroupPublicKey`).
+//! - `AttrId::ThresholdParticipants` — a CBOR map keyed by share-identifier
 //!   bytes (the Shamir x-coordinate, exactly as stored in
-//!   [`AttrId::ShareIdentifier`]/`SigShare`) to a [`ThresholdParticipant`].
+//!   `AttrId::ShareIdentifier`/`SigShare`) to a `ThresholdParticipant`.
 //!
-//! It also provides a [`ThresholdScheme`] classifier ([`threshold_kind`]) and a
-//! parameter reader ([`threshold_params`]) that work across both the Shamir
+//! It also provides a `ThresholdScheme` classifier (`threshold_kind`) and a
+//! parameter reader (`threshold_params`) that work across both the Shamir
 //! split codecs (`Bls12381G1PrivShare`/`PubShare`, `Bls12381G2PrivShare`/
 //! `PubShare`) and the DKG codecs (`*ThreshPrivShare`/`*ThreshPubShare`).
 

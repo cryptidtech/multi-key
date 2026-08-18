@@ -15,7 +15,7 @@
 //!   functional restore) plus a Feldman scalar share with commitments (mirrors
 //!   the ECC keys, threshold-signing-ready). Both are stored per share.
 //!
-//! A share is a [`Codec::KeySplitShare`] `Multikey` whose [`AttrId::KeyData`] is
+//! A share is a `Codec::KeySplitShare` `Multikey` whose `AttrId::KeyData` is
 //! the CBOR-encoded share payload, so shares serialize to CBOR/JSON through the
 //! normal Multikey encoders.
 
@@ -69,7 +69,7 @@ struct DualPayload {
     verifiers: Vec<Vec<u8>>,
 }
 
-/// CBOR payload stored in a [`Codec::KeySplitShare`] Multikey's key data.
+/// CBOR payload stored in a `Codec::KeySplitShare` Multikey's key data.
 #[derive(Clone, Serialize, Deserialize)]
 struct SharePayload {
     /// the original (split) key's codec, as its multicodec code
@@ -429,7 +429,7 @@ fn unwrap_share(mk: &Multikey) -> Result<SharePayload, Error> {
 // ---- public API -------------------------------------------------------------
 
 /// Split a private [`Multikey`] into `limit` shares, any `threshold` of which
-/// recombine it. Returns one [`Codec::KeySplitShare`] Multikey per share.
+/// recombine it. Returns one `Codec::KeySplitShare` Multikey per share.
 pub fn split(
     mk: &Multikey,
     threshold: usize,
@@ -467,7 +467,7 @@ pub fn verify_share(share: &Multikey) -> Result<(), Error> {
     }
 }
 
-/// Recombine [`Codec::KeySplitShare`] shares into the original private key. At
+/// Recombine `Codec::KeySplitShare` shares into the original private key. At
 /// least `threshold` shares for the same key are required; Feldman shares are
 /// verified before combining.
 pub fn combine(shares: &[Multikey]) -> Result<Multikey, Error> {
