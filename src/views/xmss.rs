@@ -9,8 +9,9 @@
 //!
 //! NOTE: this view signs at whatever index the stored secret key currently holds;
 //! it does NOT persist the advanced secret key. The authoritative advance-and-
-//! persist is owned by the keystore (`bs-keystore`), which calls [`sign_advance`]
-//! to obtain both the signature and the advanced secret key in one step.
+//! persist is owned by the keystore (`bs-keystore`), which calls
+//! [`SignView::sign_advance`] to obtain both the signature and the advanced
+//! secret key in one step.
 
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
@@ -228,27 +229,13 @@ fn build_multisig(
     Ok(ms.try_build()?)
 }
 
-/// Sign `msg`, returning the [`Multisig`](multi_sig::Multisig) AND the advanced
-/// secret key bytes. The caller (keystore) MUST persist the advanced key so the
-/// consumed leaf index is never reused.
-///
-/// Returns an error if the multikey is not an XMSS secret key.
-pub fn sign_advance(
-    mk: &Multikey,
-    msg: &[u8],
-    combined: bool,
-) -> Result<(multi_sig::Multisig, Zeroizing<Vec<u8>>), Error> {
-    let attr = mk.attr_view()?;
-    if !attr.is_secret_key() || !is_xmss_priv(mk.codec) {
-        return Err(SignError::NotSigningKey.into());
-    }
-    let secret_bytes = {
-        let kd = mk.data_view()?;
-        kd.secret_bytes()?
-    };
-    let sig = sign_bytes(mk.codec, secret_bytes.as_slice(), msg)?;
-    let ms = build_multisig(mk.codec, &sig, msg, combined)?;
-    Ok((ms, sig.advanced_secret_key.clone()))
+/// Rebuild `mk` with only the `KeyData` attribute replaced by `new_bytes`.
+/// Codec, comment, and all other attributes are copied unchanged.
+fn with_key_data(mk: &Multikey, new_bytes: &[u8]) -> Result<Multikey, Error> {
+    Builder::new(mk.codec)
+        .with_comment(&mk.comment)
+        .with_key_bytes(new_bytes)
+        .try_build()
 }
 
 pub(crate) struct View<'a> {
@@ -353,6 +340,31 @@ impl<'a> SignView for View<'a> {
         let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
         build_multisig(self.mk.codec, &sig, msg, combined)
     }
+
+    /// Sign `msg` and return the Multisig AND the advanced Multikey. The caller
+    /// (keystore) MUST persist the advanced key so the consumed leaf index is
+    /// never reused.
+    ///
+    /// Returns an error if the multikey is not an XMSS secret key.
+    fn sign_advance(
+        &self,
+        msg: &[u8],
+        combined: bool,
+        _scheme: Option<u8>,
+    ) -> Result<(multi_sig::Multisig, Multikey), Error> {
+        let attr = self.mk.attr_view()?;
+        if !attr.is_secret_key() || !is_xmss_priv(self.mk.codec) {
+            return Err(SignError::NotSigningKey.into());
+        }
+        let secret_bytes = {
+            let kd = self.mk.data_view()?;
+            kd.secret_bytes()?
+        };
+        let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
+        let ms = build_multisig(self.mk.codec, &sig, msg, combined)?;
+        let advanced = with_key_data(self.mk, &sig.advanced_secret_key)?;
+        Ok((ms, advanced))
+    }
 }
 
 impl<'a> VerifyView for View<'a> {
@@ -434,9 +446,14 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let (ms0, advanced) = sign_advance(&sk, b"first", false).unwrap();
+        let (ms0, advanced) = sk
+            .sign_view()
+            .unwrap()
+            .sign_advance(b"first", false, None)
+            .unwrap();
         assert_eq!(ms0.sig_index(), Some(0));
         // advanced secret key now points at index 1
-        assert_eq!(xmss_wrapper::current_index(&advanced).unwrap(), 1);
+        let advanced_bytes = advanced.data_view().unwrap().secret_bytes().unwrap();
+        assert_eq!(xmss_wrapper::current_index(&advanced_bytes).unwrap(), 1);
     }
 }

@@ -254,7 +254,7 @@ impl<'a> OpenView for View<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests"))]
 mod tests {
     use super::*;
     use crate::mk::MCELIECE_KEY_CODECS;
@@ -285,7 +285,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_mceliece_public_key_derivation() {
         for codec in MCELIECE_KEY_CODECS {

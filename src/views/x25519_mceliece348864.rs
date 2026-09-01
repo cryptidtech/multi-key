@@ -326,7 +326,7 @@ impl<'a> OpenView for View<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests"))]
 mod tests {
     use super::*;
     use crate::views::Views;

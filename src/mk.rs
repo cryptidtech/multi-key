@@ -2906,7 +2906,7 @@ impl Builder {
     }
 
     /// add in the key bytes directly
-    pub fn with_key_bytes(self, bytes: &impl AsRef<[u8]>) -> Self {
+    pub fn with_key_bytes(self, bytes: &(impl AsRef<[u8]> + ?Sized)) -> Self {
         self.with_attribute(AttrId::KeyData, &bytes.as_ref().to_vec())
     }
 

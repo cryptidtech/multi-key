@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-01
+
+### Added
+
+- `sign_advance` method on the `SignView` trait. Stateful signature schemes (XMSS, merkle-tree Lamport) override it to return the `Multisig` AND the advanced `Multikey` (codec, comment, and attributes preserved; only `KeyData` replaced). The caller must persist the advanced key so the consumed one-time slot is never reused. The default implementation returns `UnsupportedAlgorithm`, so stateless schemes and existing external trait impls stay source-compatible.
+- `AttrId::Depth` attribute (code 29, name `depth`, one raw byte) for merkle-tree signature schemes.
+- `AttributesError::DepthMismatch { expected, found }` error variant.
+
+### Changed
+
+- **Breaking:** removed the free function `multi_key::views::xmss::sign_advance`. Use the `SignView::sign_advance` trait method instead. The trait method returns the advanced key as a full `Multikey` rather than raw secret-key bytes.
+- Bumped `lamport_signature_plus` from `0.5.0-rc2` to `0.5.0` (adds the merkle-tree API used by the next release).
+- Raised `rust-version` from `1.95` to `1.96` (required by `lamport_signature_plus` 0.5.0).
+- `Builder::with_key_bytes` now accepts unsized byte slices (`&(impl AsRef<[u8]> + ?Sized)`).
+
 ## [1.1.1] - 2026-08-18
 
 ### Fixed

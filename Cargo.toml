@@ -1,8 +1,8 @@
 [package]
 name = "multi-key"
-version = "1.1.1"
+version = "1.2.0"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.96"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
 repository = "https://github.com/cryptidtech/multi-key.git"
@@ -77,7 +77,7 @@ vsss-rs = "6.0"
 x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
 zeroize = "1"
 # Lamport support (feature-gated, default-enabled)
-lamport_signature_plus = { version = "0.5.0-rc2", optional = true }
+lamport_signature_plus = { version = "0.5.0", optional = true }
 sha3 = { version = "0.12", optional = true }
 blake2 = { version = "0.11.0-rc.6", optional = true }
 shake = { version = "0.1", optional = true }

@@ -201,6 +201,24 @@ pub trait OpenView {
 pub trait SignView {
     /// try to create a Multisig by siging the passed-in data with the Multikey
     fn sign(&self, msg: &[u8], combined: bool, scheme: Option<u8>) -> Result<Multisig, Error>;
+    /// Sign `msg` with a stateful signature scheme that consumes one leaf (or
+    /// equivalent one-time slot) per signature. Returns the Multisig AND the
+    /// advanced Multikey. The caller MUST persist the advanced key so the
+    /// consumed slot is never reused.
+    ///
+    /// The default implementation returns an error: stateless schemes sign
+    /// with [`SignView::sign`] and do not produce an advanced key.
+    fn sign_advance(
+        &self,
+        msg: &[u8],
+        combined: bool,
+        scheme: Option<u8>,
+    ) -> Result<(Multisig, Multikey), Error> {
+        let _ = (msg, combined, scheme);
+        Err(Error::UnsupportedAlgorithm(
+            "sign_advance requires a stateful signature scheme".into(),
+        ))
+    }
 }
 
 /// trait for doing threshold operations on multikeys
