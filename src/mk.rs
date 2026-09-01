@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #[cfg(feature = "lamport")]
 use crate::views::lamport;
+#[cfg(feature = "lamport")]
+use crate::views::lamport_merkle;
 #[cfg(feature = "xmss")]
 use crate::views::xmss;
 use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
-    ThresholdKeyView, ThresholdView, VerifyView, Views,
-    error::{AttributesError, CipherError, ConversionsError, KdfError, SealError},
+    KdfAttrView, KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
+    error::{AttributesError, CipherError, ConversionsError, KdfError, SealError, ThresholdError},
     views::{
         bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
         bls12381_g1_mldsa65, chacha20, classic_mceliece, ed25519, ed25519_fndsa512, ed25519_mayo2,
@@ -119,15 +121,69 @@ pub const X25519_MLKEM768_KEY_CODECS: [Codec; 1] = [Codec::X25519Mlkem768Priv];
 pub const ED25519_MAYO2_KEY_CODECS: [Codec; 1] = [Codec::Ed25519Mayo2Priv];
 
 /// the list of key share codecs supported
-pub const KEY_SHARE_CODECS: [Codec; 4] = [
+pub const KEY_SHARE_CODECS: [Codec; 15] = [
     Codec::Bls12381G1PubShare,
     Codec::Bls12381G1PrivShare,
     Codec::Bls12381G2PubShare,
-    Codec::Bls12381G2PrivShare, /*
-                                Codec::LamportSha3256PrivShare,
-                                Codec::LamportSha3384PrivShare,
-                                Codec::LamportSha3512PrivShare,
-                                */
+    Codec::Bls12381G2PrivShare,
+    Codec::LamportMerkleSha3256PrivShare,
+    Codec::LamportMerkleSha3384PrivShare,
+    Codec::LamportMerkleSha3512PrivShare,
+    Codec::LamportMerkleSha2256PrivShare,
+    Codec::LamportMerkleSha2384PrivShare,
+    Codec::LamportMerkleSha2512PrivShare,
+    Codec::LamportMerkleBlake2B512PrivShare,
+    Codec::LamportMerkleBlake2S256PrivShare,
+    Codec::LamportMerkleBlake3256PrivShare,
+    Codec::LamportMerkleShake128PrivShare,
+    Codec::LamportMerkleShake256PrivShare, /*
+                                           Codec::LamportSha3256PrivShare,
+                                           Codec::LamportSha3384PrivShare,
+                                           Codec::LamportSha3512PrivShare,
+                                           */
+];
+
+/// the list of merkle-tree Lamport public and private key codecs
+#[cfg(feature = "lamport")]
+pub const LAMPORT_MERKLE_KEY_CODECS: [Codec; 22] = [
+    Codec::LamportMerkleSha3512Pub,
+    Codec::LamportMerkleSha3512Priv,
+    Codec::LamportMerkleSha3384Pub,
+    Codec::LamportMerkleSha3384Priv,
+    Codec::LamportMerkleSha3256Pub,
+    Codec::LamportMerkleSha3256Priv,
+    Codec::LamportMerkleSha2512Pub,
+    Codec::LamportMerkleSha2512Priv,
+    Codec::LamportMerkleSha2384Pub,
+    Codec::LamportMerkleSha2384Priv,
+    Codec::LamportMerkleSha2256Pub,
+    Codec::LamportMerkleSha2256Priv,
+    Codec::LamportMerkleBlake2B512Pub,
+    Codec::LamportMerkleBlake2B512Priv,
+    Codec::LamportMerkleBlake2S256Pub,
+    Codec::LamportMerkleBlake2S256Priv,
+    Codec::LamportMerkleBlake3256Pub,
+    Codec::LamportMerkleBlake3256Priv,
+    Codec::LamportMerkleShake128Pub,
+    Codec::LamportMerkleShake128Priv,
+    Codec::LamportMerkleShake256Pub,
+    Codec::LamportMerkleShake256Priv,
+];
+
+/// the list of merkle-tree Lamport private-key-share codecs
+#[cfg(feature = "lamport")]
+pub const LAMPORT_MERKLE_KEY_SHARE_CODECS: [Codec; 11] = [
+    Codec::LamportMerkleSha3512PrivShare,
+    Codec::LamportMerkleSha3384PrivShare,
+    Codec::LamportMerkleSha3256PrivShare,
+    Codec::LamportMerkleSha2512PrivShare,
+    Codec::LamportMerkleSha2384PrivShare,
+    Codec::LamportMerkleSha2256PrivShare,
+    Codec::LamportMerkleBlake2B512PrivShare,
+    Codec::LamportMerkleBlake2S256PrivShare,
+    Codec::LamportMerkleBlake3256PrivShare,
+    Codec::LamportMerkleShake128PrivShare,
+    Codec::LamportMerkleShake256PrivShare,
 ];
 
 /// the multicodec sigil for multikey
@@ -508,6 +564,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -699,6 +791,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -935,6 +1063,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -1113,6 +1277,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -1395,6 +1595,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -1446,6 +1682,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -1571,6 +1843,42 @@ impl Views for Multikey {
             | Codec::LamportShake256Pub
             | Codec::LamportShake256Priv
             | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3256PrivShare
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3384PrivShare
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha3512PrivShare
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2256PrivShare
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2384PrivShare
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleSha2512PrivShare
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2B512PrivShare
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake2S256PrivShare
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleBlake3256PrivShare
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake128PrivShare
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv
+            | Codec::LamportMerkleShake256PrivShare => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Pub
             | Codec::XmssSha210256Priv
@@ -1585,6 +1893,40 @@ impl Views for Multikey {
     /// Provide an interface for threshold disclosure mode operations
     fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
         Ok(Box::new(threshold_meta::DisclosureView::new(self)))
+    }
+
+    /// Provide an interface for merkle-tree state introspection
+    fn merkle_state_view<'a>(&'a self) -> Result<Box<dyn MerkleStateView + 'a>, Error> {
+        #[cfg(feature = "lamport")]
+        match self.codec {
+            Codec::LamportMerkleSha3256Pub
+            | Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3384Pub
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3512Pub
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha2256Pub
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2384Pub
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2512Pub
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleBlake2B512Pub
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2S256Pub
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake3256Pub
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleShake128Pub
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake256Pub
+            | Codec::LamportMerkleShake256Priv => {
+                Ok(Box::new(lamport_merkle::View::try_from(self)?))
+            }
+            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
+        }
+        #[cfg(not(feature = "lamport"))]
+        Err(ConversionsError::UnsupportedCodec(self.codec).into())
     }
 }
 
@@ -1853,6 +2195,20 @@ impl Builder {
             | Codec::LamportBlake3256Priv
             | Codec::LamportShake128Priv
             | Codec::LamportShake256Priv => lamport::generate_private_key(codec)?.to_vec(),
+            #[cfg(feature = "lamport")]
+            Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake256Priv => {
+                lamport_merkle::generate_private_key(codec)?.to_vec()
+            }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Priv | Codec::XmssSha216256Priv | Codec::XmssSha220256Priv => {
                 xmss::generate_private_key(codec)?.to_vec()
@@ -1861,6 +2217,45 @@ impl Builder {
         };
         let mut attributes = Attributes::new();
         attributes.insert(AttrId::KeyData, key_bytes.into());
+        Ok(Builder {
+            codec,
+            attributes: Some(attributes),
+            ..Default::default()
+        })
+    }
+
+    /// new builder for a merkle-tree Lamport key of the given depth (1..=3)
+    ///
+    /// The depth is validated against the scheme's limit and stamped as the
+    /// `depth` attribute on the built key.
+    #[cfg(feature = "lamport")]
+    pub fn new_from_random_bytes_with_depth(
+        codec: Codec,
+        depth: u8,
+        _rng: &mut impl CryptoRng,
+    ) -> Result<Self, Error> {
+        if !(1..=3).contains(&depth) {
+            return Err(ThresholdError::InvalidThresholdLimit(depth as usize, 3).into());
+        }
+        let key_bytes = match codec {
+            Codec::LamportMerkleSha3256Priv
+            | Codec::LamportMerkleSha3384Priv
+            | Codec::LamportMerkleSha3512Priv
+            | Codec::LamportMerkleSha2256Priv
+            | Codec::LamportMerkleSha2384Priv
+            | Codec::LamportMerkleSha2512Priv
+            | Codec::LamportMerkleBlake2B512Priv
+            | Codec::LamportMerkleBlake2S256Priv
+            | Codec::LamportMerkleBlake3256Priv
+            | Codec::LamportMerkleShake128Priv
+            | Codec::LamportMerkleShake256Priv => {
+                lamport_merkle::generate_private_key_with_depth(codec, depth)?.to_vec()
+            }
+            _ => return Err(ConversionsError::UnsupportedCodec(codec).into()),
+        };
+        let mut attributes = Attributes::new();
+        attributes.insert(AttrId::KeyData, key_bytes.into());
+        attributes.insert(AttrId::Depth, Zeroizing::new(vec![depth]));
         Ok(Builder {
             codec,
             attributes: Some(attributes),
@@ -2908,6 +3303,11 @@ impl Builder {
     /// add in the key bytes directly
     pub fn with_key_bytes(self, bytes: &(impl AsRef<[u8]> + ?Sized)) -> Self {
         self.with_attribute(AttrId::KeyData, &bytes.as_ref().to_vec())
+    }
+
+    /// add in the merkle-tree depth value (one raw byte, 1..=3)
+    pub fn with_depth(self, depth: u8) -> Self {
+        self.with_attribute(AttrId::Depth, &vec![depth])
     }
 
     /// add in the threshold value

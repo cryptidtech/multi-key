@@ -141,8 +141,8 @@ pub use views::threshold_meta::{
 };
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
-    KdfView, OpenView, SealView, SignView, ThresholdAttrView, ThresholdDisclosureView,
-    ThresholdKeyView, ThresholdView, VerifyView, Views,
+    KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
 };
 
 /// Key splitting / recombination (verifiable threshold shares)
@@ -155,6 +155,8 @@ pub use mk::{
     MAX_DECODED_SIZE, ML_DSA_KEY_CODECS, ML_KEM_KEY_CODECS, Multikey, SLH_DSA_KEY_CODECS,
     X25519_KEY_CODECS,
 };
+#[cfg(feature = "lamport")]
+pub use mk::{LAMPORT_MERKLE_KEY_CODECS, LAMPORT_MERKLE_KEY_SHARE_CODECS};
 
 /// Nonce type
 pub mod nonce;

@@ -25,6 +25,8 @@ pub(crate) mod frodokem;
 pub(crate) mod frodokem_helper;
 #[cfg(feature = "lamport")]
 pub(crate) mod lamport;
+#[cfg(feature = "lamport")]
+pub(crate) mod lamport_merkle;
 pub(crate) mod mayo;
 pub(crate) mod ml_dsa;
 pub(crate) mod ml_kem;
@@ -272,6 +274,23 @@ pub trait VerifyView {
     fn verify(&self, sig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error>;
 }
 
+/// trait exposing merkle-tree state introspection on a Multikey
+/// (merkle-tree Lamport views; XMSS may adopt it later).
+///
+/// Public keys expose [`depth`](MerkleStateView::depth) and
+/// [`capacity`](MerkleStateView::capacity); the secret-only fields return an
+/// error for public keys.
+pub trait MerkleStateView {
+    /// Merkle tree depth (leaves = 2^depth).
+    fn depth(&self) -> Result<u8, Error>;
+    /// Total number of one-time leaves (2^depth).
+    fn capacity(&self) -> Result<usize, Error>;
+    /// Index of the next leaf that signing will consume (secret keys only).
+    fn next_index(&self) -> Result<usize, Error>;
+    /// Number of unused leaves (secret keys only).
+    fn remaining_signatures(&self) -> Result<usize, Error>;
+}
+
 /// trait for getting the other views
 pub trait Views {
     /// Provide a read-only view of the basic attributes in the viewed Multikey
@@ -306,4 +325,6 @@ pub trait Views {
     fn verify_view<'a>(&'a self) -> Result<Box<dyn VerifyView + 'a>, Error>;
     /// Provide an interface for threshold disclosure mode operations
     fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error>;
+    /// Provide an interface for merkle-tree state introspection
+    fn merkle_state_view<'a>(&'a self) -> Result<Box<dyn MerkleStateView + 'a>, Error>;
 }
