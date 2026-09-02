@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-09-01
+
+### Fixed
+
+- Merkle-tree Lamport keys generated with `Builder::new_from_random_bytes` now stamp the mandatory `depth` attribute (value 1). Previously such keys were generated with a depth-1 tree but carried no `depth` attribute, so every merkle operation on them (`to_public_key`, `sign_advance`, `merkle_state_view`) failed with `AttributesError::MissingThreshold`. Use `new_from_random_bytes_with_depth` for depths 2 or 3.
+
 ## [1.2.0] - 2026-09-01
 
 ### Added
@@ -222,6 +228,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Initial published release on crates.io as `multi-key`.
 
 [1.1.1]: https://github.com/cryptidtech/multi-key/compare/v1.1.0...v1.1.1
+[1.2.2]: https://github.com/cryptidtech/multi-key/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/cryptidtech/multi-key/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/cryptidtech/multi-key/compare/v1.1.1...v1.2.0
 [1.1.0]: https://github.com/cryptidtech/multi-key/compare/v1.0.9...v1.1.0
 [1.0.9]: https://github.com/cryptidtech/multi-key/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/cryptidtech/multi-key/compare/v1.0.7...v1.0.8
