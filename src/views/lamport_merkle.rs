@@ -989,6 +989,10 @@ fn signing_key_material_size_for(codec: Codec) -> Result<usize, Error> {
     Ok(2 * bits * digest)
 }
 
+/// Generate a depth-1 merkle-Lamport private key (unused since 1.2.2: the
+/// plain `Builder::new_from_random_bytes` path stamps depth inline; kept for
+/// symmetry with the other view helpers).
+#[allow(dead_code)]
 pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, Error> {
     generate_private_key_with_depth(codec, 1)
 }
@@ -1099,6 +1103,31 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn test_merkle_plain_ctor_stamps_depth() {
+        // The plain constructor generates a depth-1 tree and must stamp the
+        // mandatory depth attribute (fixed in 1.2.2).
+        let sk =
+            Builder::new_from_random_bytes(Codec::LamportMerkleBlake3256Priv, &mut rand::rng())
+                .unwrap()
+                .try_build()
+                .unwrap();
+        assert_eq!(sk.attributes.get(&AttrId::Depth).map(|b| b[0]), Some(1));
+
+        // the key must be fully usable: public derivation and signing
+        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let msg = b"plain ctor roundtrip";
+        let (ms, advanced) = sk
+            .sign_view()
+            .unwrap()
+            .sign_advance(msg, false, None)
+            .unwrap();
+        pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+        let av = advanced.merkle_state_view().unwrap();
+        assert_eq!(av.next_index().unwrap(), 1);
+        assert_eq!(av.remaining_signatures().unwrap(), 1);
     }
 
     #[test]

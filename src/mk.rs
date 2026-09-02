@@ -2207,7 +2207,7 @@ impl Builder {
             | Codec::LamportMerkleBlake3256Priv
             | Codec::LamportMerkleShake128Priv
             | Codec::LamportMerkleShake256Priv => {
-                lamport_merkle::generate_private_key(codec)?.to_vec()
+                lamport_merkle::generate_private_key_with_depth(codec, 1)?.to_vec()
             }
             #[cfg(feature = "xmss")]
             Codec::XmssSha210256Priv | Codec::XmssSha216256Priv | Codec::XmssSha220256Priv => {
@@ -2217,11 +2217,37 @@ impl Builder {
         };
         let mut attributes = Attributes::new();
         attributes.insert(AttrId::KeyData, key_bytes.into());
+        // Merkle-tree Lamport keys embed a mandatory depth byte; a depth-1
+        // (capacity 2) tree is the default here, mirroring
+        // `new_from_random_bytes_with_depth`.
+        #[cfg(feature = "lamport")]
+        if Self::lamport_merkle_codec(codec) {
+            attributes.insert(AttrId::Depth, Zeroizing::new(vec![1]));
+        }
         Ok(Builder {
             codec,
             attributes: Some(attributes),
             ..Default::default()
         })
+    }
+
+    /// True when `codec` is a merkle-tree Lamport private key codec.
+    #[cfg(feature = "lamport")]
+    fn lamport_merkle_codec(codec: Codec) -> bool {
+        matches!(
+            codec,
+            Codec::LamportMerkleSha3256Priv
+                | Codec::LamportMerkleSha3384Priv
+                | Codec::LamportMerkleSha3512Priv
+                | Codec::LamportMerkleSha2256Priv
+                | Codec::LamportMerkleSha2384Priv
+                | Codec::LamportMerkleSha2512Priv
+                | Codec::LamportMerkleBlake2B512Priv
+                | Codec::LamportMerkleBlake2S256Priv
+                | Codec::LamportMerkleBlake3256Priv
+                | Codec::LamportMerkleShake128Priv
+                | Codec::LamportMerkleShake256Priv
+        )
     }
 
     /// new builder for a merkle-tree Lamport key of the given depth (1..=3)
