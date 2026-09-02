@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-01
+
+### Added
+
+- Merkle-tree Lamport multikey view (`views::lamport_merkle`, behind the default `lamport` feature) wrapping the `lamport_signature_plus` 0.5.0 `Mt*` API. Supports 11 digest variants (SHA3-512/384/256, SHA2-512/384/256, BLAKE2b-512, BLAKE2s-256, BLAKE3-256, SHAKE-128/256) with 55 new codecs (`LamportMerkle*Pub/Priv/PrivShare`, codes `0x1a64`-`0x1a8e`).
+- Depth attribute (`AttrId::Depth`, code 29) stamped on every merkle artifact and strictly cross-checked against the depth byte embedded in the `Mt*` wire data; mismatches return `AttributesError::DepthMismatch`.
+- `MerkleStateView` trait and `Views::merkle_state_view()`: `depth`, `capacity`, `next_index`, and `remaining_signatures` introspection parsed from the tree state.
+- `Builder::new_from_random_bytes_with_depth(codec, depth, rng)` (depth 1..=3 validated and stamped) and `Builder::with_depth(depth)`.
+- `LAMPORT_MERKLE_KEY_CODECS` and `LAMPORT_MERKLE_KEY_SHARE_CODECS` codec lists; the 11 `LamportMerkle*PrivShare` codecs added to `KEY_SHARE_CODECS`.
+- Threshold support mirroring the one-time Lamport view: `split(t, n)` produces `LamportMerkle*PrivShare` multikeys (GF(256) shares of the whole tree state); share signing produces `LamportMerkle*SigShare` multisigs; accumulation/combination happens in multi-sig. Keys are never reconstructed.
+- `sign_advance` method on the `SignView` trait. Stateful signature schemes (XMSS, merkle-tree Lamport) override it to return the `Multisig` AND the advanced `Multikey` (codec, comment, and attributes preserved; only `KeyData` replaced). The caller must persist the advanced key so the consumed one-time slot is never reused. The default implementation returns `UnsupportedAlgorithm`, so stateless schemes and existing external trait impls stay source-compatible.
+- `AttrId::Depth` attribute (code 29, name `depth`, one raw byte) for merkle-tree signature schemes.
+- `AttributesError::DepthMismatch { expected, found }` error variant.
+
+### Changed
+
+- **Breaking:** removed the free function `multi_key::views::xmss::sign_advance`. Use the `SignView::sign_advance` trait method instead. The trait method returns the advanced key as a full `Multikey` rather than raw secret-key bytes.
+- Bumped `lamport_signature_plus` from `0.5.0-rc2` to `0.5.0` (adds the merkle-tree API used by the next release).
+- Raised `rust-version` from `1.95` to `1.96` (required by `lamport_signature_plus` 0.5.0).
+- `Builder::with_key_bytes` now accepts unsized byte slices (`&(impl AsRef<[u8]> + ?Sized)`).
+- `multi-sig` dependency raised to `1.3` (adds `AttrId::Depth`, `Builder::with_depth`, and `Multisig::depth()`).
+
 ## [1.1.1] - 2026-08-18
 
 ### Fixed

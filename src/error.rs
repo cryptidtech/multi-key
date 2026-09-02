@@ -138,6 +138,15 @@ pub enum AttributesError {
     /// The threshold marker signature failed verification (tampered marker).
     #[error("Threshold marker signature verification failed")]
     ThresholdMarkerSigInvalid,
+    /// A merkle-tree depth attribute does not match the depth byte embedded in
+    /// the key or signature wire data.
+    #[error("Depth mismatch: attribute says {expected}, wire data says {found}")]
+    DepthMismatch {
+        /// depth declared by the `depth` attribute
+        expected: u8,
+        /// depth byte embedded in the wire data
+        found: u8,
+    },
 }
 
 /// Conversions errors created by this library

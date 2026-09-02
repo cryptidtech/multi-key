@@ -82,6 +82,10 @@ pub enum AttrId {
     AlgorithmName,
     /// An arbitrary key type for non-standard keys (optional)
     KeyType,
+    /// Merkle-tree signature scheme depth (one raw byte; the tree holds
+    /// 2^depth one-time leaves). Cross-checked against the depth byte embedded
+    /// in the key/signature wire data.
+    Depth,
 }
 
 impl AttrId {
@@ -122,6 +126,7 @@ impl AttrId {
             AttrId::ThresholdMetaCipher => "threshold-meta-cipher",
             AttrId::AlgorithmName => "algorithm-name",
             AttrId::KeyType => "key-type",
+            AttrId::Depth => "depth",
         }
     }
 }
@@ -166,6 +171,7 @@ impl TryFrom<u8> for AttrId {
             26 => Ok(AttrId::ThresholdMetaCipher),
             27 => Ok(AttrId::AlgorithmName),
             28 => Ok(AttrId::KeyType),
+            29 => Ok(AttrId::Depth),
             _ => Err(AttributesError::InvalidAttributeValue(c).into()),
         }
     }
@@ -230,6 +236,7 @@ impl TryFrom<&str> for AttrId {
             "threshold-meta-cipher" => Ok(AttrId::ThresholdMetaCipher),
             "algorithm-name" => Ok(AttrId::AlgorithmName),
             "key-type" => Ok(AttrId::KeyType),
+            "depth" => Ok(AttrId::Depth),
             _ => Err(AttributesError::InvalidAttributeName(s.to_string()).into()),
         }
     }

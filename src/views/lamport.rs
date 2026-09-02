@@ -30,19 +30,19 @@ use zeroize::Zeroizing;
 // These generic functions replicate the bs-lamport crate's macro-generated
 // wrappers, calling lamport_signature_plus directly.
 
-type Sha3_256Digest = LamportFixedDigest<Sha3_256>;
-type Sha3_384Digest = LamportFixedDigest<Sha3_384>;
-type Sha3_512Digest = LamportFixedDigest<Sha3_512>;
-type Sha2_256Digest = LamportFixedDigest<Sha256>;
-type Sha2_384Digest = LamportFixedDigest<Sha384>;
-type Sha2_512Digest = LamportFixedDigest<Sha512>;
-type Blake2b512Digest = LamportFixedDigest<Blake2b512>;
-type Blake2s256Digest = LamportFixedDigest<Blake2s256>;
-type Shake128Digest = LamportExtendableDigest<Shake128>;
-type Shake256Digest = LamportExtendableDigest<Shake256>;
+pub(crate) type Sha3_256Digest = LamportFixedDigest<Sha3_256>;
+pub(crate) type Sha3_384Digest = LamportFixedDigest<Sha3_384>;
+pub(crate) type Sha3_512Digest = LamportFixedDigest<Sha3_512>;
+pub(crate) type Sha2_256Digest = LamportFixedDigest<Sha256>;
+pub(crate) type Sha2_384Digest = LamportFixedDigest<Sha384>;
+pub(crate) type Sha2_512Digest = LamportFixedDigest<Sha512>;
+pub(crate) type Blake2b512Digest = LamportFixedDigest<Blake2b512>;
+pub(crate) type Blake2s256Digest = LamportFixedDigest<Blake2s256>;
+pub(crate) type Shake128Digest = LamportExtendableDigest<Shake128>;
+pub(crate) type Shake256Digest = LamportExtendableDigest<Shake256>;
 
 #[derive(Copy, Clone, Debug, Default)]
-pub struct Blake3_256Digest;
+pub(crate) struct Blake3_256Digest;
 
 impl LamportDigest for Blake3_256Digest {
     fn digest_size_in_bits() -> usize {
