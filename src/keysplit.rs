@@ -626,6 +626,8 @@ mod tests {
         assert_all(&mk::SNTRUP_KEY_CODECS);
     }
 
+    #[cfg(feature = "deprecated")]
+    #[allow(deprecated)]
     #[test]
     fn roundtrip_mceliece() {
         assert_all(&mk::MCELIECE_KEY_CODECS);

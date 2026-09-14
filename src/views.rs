@@ -14,9 +14,13 @@ pub(crate) mod bls12381_g1_mayo2;
 pub(crate) mod bls12381_g1_mldsa65;
 pub(crate) mod bls12381_hybrid;
 pub(crate) mod chacha20;
+#[cfg(feature = "deprecated")]
+#[allow(deprecated)]
 pub(crate) mod classic_mceliece;
 pub(crate) mod dkg_threshold;
 pub(crate) mod ed25519;
+/// XEdDSA view: an Ed25519-form signature over an X25519 key (POP-only).
+pub(crate) mod xeddsa;
 pub(crate) mod ed25519_fndsa512;
 pub(crate) mod ed25519_mayo2;
 pub(crate) mod ed25519_mldsa65;
@@ -46,13 +50,16 @@ pub use threshold_meta::{
 };
 pub(crate) mod x25519;
 pub(crate) mod x25519_frodokem640;
+#[cfg(feature = "deprecated")]
+#[allow(deprecated)]
 pub(crate) mod x25519_mceliece348864;
 pub(crate) mod x25519_mlkem768;
 pub(crate) mod x25519_sntrup761;
 #[cfg(feature = "xmss")]
 pub(crate) mod xmss;
 
-// shared AEAD helper used by ml_kem, sntrup, classic_mceliece, x25519, and hybrid KEM views
+// shared AEAD helper used by ml_kem, sntrup, x25519, and hybrid KEM views
+// (plus the deprecated classic_mceliece views)
 pub(crate) mod aead;
 
 ///

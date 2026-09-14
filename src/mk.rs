@@ -5,6 +5,8 @@ use crate::views::lamport;
 use crate::views::lamport_merkle;
 #[cfg(feature = "xmss")]
 use crate::views::xmss;
+#[cfg(feature = "deprecated")]
+use crate::views::{classic_mceliece, x25519_mceliece348864};
 use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
@@ -12,10 +14,9 @@ use crate::{
     error::{AttributesError, CipherError, ConversionsError, KdfError, SealError, ThresholdError},
     views::{
         bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
-        bls12381_g1_mldsa65, chacha20, classic_mceliece, ed25519, ed25519_fndsa512, ed25519_mayo2,
-        ed25519_mldsa65, fn_dsa, frodokem, mayo, ml_dsa, ml_kem, nist_p, rsa, secp256k1, slh_dsa,
-        sntrup, threshold_meta, x25519, x25519_frodokem640, x25519_mceliece348864, x25519_mlkem768,
-        x25519_sntrup761,
+        bls12381_g1_mldsa65, chacha20, ed25519, ed25519_fndsa512, ed25519_mayo2, ed25519_mldsa65,
+        fn_dsa, frodokem, mayo, ml_dsa, ml_kem, nist_p, rsa, secp256k1, slh_dsa, sntrup,
+        threshold_meta, x25519, x25519_frodokem640, x25519_mlkem768, x25519_sntrup761, xeddsa,
     },
 };
 
@@ -96,6 +97,16 @@ pub const SNTRUP_KEY_CODECS: [Codec; 5] = [
 ];
 
 /// the list of Classic McEliece key codecs supported for key generation
+///
+/// This constant is deprecated. Key-recovery attacks now solve the TII
+/// McEliece challenges; see <https://github.com/mjosaarinen/tii-solved>.
+/// The McEliece views compile only with the `deprecated` feature.
+#[cfg(feature = "deprecated")]
+#[deprecated(
+    since = "2.0.0",
+    note = "Classic McEliece key recovery attacks: see https://github.com/mjosaarinen/tii-solved"
+)]
+#[allow(deprecated)]
 pub const MCELIECE_KEY_CODECS: [Codec; 1] = [Codec::Mceliece348864Priv];
 
 /// the list of FrodoKEM key codecs supported for key generation
@@ -466,6 +477,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -491,6 +504,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -693,6 +708,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -718,6 +735,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -965,6 +984,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -990,6 +1011,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -1179,6 +1202,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -1204,6 +1229,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -1353,6 +1380,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -1378,6 +1407,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -1424,6 +1455,8 @@ impl Views for Multikey {
             | Codec::Sntrup1013Priv
             | Codec::Sntrup1277Pub
             | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
                 Ok(Box::new(classic_mceliece::View::try_from(self)?))
             }
@@ -1449,6 +1482,8 @@ impl Views for Multikey {
             | Codec::X25519Frodokem640ShakePriv => {
                 Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
                 Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
             }
@@ -1638,6 +1673,7 @@ impl Views for Multikey {
             | Codec::XmssSha216256Priv
             | Codec::XmssSha220256Pub
             | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
+            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(xeddsa::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -1886,6 +1922,7 @@ impl Views for Multikey {
             | Codec::XmssSha216256Priv
             | Codec::XmssSha220256Pub
             | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
+            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(xeddsa::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -2034,6 +2071,8 @@ impl Builder {
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::Mceliece348864Priv => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
@@ -2056,6 +2095,8 @@ impl Builder {
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
+            #[cfg(feature = "deprecated")]
+            #[allow(deprecated)]
             Codec::X25519Mceliece348864Priv => {
                 // x25519_seed (32) || mceliece_seed (32) = 64 bytes
                 let mut seed = [0u8; 64];
