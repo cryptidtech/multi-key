@@ -5,7 +5,7 @@
 
 # Multi-Key
 
-A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and [nonce specification][NONCE]. The published crate is **`multi-key`**. Depend on it as `multi-key = "1.0"` in `Cargo.toml`. Import it as `multi_key` in Rust, for example `use multi_key::Builder;`.
+A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and [nonce specification][NONCE]. The published crate is **`multi-key`**. Depend on it as `multi-key = "2"` in `Cargo.toml`. Import it as `multi_key` in Rust, for example `use multi_key::Builder;`.
 
 ## Current Status
 

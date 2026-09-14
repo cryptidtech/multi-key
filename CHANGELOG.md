@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-14
+
+### Added
+
+- XEdDSA view for X25519 keys (`views::xeddsa`): an Ed25519-form signature over a 32-byte message that verifies against the Edwards form of the X25519 public key. Signatures carry the `XeddsaMsig` codec. Includes strict verification, small-order key rejection, and known-answer tests.
+- `deprecated` cargo feature (default off). Restores the Classic McEliece support described under Deprecated below.
+
+### Changed
+
+- BREAKING. Classic McEliece (`Mceliece348864Pub`/`Priv`) and the X25519-McEliece-348864 hybrid moved behind the `deprecated` cargo feature. Default builds contain no McEliece code and no `mceliece348864` dependency. Default builds still decode stored McEliece multikeys, but `Builder::new_from_random_bytes` fails for McEliece codecs with `UnsupportedCodec`, and the McEliece views reject them.
+- `multi-codec` dependency raised from `1.3` to `1.5` (adds the McEliece codec deprecation attributes).
+
+### Deprecated
+
+- The Classic McEliece key views, the `X25519-McEliece-348864` hybrid view, and the `MCELIECE_KEY_CODECS` constant. Key-recovery attacks now solve the TII McEliece challenges; see [tii-solved](https://github.com/mjosaarinen/tii-solved) for the recovered keys. Enable the `deprecated` feature to keep using them.
+
 ## [1.2.2] - 2026-09-01
 
 ### Fixed
