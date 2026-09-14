@@ -14,8 +14,9 @@ This implementation of the multikey specification supports an extensive set of p
 - **Classical signing** — Ed25519, secp256k1, NIST P-256/P-384/P-521, RSA-2048/3072/4096,
   and BLS12-381 G1/G2.
 - **Post-quantum signing** — FN-DSA, ML-DSA, MAYO, and SLH-DSA (all parameter sets).
-- **Key encapsulation / key agreement** — X25519, ML-KEM, sntrup, Classic McEliece,
-  FrodoKEM, and the BLS12-381 TimeCrypt pairing-based KEM.
+- **Key encapsulation / key agreement** — X25519, ML-KEM, sntrup, Classic McEliece
+  (deprecated; behind the `deprecated` feature), FrodoKEM, and the BLS12-381
+  TimeCrypt pairing-based KEM.
 - **Hybrid signing** — combinations of Ed25519 or BLS12-381 G1 with a PQ signing scheme.
 - **Hybrid KEMs** — combinations of X25519 with a PQ KEM.
 - **Secret-key / symmetric** — ChaCha20-Poly1305 keys.
@@ -73,6 +74,10 @@ identifiers come from the [multicodec][MULTICODEC] registry and are surfaced as
 | MAYO | `Mayo1Pub`/`Priv`, `Mayo2Pub`/`Priv`, `Mayo3Pub`/`Priv`, `Mayo5Pub`/`Priv` | 1, 2, 3, 5 |
 | SLH-DSA | `SlhdsaSha2128FPub`/`Priv`, `SlhdsaSha2128SPub`/`Priv`, `SlhdsaSha2192FPub`/`Priv`, `SlhdsaSha2192SPub`/`Priv`, `SlhdsaSha2256FPub`/`Priv`, `SlhdsaSha2256SPub`/`Priv`, `SlhdsaShake128FPub`/`Priv`, `SlhdsaShake128SPub`/`Priv`, `SlhdsaShake192FPub`/`Priv`, `SlhdsaShake192SPub`/`Priv`, `SlhdsaShake256FPub`/`Priv`, `SlhdsaShake256SPub`/`Priv` | 12 sets: SHA-2/SHAKE × 128/192/256 × F/S |
 
+### Deprecated Algorithms
+
+Classic McEliece (the `Mceliece348864Pub`/`Priv` codecs) and the X25519-McEliece-348864 hybrid are **deprecated**. Key-recovery attacks now solve the TII McEliece challenges; see [tii-solved](https://github.com/mjosaarinen/tii-solved) for the recovered keys. The McEliece views compile only with the `deprecated` cargo feature and are excluded from the default build. Stored McEliece multikeys still decode in default builds, but `Builder::new_from_random_bytes` fails for McEliece codecs with `UnsupportedCodec`.
+
 ### KEMs / Key Agreement
 
 | Algorithm | Codecs | Notes |
@@ -80,7 +85,7 @@ identifiers come from the [multicodec][MULTICODEC] registry and are surfaced as
 | X25519 | `X25519Pub` / `X25519Priv` | ECDH; returns ephemeral public key from `seal` |
 | ML-KEM | `Mlkem768Pub`/`Priv`, `Mlkem1024Pub`/`Priv` | 768, 1024 |
 | sntrup | `Sntrup761Pub`/`Priv`, `Sntrup857Pub`/`Priv`, `Sntrup953Pub`/`Priv`, `Sntrup1013Pub`/`Priv`, `Sntrup1277Pub`/`Priv` | 761, 857, 953, 1013, 1277 |
-| Classic McEliece | `Mceliece348864Pub` / `Mceliece348864Priv` | 348864 |
+| Deprecated Classic McEliece | `Mceliece348864Pub` / `Mceliece348864Priv` | 348864; behind the `deprecated` feature |
 | FrodoKEM | `FrodoKem640AesPub`/`Priv`, `FrodoKem976AesPub`/`Priv`, `FrodoKem1344AesPub`/`Priv`, `FrodoKem640ShakePub`/`Priv`, `FrodoKem976ShakePub`/`Priv`, `FrodoKem1344ShakePub`/`Priv` | 640/976/1344 × AES/SHAKE |
 | BLS12-381 TimeCrypt | (uses the G1/G2 codecs above) | Pairing-based KEM built into the BLS views |
 
@@ -103,7 +108,7 @@ identifiers come from the [multicodec][MULTICODEC] registry and are surfaced as
 | X25519-sntrup761 | `X25519Sntrup761Pub` / `X25519Sntrup761Priv` | X25519 + sntrup761 |
 | X25519-ML-KEM-768 | `X25519Mlkem768Pub` / `X25519Mlkem768Priv` | X25519 + ML-KEM-768 |
 | X25519-FrodoKEM-640 | `X25519Frodokem640AesPub`/`Priv`, `X25519Frodokem640ShakePub`/`Priv` | X25519 + FrodoKEM-640 (AES/SHAKE) |
-| X25519-McEliece-348864 | `X25519Mceliece348864Pub` / `X25519Mceliece348864Priv` | X25519 + Classic McEliece 348864 |
+| Deprecated X25519-McEliece-348864 | `X25519Mceliece348864Pub` / `X25519Mceliece348864Priv` | X25519 + Classic McEliece 348864; behind the `deprecated` feature |
 
 ### Threshold Key Shares
 
@@ -190,7 +195,7 @@ The import direction (`Builder::new_from_ssh_public_key` and `Builder::new_from_
 
 ### Key types that do not support SSH conversion
 
-All KEM-only and hybrid key types explicitly reject SSH conversion and return `UnsupportedAlgorithm`. These include X25519, ML-KEM, all sntrup sizes, Classic McEliece, all FrodoKEM variants, the BLS12-381 TimeCrypt KEM, and all hybrid signing and hybrid KEM schemes.
+All KEM-only and hybrid key types explicitly reject SSH conversion and return `UnsupportedAlgorithm`. These include X25519, ML-KEM, all sntrup sizes, Classic McEliece (deprecated), all FrodoKEM variants, the BLS12-381 TimeCrypt KEM, and all hybrid signing and hybrid KEM schemes.
 
 ## Threshold Operations
 
@@ -209,7 +214,7 @@ The DKG share codecs (`Ed25519Thresh*`, `P256Thresh*`, `P384Thresh*`, `Secp256K1
 - **Feldman VSS** — secp256k1, P-256/P-384/P-521, BLS12-381 G1/G2 (verifiable, with
   commitments).
 - **gf256 byte-sharing** — RSA and all PQ families (ML-DSA, ML-KEM, SLH-DSA, FN-DSA, MAYO,
-  sntrup, FrodoKEM, Classic McEliece) and all hybrids.
+  sntrup, FrodoKEM, Classic McEliece (deprecated)) and all hybrids.
 - **Dual mode** — Ed25519 and X25519: a gf256 share of the 32-byte seed (exact restore)
   plus a Feldman scalar share (threshold-signing-ready).
 

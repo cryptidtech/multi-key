@@ -55,7 +55,7 @@ The `Multikey` comment field is stored as a plain `String`. It is not zeroized o
 
 ## Hybrid KEM Combiner Hash (M3)
 
-The AEAD-key KDF is unified across all four hybrid KEMs. It uses HKDF-SHA512 via the shared `aead::derive_aead_key` helper. The secret-combiner hash is not unified. `x25519_mlkem768` uses SHA-512. The other three hybrid KEMs (`x25519_sntrup761`, `x25519_frodokem640`, `x25519_mceliece348864`) use BLAKE3. Both constructions are cryptographically sound. The split is accepted. The combiner hash feeds into HKDF-SHA512, which accepts arbitrary input length.
+The AEAD-key KDF is unified across all four hybrid KEMs. It uses HKDF-SHA512 via the shared `aead::derive_aead_key` helper. The secret-combiner hash is not unified. `x25519_mlkem768` uses SHA-512. The other three hybrid KEMs (`x25519_sntrup761`, `x25519_frodokem640`, `x25519_mceliece348864`) use BLAKE3. Both constructions are cryptographically sound. The split is accepted. The combiner hash feeds into HKDF-SHA512, which accepts arbitrary input length. Note that `x25519_mceliece348864` is deprecated (behind the `deprecated` feature) because key-recovery attacks now solve the TII McEliece challenges; see https://github.com/mjosaarinen/tii-solved. The combiner note above is historical context for code still compiled with that feature.
 
 ## Decoded-Size Caps
 
