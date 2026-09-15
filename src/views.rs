@@ -19,8 +19,6 @@ pub(crate) mod chacha20;
 pub(crate) mod classic_mceliece;
 pub(crate) mod dkg_threshold;
 pub(crate) mod ed25519;
-/// XEdDSA view: an Ed25519-form signature over an X25519 key (POP-only).
-pub(crate) mod xeddsa;
 pub(crate) mod ed25519_fndsa512;
 pub(crate) mod ed25519_mayo2;
 pub(crate) mod ed25519_mldsa65;
@@ -43,6 +41,8 @@ pub(crate) mod sntrup;
 pub mod threshold_marker;
 /// Threshold disclosure modes and encrypted metadata helpers.
 pub mod threshold_meta;
+/// XEdDSA view: an Ed25519-form signature over an X25519 key (POP-only).
+pub(crate) mod xeddsa;
 pub use threshold_meta::{
     DisclosureView, ThresholdDisclosure, ThresholdDisclosureView, ThresholdMetaCipher,
     ThresholdMetadata, decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key,

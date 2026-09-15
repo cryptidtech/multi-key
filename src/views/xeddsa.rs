@@ -26,11 +26,7 @@ use crate::{
     VerifyView, Views,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
 };
-use curve25519_dalek::{
-    edwards::EdwardsPoint,
-    montgomery::MontgomeryPoint,
-    scalar::Scalar,
-};
+use curve25519_dalek::{edwards::EdwardsPoint, montgomery::MontgomeryPoint, scalar::Scalar};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -142,10 +138,9 @@ impl<'a> DataView for View<'a> {
 /// order. Its base multiple is the point behind the published u-coordinate.
 fn dh_scalar(secret_bytes: &[u8]) -> Result<Scalar, Error> {
     if secret_bytes.len() != X25519_KEY_LENGTH {
-        return Err(ConversionsError::SecretKeyFailure(
-            "invalid X25519 secret key length".into(),
-        )
-        .into());
+        return Err(
+            ConversionsError::SecretKeyFailure("invalid X25519 secret key length".into()).into(),
+        );
     }
     let seed: [u8; 32] = <[u8; 32]>::try_from(secret_bytes)
         .map_err(|_| ConversionsError::SecretKeyFailure("invalid X25519 secret key".into()))?;
@@ -170,10 +165,9 @@ fn canonical_lift(u_bytes: &[u8; 32]) -> Result<EdwardsPoint, Error> {
     // order-2, order-4, and order-8 points cannot serve as proof keys.
     for small in &SMALL_ORDER_PUBKEYS {
         if u_bytes.ct_eq(small).into() {
-            return Err(ConversionsError::PublicKeyFailure(
-                "small-order X25519 public key".into(),
-            )
-            .into());
+            return Err(
+                ConversionsError::PublicKeyFailure("small-order X25519 public key".into()).into(),
+            );
         }
     }
 
@@ -188,10 +182,9 @@ fn canonical_lift(u_bytes: &[u8; 32]) -> Result<EdwardsPoint, Error> {
     // The mixed-order check: the point must be torsion-free. A point on the
     // curve but outside the prime-order subgroup fails this check.
     if !a_ed.is_torsion_free() {
-        return Err(ConversionsError::PublicKeyFailure(
-            "mixed-order X25519 public key".into(),
-        )
-        .into());
+        return Err(
+            ConversionsError::PublicKeyFailure("mixed-order X25519 public key".into()).into(),
+        );
     }
 
     // The identity is small order and already rejected above; this round trip
@@ -216,12 +209,9 @@ fn canonical_lift(u_bytes: &[u8; 32]) -> Result<EdwardsPoint, Error> {
 fn key_pair(secret_bytes: &[u8]) -> Result<(Scalar, EdwardsPoint), Error> {
     let mut a = dh_scalar(secret_bytes)?;
     let a_raw = EdwardsPoint::mul_base(&a);
-    let a_ed = a_raw
-        .to_montgomery()
-        .to_edwards(0)
-        .ok_or_else(|| {
-            ConversionsError::PublicKeyFailure("X25519 key is on the twist, not the curve".into())
-        })?;
+    let a_ed = a_raw.to_montgomery().to_edwards(0).ok_or_else(|| {
+        ConversionsError::PublicKeyFailure("X25519 key is on the twist, not the curve".into())
+    })?;
     if a_raw.compress().as_bytes()[31] >> 7 == 1 {
         a = -a;
     }
@@ -253,12 +243,9 @@ impl<'a> ConvView for View<'a> {
             kd.secret_bytes()?
         };
         let public = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(
-            *secret_bytes
-                .as_slice()
-                .first_chunk::<32>()
-                .ok_or_else(|| {
-                    ConversionsError::SecretKeyFailure("invalid X25519 secret key".into())
-                })?,
+            *secret_bytes.as_slice().first_chunk::<32>().ok_or_else(|| {
+                ConversionsError::SecretKeyFailure("invalid X25519 secret key".into())
+            })?,
         ));
 
         Builder::new(Codec::X25519Pub)
@@ -334,7 +321,8 @@ impl<'a> SignView for View<'a> {
         signature_bytes[..32].copy_from_slice(big_r.as_bytes());
         signature_bytes[32..].copy_from_slice(s.as_bytes());
 
-        let mut builder = ms::Builder::new(Codec::XeddsaMsig).with_signature_bytes(&signature_bytes);
+        let mut builder =
+            ms::Builder::new(Codec::XeddsaMsig).with_signature_bytes(&signature_bytes);
         if combined {
             builder = builder.with_message_bytes(&msg);
         }
@@ -394,10 +382,9 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
         if msg.len() != X25519_KEY_LENGTH {
-            return Err(VerifyError::BadSignature(
-                "XEdDSA signs 32-byte messages only".into(),
-            )
-            .into());
+            return Err(
+                VerifyError::BadSignature("XEdDSA signs 32-byte messages only".into()).into(),
+            );
         }
 
         // Ed25519 strict verification: a non-canonical R or S fails.

@@ -117,7 +117,3 @@ multiple_crate_versions = { level = "allow", priority = 1 }
 
 [lints.rust]
 unsafe_code = "deny"
-
-[patch.crates-io]
-multi-codec = { path = "../multi-codec" }
-multi-sig = { path = "../multi-sig" }
