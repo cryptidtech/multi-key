@@ -59,6 +59,18 @@
 //!   AEAD was added. Disabled by default — AEAD failure is a hard error so
 //!   unauthenticated ciphertext is never returned as if it were valid. Enable
 //!   only to migrate pre-AEAD keystores; a warning is emitted on every fallback.
+//! - **`deprecated`** (default off): Enables the deprecated Classic McEliece
+//!   support (see the Deprecations section below).
+//!
+//! ## Deprecations
+//!
+//! Classic McEliece (the `Mceliece348864Pub`/`Priv` codecs and the
+//! `X25519-McEliece-348864` hybrid) is deprecated. Key-recovery attacks now
+//! solve the TII McEliece challenges; see
+//! <https://github.com/mjosaarinen/tii-solved> for the recovered keys. The
+//! McEliece views compile only with the `deprecated` feature. Stored
+//! McEliece multikeys still decode in default builds, but key generation
+//! fails with `UnsupportedCodec`.
 //!
 //! ## Security
 //!

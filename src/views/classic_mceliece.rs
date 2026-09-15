@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Classic McEliece multikey view; post-quantum KEM (348864 variant).
 //!
+//! # Deprecation
+//!
+//! This view is deprecated. Key-recovery attacks now solve the TII McEliece
+//! challenges; see <https://github.com/mjosaarinen/tii-solved> for the
+//! recovered keys. It compiles only with the `deprecated` feature.
+//!
 //! Note: mceliece460896 codec entries exist in the codec table for future
 //! interoperability, but only mceliece348864 is currently supported for key
 //! generation and operations. The upstream `classic-mceliece-rust` crate uses

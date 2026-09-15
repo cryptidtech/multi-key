@@ -23,6 +23,9 @@ jobs:
       - name: Check
         run: cargo check --all-features
 
+      - name: Check default features (McEliece excluded)
+        run: cargo check
+
   audit:
     name: Security Audit
     runs-on: ubuntu-latest

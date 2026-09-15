@@ -5,6 +5,12 @@
 //!
 //! Private key layout: `x25519_seed (32) || mceliece_seed (32)` = 64 bytes.
 //! Public key layout (classical-first): `x25519_pub (32) || mceliece_public_key`.
+//!
+//! # Deprecation
+//!
+//! This view is deprecated. Key-recovery attacks now solve the TII McEliece
+//! challenges; see <https://github.com/mjosaarinen/tii-solved> for the
+//! recovered keys. It compiles only with the `deprecated` feature.
 
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
