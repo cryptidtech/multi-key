@@ -293,11 +293,10 @@ impl<'a> OpenView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk::ML_KEM_KEY_CODECS;
-    use crate::views::Views;
 
     #[test]
     fn test_ml_kem_key_gen_roundtrip() {
@@ -309,11 +308,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(attr.is_secret_key());
             assert!(!attr.is_public_key());
 
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -333,10 +332,10 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = conv.to_public_key().unwrap();
 
-            let attr = pk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&pk).attr().build().unwrap();
             assert!(attr.is_public_key());
             assert!(!attr.is_secret_key());
 
@@ -355,9 +354,15 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let pk = mk.conv_view().unwrap().to_public_key().unwrap();
-            let fp = pk
-                .fingerprint_view()
+            let pk = ViewBuilder::new(&mk)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .unwrap();
+            let fp = ViewBuilder::new(&pk)
+                .fingerprint()
+                .build()
                 .unwrap()
                 .fingerprint(Codec::Sha3256)
                 .unwrap();
@@ -380,17 +385,28 @@ mod tests {
                 .unwrap()
                 .try_build()
                 .unwrap();
-            let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+            let pk = ViewBuilder::new(&sk)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .unwrap();
 
             for aead_codec in &aead_codecs {
                 let plaintext = b"hello ML-KEM world!";
-                let (sealed, _) = pk
-                    .seal_view()
+                let (sealed, _) = ViewBuilder::new(&pk)
+                    .seal()
+                    .build()
                     .unwrap()
                     .seal(plaintext, *aead_codec, b"")
                     .unwrap();
 
-                let opened = sk.open_view().unwrap().open(&sealed, None, b"").unwrap();
+                let opened = ViewBuilder::new(&sk)
+                    .open()
+                    .build()
+                    .unwrap()
+                    .open(&sealed, None, b"")
+                    .unwrap();
                 assert_eq!(plaintext.as_slice(), opened.as_slice());
             }
         }
@@ -403,22 +419,35 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let sk2 = Builder::new_from_random_bytes(Codec::Mlkem768Priv, &mut rng)
             .unwrap()
             .try_build()
             .unwrap();
 
-        let (sealed, _) = pk1
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret data", Codec::Xchacha20Poly1305, b"")
             .unwrap();
 
         // Opening with wrong key should fail (decapsulation will produce different shared secret
         // and AEAD open will fail)
-        assert!(sk2.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -431,7 +460,9 @@ mod tests {
 
         // seal with private key should fail
         assert!(
-            sk.seal_view()
+            ViewBuilder::new(&sk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(b"data", Codec::Xchacha20Poly1305, b"")
                 .is_err()
@@ -445,16 +476,29 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
-        let (sealed, _) = pk
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"data", Codec::Xchacha20Poly1305, b"")
             .unwrap();
 
         // open with public key should fail
-        assert!(pk.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&pk)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 
     #[test]
@@ -464,11 +508,18 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         // AES-128-GCM is not allowed for ML-KEM (not PQ-safe)
         assert!(
-            pk.seal_view()
+            ViewBuilder::new(&pk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(b"data", Codec::AesGcm128, b"")
                 .is_err()

@@ -402,14 +402,13 @@ pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, E
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     #[cfg(feature = "slow-tests")]
     use super::*;
     #[cfg(feature = "slow-tests")]
     use crate::Builder;
     #[cfg(feature = "slow-tests")]
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[cfg(feature = "slow-tests")]
     #[test]
@@ -420,20 +419,42 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"provenance entry bytes";
-        let ms = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let ms = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
         // the consumed leaf index (0) travels with the signature
         assert_eq!(ms.sig_index(), Some(0));
 
         // verify with the public key and with the secret key's derived public key
-        pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
-        sk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
+        ViewBuilder::new(&sk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
 
         // wrong message must fail
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&ms, Some(b"tampered"))
                 .is_err()
@@ -449,14 +470,20 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let (ms0, advanced) = sk
-            .sign_view()
+        let (ms0, advanced) = ViewBuilder::new(&sk)
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(b"first", false, None)
             .unwrap();
         assert_eq!(ms0.sig_index(), Some(0));
         // advanced secret key now points at index 1
-        let advanced_bytes = advanced.data_view().unwrap().secret_bytes().unwrap();
+        let advanced_bytes = ViewBuilder::new(&advanced)
+            .data()
+            .build()
+            .unwrap()
+            .secret_bytes()
+            .unwrap();
         assert_eq!(xmss_wrapper::current_index(&advanced_bytes).unwrap(), 1);
     }
 }

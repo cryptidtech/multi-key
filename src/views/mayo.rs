@@ -402,10 +402,9 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     fn sign_verify_roundtrip(priv_codec: Codec) {
         let mut rng = rand::rng();
@@ -414,15 +413,32 @@ mod tests {
             .with_comment("mayo test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"hello MAYO multivariate signature";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
-        pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
 
         // wrong message must fail
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(b"tampered"))
                 .is_err()

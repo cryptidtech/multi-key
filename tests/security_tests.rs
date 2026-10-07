@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Security-focused tests for multi-key
 #![allow(clippy::redundant_clone, clippy::doc_markdown)]
-#![allow(deprecated)]
 use multi_codec::Codec;
 use multi_key::{Builder, Error, Multikey};
 
@@ -87,7 +86,7 @@ fn test_private_key_zeroization() {
 #[cfg(not(feature = "legacy_chacha20_fallback"))]
 #[test]
 fn test_chacha20_aead_tamper_rejected() {
-    use multi_key::{Builder, Views, cipher, kdf};
+    use multi_key::{Builder, ViewBuilder, cipher, kdf};
 
     let plain =
         hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2").unwrap();
@@ -109,15 +108,27 @@ fn test_chacha20_aead_tamper_rejected() {
         .with_nonce(&nonce)
         .try_build()
         .unwrap();
-    let ciphermk = ciphermk
-        .kdf_view(&kdfmk)
+    let ciphermk = ViewBuilder::new(&ciphermk)
+        .kdf(&kdfmk)
+        .build()
         .unwrap()
         .derive_key(b"for great justice, move every zig!")
         .unwrap();
 
     // encrypt → authenticated ciphertext (plaintext || 16-byte tag)
-    let enc = mk1.cipher_view(&ciphermk).unwrap().encrypt().unwrap();
-    assert!(enc.attr_view().unwrap().is_encrypted());
+    let enc = ViewBuilder::new(&mk1)
+        .cipher(&ciphermk)
+        .build()
+        .unwrap()
+        .encrypt()
+        .unwrap();
+    assert!(
+        ViewBuilder::new(&enc)
+            .attr()
+            .build()
+            .unwrap()
+            .is_encrypted()
+    );
 
     // tamper with the stored ciphertext attribute so AEAD verification fails
     let mut tampered = enc.clone();
@@ -133,7 +144,11 @@ fn test_chacha20_aead_tamper_rejected() {
         .attributes
         .insert(multi_key::AttrId::KeyData, corrupted.into());
 
-    let result = tampered.cipher_view(&ciphermk).unwrap().decrypt();
+    let result = ViewBuilder::new(&tampered)
+        .cipher(&ciphermk)
+        .build()
+        .unwrap()
+        .decrypt();
     assert!(
         result.is_err(),
         "decrypting tampered AEAD ciphertext must fail, not silently fall back \
@@ -148,7 +163,7 @@ fn test_chacha20_aead_tamper_rejected() {
 #[cfg(feature = "legacy_chacha20_fallback")]
 #[test]
 fn test_chacha20_legacy_fallback_downgrades_on_tamper() {
-    use multi_key::{Builder, Views, cipher, kdf};
+    use multi_key::{Builder, ViewBuilder, cipher, kdf};
 
     let plain =
         hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2").unwrap();
@@ -170,13 +185,19 @@ fn test_chacha20_legacy_fallback_downgrades_on_tamper() {
         .with_nonce(&nonce)
         .try_build()
         .unwrap();
-    let ciphermk = ciphermk
-        .kdf_view(&kdfmk)
+    let ciphermk = ViewBuilder::new(&ciphermk)
+        .kdf(&kdfmk)
+        .build()
         .unwrap()
         .derive_key(b"for great justice, move every zig!")
         .unwrap();
 
-    let enc = mk1.cipher_view(&ciphermk).unwrap().encrypt().unwrap();
+    let enc = ViewBuilder::new(&mk1)
+        .cipher(&ciphermk)
+        .build()
+        .unwrap()
+        .encrypt()
+        .unwrap();
 
     // tamper with the ciphertext body so AEAD verification fails
     let mut tampered = enc.clone();
@@ -193,9 +214,20 @@ fn test_chacha20_legacy_fallback_downgrades_on_tamper() {
 
     // With the legacy fallback enabled, the bare-ChaCha20 path is taken and
     // decrypt "succeeds" — but the output is garbage, NOT the original key.
-    let dec = tampered.cipher_view(&ciphermk).unwrap().decrypt().unwrap();
+    let dec = ViewBuilder::new(&tampered)
+        .cipher(&ciphermk)
+        .build()
+        .unwrap()
+        .decrypt()
+        .unwrap();
     assert_ne!(
-        dec.data_view().unwrap().secret_bytes().unwrap().as_slice(),
+        ViewBuilder::new(&dec)
+            .data()
+            .build()
+            .unwrap()
+            .secret_bytes()
+            .unwrap()
+            .as_slice(),
         plain.as_slice(),
         "legacy fallback must not be used to authenticate; it yields garbage \
          on tampered ciphertext"

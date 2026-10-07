@@ -336,7 +336,7 @@ impl<'a> OpenView for View<'a> {
 #[cfg(all(test, feature = "slow-tests"))]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_seal_open_roundtrip() {
@@ -346,15 +346,26 @@ mod tests {
             .with_comment("x25519-mceliece hybrid test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"hello X25519-Classic-McEliece-348864 hybrid KEM!";
-        let (sealed, _) = pk
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(plaintext, Codec::Chacha20Poly1305, b"")
             .unwrap();
-        let opened = sk.open_view().unwrap().open(&sealed, None, b"").unwrap();
+        let opened = ViewBuilder::new(&sk)
+            .open()
+            .build()
+            .unwrap()
+            .open(&sealed, None, b"")
+            .unwrap();
         assert_eq!(plaintext.as_slice(), opened.as_slice());
     }
 
@@ -365,17 +376,30 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let sk2 = Builder::new_from_random_bytes(Codec::X25519Mceliece348864Priv, &mut rng)
             .unwrap()
             .try_build()
             .unwrap();
 
-        let (sealed, _) = pk1
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
-        assert!(sk2.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 }

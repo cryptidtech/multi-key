@@ -261,11 +261,10 @@ impl<'a> OpenView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk::X25519_KEY_CODECS;
-    use crate::views::Views;
 
     #[test]
     fn test_x25519_key_gen_roundtrip() {
@@ -277,7 +276,7 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(attr.is_secret_key());
             assert!(!attr.is_public_key());
 
@@ -296,10 +295,10 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let conv = mk.conv_view().unwrap();
+        let conv = ViewBuilder::new(&mk).conv().build().unwrap();
         let pk = conv.to_public_key().unwrap();
 
-        let attr = pk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&pk).attr().build().unwrap();
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
 
@@ -316,9 +315,15 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let pk = mk.conv_view().unwrap().to_public_key().unwrap();
-        let fp = pk
-            .fingerprint_view()
+        let pk = ViewBuilder::new(&mk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
+        let fp = ViewBuilder::new(&pk)
+            .fingerprint()
+            .build()
             .unwrap()
             .fingerprint(Codec::Sha3256)
             .unwrap();
@@ -339,18 +344,25 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         for aead_codec in &aead_codecs {
             let plaintext = b"hello X25519 ECIES world!";
-            let (sealed, ephemeral) = pk
-                .seal_view()
+            let (sealed, ephemeral) = ViewBuilder::new(&pk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(plaintext, *aead_codec, b"")
                 .unwrap();
 
-            let opened = sk
-                .open_view()
+            let opened = ViewBuilder::new(&sk)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .unwrap();
@@ -365,22 +377,30 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let sk2 = Builder::new_from_random_bytes(Codec::X25519Priv, &mut rng)
             .unwrap()
             .try_build()
             .unwrap();
 
-        let (sealed, ephemeral) = pk1
-            .seal_view()
+        let (sealed, ephemeral) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret data", Codec::Chacha20Poly1305, b"")
             .unwrap();
 
         // Opening with wrong key should fail
         assert!(
-            sk2.open_view()
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .is_err()
@@ -396,7 +416,9 @@ mod tests {
             .unwrap();
 
         assert!(
-            sk.seal_view()
+            ViewBuilder::new(&sk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(b"data", Codec::Chacha20Poly1305, b"")
                 .is_err()
@@ -410,16 +432,24 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
-        let (sealed, ephemeral) = pk
-            .seal_view()
+        let (sealed, ephemeral) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"data", Codec::Chacha20Poly1305, b"")
             .unwrap();
 
         assert!(
-            pk.open_view()
+            ViewBuilder::new(&pk)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .is_err()

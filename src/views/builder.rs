@@ -1214,10 +1214,9 @@ impl<'mk> ViewBuilder<'mk, MerkleStateKind> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{AttrId, Builder, KEY_CODECS, ThresholdDisclosure, Views};
+    use crate::{AttrId, Builder, KEY_CODECS, ThresholdDisclosure};
     use multi_sig::Multisig;
     use std::sync::{Arc, Mutex};
     use zeroize::Zeroizing;
@@ -1375,8 +1374,9 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            // the basic-attributes view is identical to the shim
-            let shim = mk.attr_view().unwrap();
+            // the basic-attributes view is identical to the shim (which
+            // delegates to the dispatch core)
+            let shim = dispatch_attr_view(&mk).unwrap();
             let built = ViewBuilder::new(&mk).attr().build().unwrap();
             assert_eq!(shim.is_encrypted(), built.is_encrypted());
             assert_eq!(shim.is_public_key(), built.is_public_key());
@@ -1384,7 +1384,7 @@ mod tests {
             assert_eq!(shim.is_secret_key_share(), built.is_secret_key_share());
 
             // the key-data view is identical to the shim
-            let shim = mk.data_view().unwrap();
+            let shim = dispatch_data_view(&mk).unwrap();
             let built = ViewBuilder::new(&mk).data().build().unwrap();
             assert_eq!(shim.key_bytes().unwrap(), built.key_bytes().unwrap());
             assert_eq!(shim.secret_bytes().unwrap(), built.secret_bytes().unwrap());
@@ -1396,7 +1396,7 @@ mod tests {
         let mk = chacha_key();
 
         // built-in path: both construct the chacha20 view
-        let shim = mk.cipher_attr_view().unwrap();
+        let shim = dispatch_cipher_attr_view(&mk).unwrap();
         let built = ViewBuilder::new(&mk).cipher_attr().build().unwrap();
         assert_eq!(shim.cipher_codec().unwrap(), built.cipher_codec().unwrap());
         assert_eq!(
@@ -1407,12 +1407,12 @@ mod tests {
 
         // a signing codec has no cipher-attributes view: same error as the shim
         let mk = ed25519_key();
-        let shim = mk.cipher_attr_view().err().unwrap();
+        let shim = dispatch_cipher_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).cipher_attr().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
 
         // a signing codec has no kdf-attributes view: same error as the shim
-        let shim = mk.kdf_attr_view().err().unwrap();
+        let shim = dispatch_kdf_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).kdf_attr().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
     }
@@ -1424,7 +1424,7 @@ mod tests {
             .with_key_bytes("share")
             .try_build()
             .unwrap();
-        let shim = mk.sign_view().err().unwrap();
+        let shim = dispatch_sign_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).sign().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
         assert!(matches!(
@@ -1433,19 +1433,19 @@ mod tests {
         ));
 
         // the same key also has no threshold view
-        let shim = mk.threshold_view().err().unwrap();
+        let shim = dispatch_threshold_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).threshold().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
 
         // a signing codec is not a seal/open key: exact variant preserved
         let mk = ed25519_key();
-        let shim = mk.seal_view().err().unwrap();
+        let shim = dispatch_seal_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).seal().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
         assert!(matches!(built, Error::Seal(SealError::NotEncryptionKey)));
 
         // a signing codec has no merkle state either
-        let shim = mk.merkle_state_view().err().unwrap();
+        let shim = dispatch_merkle_state_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).merkle_state().build().err().unwrap();
         assert_eq!(shim.to_string(), built.to_string());
     }
@@ -1580,15 +1580,19 @@ mod tests {
         // a factory registered for a supported standard codec is never called
         assert!(rec.lock().unwrap().is_empty());
 
-        // the built-in view works: sign with the builder, verify with the shim
+        // the built-in view works: sign with the builder, verify with the
+        // shim's dispatch path
         let sig = signer.sign(b"hello", false, None).unwrap();
-        mk.verify_view()
+        dispatch_verify_view(&mk)
             .unwrap()
             .verify(&sig, Some(b"hello"))
             .unwrap();
 
         // and the other way around
-        let sig = mk.sign_view().unwrap().sign(b"hello", false, None).unwrap();
+        let sig = dispatch_sign_view(&mk)
+            .unwrap()
+            .sign(b"hello", false, None)
+            .unwrap();
         ViewBuilder::new(&mk)
             .verify()
             .build()
@@ -1681,7 +1685,7 @@ mod tests {
                 Codec::Ed25519Pub
             )))
         ));
-        let shim = mk.cipher_attr_view().err().unwrap();
+        let shim = dispatch_cipher_attr_view(&mk).err().unwrap();
         assert_eq!(shim.to_string(), built.err().unwrap().to_string());
     }
 
@@ -1698,7 +1702,7 @@ mod tests {
 
         // no factory: the fallthrough error matches the shim and names the
         // derived codec
-        let shim = mk.kdf_attr_view().err().unwrap();
+        let shim = dispatch_kdf_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).kdf_attr().build().err().unwrap();
         assert!(matches!(
             built,
@@ -1907,7 +1911,7 @@ mod tests {
                 Codec::Ed25519Priv
             )))
         ));
-        let shim = mk.cipher_view(&ck).err().unwrap();
+        let shim = dispatch_cipher_view(&mk, &ck).err().unwrap();
         assert_eq!(shim.to_string(), built.err().unwrap().to_string());
 
         // the kdf kind keys on the kdf key's codec the same way

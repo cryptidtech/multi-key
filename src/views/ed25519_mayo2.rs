@@ -267,11 +267,10 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk::ED25519_MAYO2_KEY_CODECS;
-    use crate::views::Views;
 
     #[test]
     fn test_key_gen_roundtrip() {
@@ -283,7 +282,7 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(attr.is_secret_key());
             assert!(!attr.is_public_key());
 
@@ -302,10 +301,10 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let conv = mk.conv_view().unwrap();
+        let conv = ViewBuilder::new(&mk).conv().build().unwrap();
         let pk = conv.to_public_key().unwrap();
 
-        let attr = pk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&pk).attr().build().unwrap();
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
 
@@ -314,7 +313,7 @@ mod tests {
         assert_eq!(pk, pk2);
 
         // check public key length
-        let dv = pk.data_view().unwrap();
+        let dv = ViewBuilder::new(&pk).data().build().unwrap();
         assert_eq!(dv.key_bytes().unwrap().len(), PUB_KEY_LEN);
     }
 
@@ -327,16 +326,23 @@ mod tests {
             .unwrap();
 
         // Fingerprint from private key (derives public key internally)
-        let fp1 = mk
-            .fingerprint_view()
+        let fp1 = ViewBuilder::new(&mk)
+            .fingerprint()
+            .build()
             .unwrap()
             .fingerprint(Codec::Sha3256)
             .unwrap();
 
         // Fingerprint from public key
-        let pk = mk.conv_view().unwrap().to_public_key().unwrap();
-        let fp2 = pk
-            .fingerprint_view()
+        let pk = ViewBuilder::new(&mk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
+        let fp2 = ViewBuilder::new(&pk)
+            .fingerprint()
+            .build()
             .unwrap()
             .fingerprint(Codec::Sha3256)
             .unwrap();
@@ -354,16 +360,36 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"hello Ed25519-MAYO2 hybrid signing!";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Verify with public key
-        pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
 
         // Verify with private key (auto-derives public key)
-        sk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        ViewBuilder::new(&sk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
     }
 
     #[test]
@@ -373,13 +399,28 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"combined message test";
-        let sig = sk.sign_view().unwrap().sign(msg, true, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, true, None)
+            .unwrap();
 
         // Verify without explicit message (uses embedded message)
-        pk.verify_view().unwrap().verify(&sig, None).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, None)
+            .unwrap();
     }
 
     #[test]
@@ -389,14 +430,26 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"tamper test";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Tamper with message
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(b"wrong message"))
                 .is_err()
@@ -414,12 +467,29 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk2 = sk2.conv_view().unwrap().to_public_key().unwrap();
+        let pk2 = ViewBuilder::new(&sk2)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"wrong key test";
-        let sig = sk1.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk1)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Verify with wrong key should fail
-        assert!(pk2.verify_view().unwrap().verify(&sig, Some(msg)).is_err());
+        assert!(
+            ViewBuilder::new(&pk2)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&sig, Some(msg))
+                .is_err()
+        );
     }
 }

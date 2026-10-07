@@ -508,10 +508,9 @@ impl<'a> OpenView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod ecies_tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_secp256k1_seal_open_roundtrip() {
@@ -521,7 +520,12 @@ mod ecies_tests {
             .with_comment("secp256k1 ecies test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"the quick brown fox jumps over the lazy dog";
         for aead_codec in [
@@ -530,13 +534,15 @@ mod ecies_tests {
             Codec::AesGcm128,
             Codec::AesGcm256,
         ] {
-            let (sealed, ephemeral) = pk
-                .seal_view()
+            let (sealed, ephemeral) = ViewBuilder::new(&pk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(plaintext, aead_codec, b"")
                 .unwrap();
-            let opened = sk
-                .open_view()
+            let opened = ViewBuilder::new(&sk)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .unwrap();
@@ -555,15 +561,23 @@ mod ecies_tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
-        let (sealed, ephemeral) = pk1
-            .seal_view()
+        let (sealed, ephemeral) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
         assert!(
-            sk2.open_view()
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .is_err()

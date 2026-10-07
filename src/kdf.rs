@@ -88,10 +88,9 @@ impl Builder {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{Views, cipher};
+    use crate::{ViewBuilder, cipher};
 
     #[test]
     fn test_bcrypt() {
@@ -110,18 +109,18 @@ mod tests {
             .unwrap();
 
         // get the kdf view
-        let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+        let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
         // derive a key from the passphrase and add it to the cipher multikey
         let ciphermk = kdf
             .derive_key(b"for great justice, move every zig!")
             .unwrap();
 
-        let kattr = ciphermk.kdf_attr_view().unwrap();
+        let kattr = ViewBuilder::new(&ciphermk).kdf_attr().build().unwrap();
         assert_eq!(Codec::BcryptPbkdf, kattr.kdf_codec().unwrap());
         assert_eq!(salt, kattr.salt_bytes().unwrap().to_vec());
         assert_eq!(10, kattr.rounds().unwrap());
 
-        let kd = ciphermk.data_view().unwrap();
+        let kd = ViewBuilder::new(&ciphermk).data().build().unwrap();
         assert_eq!(
             vec![
                 119, 109, 13, 221, 140, 26, 88, 179, 135, 17, 119, 25, 176, 99, 5, 2, 203, 25, 82,

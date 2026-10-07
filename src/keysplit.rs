@@ -524,11 +524,10 @@ pub fn combine(shares: &[Multikey]) -> Result<Multikey, Error> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk;
-    use crate::views::Views;
 
     fn gen_key(codec: Codec) -> Multikey {
         Builder::new_from_random_bytes(codec, &mut rand::rng())
@@ -538,7 +537,13 @@ mod tests {
     }
 
     fn secret(mk: &Multikey) -> Vec<u8> {
-        mk.data_view().unwrap().secret_bytes().unwrap().to_vec()
+        ViewBuilder::new(mk)
+            .data()
+            .build()
+            .unwrap()
+            .secret_bytes()
+            .unwrap()
+            .to_vec()
     }
 
     /// Split → verify every share → combine a non-contiguous subset → assert the
@@ -752,8 +757,9 @@ mod tests {
             "mixed codecs"
         );
         assert!(combine(&[]).is_err(), "empty set");
-        let pk = gen_key(Codec::P256Priv)
-            .conv_view()
+        let pk = ViewBuilder::new(&gen_key(Codec::P256Priv))
+            .conv()
+            .build()
             .unwrap()
             .to_public_key()
             .unwrap();

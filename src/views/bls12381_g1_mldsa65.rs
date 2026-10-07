@@ -253,10 +253,9 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_sign_verify_roundtrip() {
@@ -265,15 +264,32 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"hello BLS12-381-G1-ML-DSA-65 hybrid (Birds of Prey 1)!";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
-        pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
 
         // wrong message must fail
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(b"wrong message"))
                 .is_err()
@@ -287,9 +303,20 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         assert_eq!(
-            pk.data_view().unwrap().key_bytes().unwrap().len(),
+            ViewBuilder::new(&pk)
+                .data()
+                .build()
+                .unwrap()
+                .key_bytes()
+                .unwrap()
+                .len(),
             PUB_KEY_LEN
         );
     }

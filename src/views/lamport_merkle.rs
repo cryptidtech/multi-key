@@ -1012,11 +1012,10 @@ pub(crate) fn generate_private_key_with_depth(
 const MAX_DECODED_SIZE: usize = crate::mk::MAX_DECODED_SIZE;
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::LAMPORT_MERKLE_KEY_CODECS;
-    use crate::views::Views;
+    use crate::ViewBuilder;
     use multi_sig::AttrId as MsAttrId;
 
     fn build_priv(codec: Codec, depth: u8) -> Multikey {
@@ -1049,33 +1048,51 @@ mod tests {
     fn test_merkle_roundtrip_all_digests_depth1() {
         for codec in merkle_priv_codecs() {
             let sk = build_priv(codec, 1);
-            let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+            let pk = ViewBuilder::new(&sk)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .unwrap();
 
             // depth attribute stamped and cross-checked
             assert_eq!(pk.attributes.get(&AttrId::Depth).map(|b| b[0]), Some(1));
 
             let msg = b"merkle roundtrip";
-            let (ms, advanced) = sk
-                .sign_view()
+            let (ms, advanced) = ViewBuilder::new(&sk)
+                .sign()
+                .build()
                 .unwrap()
                 .sign_advance(msg, false, None)
                 .unwrap();
             assert_eq!(ms.attributes.get(&MsAttrId::Depth).map(|b| b[0]), Some(1));
 
-            pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
-            sk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&ms, Some(msg))
+                .unwrap();
+            ViewBuilder::new(&sk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&ms, Some(msg))
+                .unwrap();
 
             // tampered message must fail
             assert!(
-                pk.verify_view()
+                ViewBuilder::new(&pk)
+                    .verify()
+                    .build()
                     .unwrap()
                     .verify(&ms, Some(b"tampered"))
                     .is_err()
             );
 
             // advanced key has one fewer remaining signature
-            let sv = sk.merkle_state_view().unwrap();
-            let av = advanced.merkle_state_view().unwrap();
+            let sv = ViewBuilder::new(&sk).merkle_state().build().unwrap();
+            let av = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
             assert_eq!(av.next_index().unwrap(), sv.next_index().unwrap() + 1);
         }
     }
@@ -1083,7 +1100,14 @@ mod tests {
     #[test]
     fn test_merkle_sign_rejected_sign_advance_required() {
         let sk = build_priv(Codec::LamportMerkleSha3256Priv, 1);
-        assert!(sk.sign_view().unwrap().sign(b"x", false, None).is_err());
+        assert!(
+            ViewBuilder::new(&sk)
+                .sign()
+                .build()
+                .unwrap()
+                .sign(b"x", false, None)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1119,15 +1143,26 @@ mod tests {
         assert_eq!(sk.attributes.get(&AttrId::Depth).map(|b| b[0]), Some(1));
 
         // the key must be fully usable: public derivation and signing
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let msg = b"plain ctor roundtrip";
-        let (ms, advanced) = sk
-            .sign_view()
+        let (ms, advanced) = ViewBuilder::new(&sk)
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(msg, false, None)
             .unwrap();
-        pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
-        let av = advanced.merkle_state_view().unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
+        let av = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
         assert_eq!(av.next_index().unwrap(), 1);
         assert_eq!(av.remaining_signatures().unwrap(), 1);
     }
@@ -1135,40 +1170,55 @@ mod tests {
     #[test]
     fn test_merkle_depth3_sha3_256() {
         let sk = build_priv(Codec::LamportMerkleSha3256Priv, 3);
-        let sv = sk.merkle_state_view().unwrap();
+        let sv = ViewBuilder::new(&sk).merkle_state().build().unwrap();
         assert_eq!(sv.depth().unwrap(), 3);
         assert_eq!(sv.capacity().unwrap(), 8);
         assert_eq!(sv.next_index().unwrap(), 0);
         assert_eq!(sv.remaining_signatures().unwrap(), 8);
 
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let msg = b"depth three";
-        let (ms, mut advanced) = sk
-            .sign_view()
+        let (ms, mut advanced) = ViewBuilder::new(&sk)
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(msg, true, None)
             .unwrap();
         assert_eq!(ms.message, msg.to_vec());
-        pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
         // exhaust the tree
         for i in 1..8 {
             let m = format!("m{i}");
-            let (m2, adv2) = advanced
-                .sign_view()
+            let (m2, adv2) = ViewBuilder::new(&advanced)
+                .sign()
+                .build()
                 .unwrap()
                 .sign_advance(m.as_bytes(), false, None)
                 .unwrap();
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&m2, Some(m.as_bytes()))
                 .unwrap();
             advanced = adv2;
         }
-        let av = advanced.merkle_state_view().unwrap();
+        let av = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
         assert_eq!(av.remaining_signatures().unwrap(), 0);
         assert!(
-            advanced
-                .sign_view()
+            ViewBuilder::new(&advanced)
+                .sign()
+                .build()
                 .unwrap()
                 .sign_advance(b"m9", false, None)
                 .is_err()
@@ -1183,12 +1233,27 @@ mod tests {
         tampered
             .attributes
             .insert(AttrId::Depth, Zeroizing::new(vec![3]));
-        assert!(tampered.conv_view().unwrap().to_public_key().is_err());
-        assert!(tampered.merkle_state_view().unwrap().depth().is_err());
+        assert!(
+            ViewBuilder::new(&tampered)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .is_err()
+        );
+        assert!(
+            ViewBuilder::new(&tampered)
+                .merkle_state()
+                .build()
+                .unwrap()
+                .depth()
+                .is_err()
+        );
         // sign_advance cross-checks too
         assert!(
-            tampered
-                .sign_view()
+            ViewBuilder::new(&tampered)
+                .sign()
+                .build()
                 .unwrap()
                 .sign_advance(b"m", false, None)
                 .is_err()
@@ -1198,26 +1263,44 @@ mod tests {
     #[test]
     fn test_merkle_threshold_flow() {
         let sk = build_priv(Codec::LamportMerkleSha3256Priv, 1);
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let msg = b"threshold merkle";
 
         // split 2-of-3
-        let shares = sk.threshold_view().unwrap().split(2, 3).unwrap();
+        let shares = ViewBuilder::new(&sk)
+            .threshold()
+            .build()
+            .unwrap()
+            .split(2, 3)
+            .unwrap();
         assert_eq!(shares.len(), 3);
         for share in &shares {
-            assert!(share.attr_view().unwrap().is_secret_key_share());
+            assert!(
+                ViewBuilder::new(share)
+                    .attr()
+                    .build()
+                    .unwrap()
+                    .is_secret_key_share()
+            );
             assert_eq!(share.attributes.get(&AttrId::Depth).map(|b| b[0]), Some(1));
         }
 
         // two participants sign to signature shares
-        let s1 = shares[0]
-            .sign_view()
+        let s1 = ViewBuilder::new(&shares[0])
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(msg, false, None)
             .unwrap()
             .0;
-        let s2 = shares[1]
-            .sign_view()
+        let s2 = ViewBuilder::new(&shares[1])
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(msg, false, None)
             .unwrap()
@@ -1233,7 +1316,9 @@ mod tests {
             acc = next;
         }
         let combined = acc.threshold_view().unwrap().combine().unwrap();
-        pk.verify_view()
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
             .unwrap()
             .verify(&combined, Some(msg))
             .unwrap();
@@ -1242,15 +1327,20 @@ mod tests {
     #[test]
     fn test_merkle_introspection_depth1() {
         let sk = build_priv(Codec::LamportMerkleSha2256Priv, 1);
-        let sv = sk.merkle_state_view().unwrap();
+        let sv = ViewBuilder::new(&sk).merkle_state().build().unwrap();
         assert_eq!(sv.depth().unwrap(), 1);
         assert_eq!(sv.capacity().unwrap(), 2);
         assert_eq!(sv.next_index().unwrap(), 0);
         assert_eq!(sv.remaining_signatures().unwrap(), 2);
 
         // public keys expose depth/capacity only
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
-        let pv = pk.merkle_state_view().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
+        let pv = ViewBuilder::new(&pk).merkle_state().build().unwrap();
         assert_eq!(pv.depth().unwrap(), 1);
         assert_eq!(pv.capacity().unwrap(), 2);
         assert!(pv.next_index().is_err());
@@ -1260,8 +1350,9 @@ mod tests {
     #[test]
     fn test_merkle_sig_index_absent() {
         let sk = build_priv(Codec::LamportMerkleBlake3256Priv, 1);
-        let (ms, _adv) = sk
-            .sign_view()
+        let (ms, _adv) = ViewBuilder::new(&sk)
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(b"m", false, None)
             .unwrap();

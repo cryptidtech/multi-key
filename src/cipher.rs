@@ -80,10 +80,9 @@ impl Builder {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{Views, kdf, mk};
+    use crate::{ViewBuilder, kdf, mk};
 
     #[test]
     fn test_chacha20() {
@@ -105,7 +104,7 @@ mod tests {
             .unwrap();
 
         // get the kdf view on the kdf multikey
-        let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+        let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
 
         // derive a key for the cipher multikey to use
         let ciphermk = kdf
@@ -121,24 +120,24 @@ mod tests {
             .unwrap();
 
         // get the cipher view on the multikey
-        let cipher = mk.cipher_view(&ciphermk).unwrap();
+        let cipher = ViewBuilder::new(&mk).cipher(&ciphermk).build().unwrap();
 
         // encrypt the secret key
         let mk = cipher.encrypt().unwrap();
 
         // make sure all of the attributes are right
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert!(attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err());
-        let cattr = mk.cipher_attr_view().unwrap();
+        let cattr = ViewBuilder::new(&mk).cipher_attr().build().unwrap();
         assert_eq!(Codec::Chacha20Poly1305, cattr.cipher_codec().unwrap());
         assert!(cattr.nonce_bytes().is_ok());
         assert_eq!(32, cattr.key_length().unwrap());
-        let kattr = mk.kdf_attr_view().unwrap();
+        let kattr = ViewBuilder::new(&mk).kdf_attr().build().unwrap();
         assert_eq!(Codec::BcryptPbkdf, kattr.kdf_codec().unwrap());
     }
 }

@@ -382,10 +382,9 @@ impl<'a> OpenView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     fn roundtrip(priv_codec: Codec) {
         let mut rng = rand::rng();
@@ -394,15 +393,26 @@ mod tests {
             .with_comment("x25519-frodokem hybrid test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"hello X25519-FrodoKEM-640 hybrid KEM!";
-        let (sealed, _) = pk
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(plaintext, Codec::Chacha20Poly1305, b"")
             .unwrap();
-        let opened = sk.open_view().unwrap().open(&sealed, None, b"").unwrap();
+        let opened = ViewBuilder::new(&sk)
+            .open()
+            .build()
+            .unwrap()
+            .open(&sealed, None, b"")
+            .unwrap();
         assert_eq!(plaintext.as_slice(), opened.as_slice());
 
         // wrong key fails
@@ -410,7 +420,14 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        assert!(sk2.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 
     #[test]

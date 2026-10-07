@@ -398,10 +398,9 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{Builder, Views};
+    use crate::{Builder, ViewBuilder};
 
     fn key_pair_mks() -> (Multikey, Multikey) {
         let mut rng = rand::rng();
@@ -409,7 +408,12 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         (sk, pk)
     }
 
@@ -424,15 +428,25 @@ mod tests {
         for _ in 0..8 {
             let (sk, pk) = key_pair_mks();
             let msg = message32();
-            let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
-            pk.verify_view().unwrap().verify(&sig, Some(&msg)).unwrap();
+            let sig = ViewBuilder::new(&sk)
+                .sign()
+                .build()
+                .unwrap()
+                .sign(&msg, false, None)
+                .unwrap();
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&sig, Some(&msg))
+                .unwrap();
         }
     }
 
     #[test]
     fn test_xeddsa_rejects_non_32_byte_message() {
         let (sk, _pk) = key_pair_mks();
-        let sv = sk.sign_view().unwrap();
+        let sv = ViewBuilder::new(&sk).sign().build().unwrap();
         assert!(sv.sign(b"short", false, None).is_err());
         assert!(sv.sign(&[0u8; 33], false, None).is_err());
         assert!(sv.sign(&[0u8; 31], false, None).is_err());
@@ -443,9 +457,16 @@ mod tests {
         let (sk, pk) = key_pair_mks();
         let msg = message32();
         let other = message32();
-        let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(&other))
                 .is_err()
@@ -457,22 +478,46 @@ mod tests {
         let (sk, _pk) = key_pair_mks();
         let (_sk2, pk2) = key_pair_mks();
         let msg = message32();
-        let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
-        assert!(pk2.verify_view().unwrap().verify(&sig, Some(&msg)).is_err());
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
+        assert!(
+            ViewBuilder::new(&pk2)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&sig, Some(&msg))
+                .is_err()
+        );
     }
 
     #[test]
     fn test_xeddsa_public_key_cannot_sign() {
         let (_sk, pk) = key_pair_mks();
         let msg = message32();
-        assert!(pk.sign_view().unwrap().sign(&msg, false, None).is_err());
+        assert!(
+            ViewBuilder::new(&pk)
+                .sign()
+                .build()
+                .unwrap()
+                .sign(&msg, false, None)
+                .is_err()
+        );
     }
 
     #[test]
     fn test_xeddsa_tampered_signature_fails() {
         let (sk, pk) = key_pair_mks();
         let msg = message32();
-        let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
         let view = sig.data_view().unwrap();
         let mut bytes = view.sig_bytes().unwrap();
         bytes[0] ^= 1;
@@ -481,7 +526,9 @@ mod tests {
             .try_build()
             .unwrap();
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&tampered, Some(&msg))
                 .is_err()
@@ -501,7 +548,12 @@ mod tests {
             .with_key_bytes(&seed)
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         // The published u must be the standard RFC 7748 ladder output.
         let expected_u: [u8; 32] = [
@@ -509,7 +561,7 @@ mod tests {
             0xf7, 0x5a, 0x0d, 0xbf, 0x3a, 0x0d, 0x26, 0x38, 0x1a, 0xf4, 0xeb, 0xa4, 0xa9, 0x8e,
             0xaa, 0x9b, 0x4e, 0x6a,
         ];
-        let dv = pk.data_view().unwrap();
+        let dv = ViewBuilder::new(&pk).data().build().unwrap();
         let pub_bytes = dv.key_bytes().unwrap();
         let mut pub_arr = [0u8; 32];
         pub_arr.copy_from_slice(pub_bytes.as_slice());
@@ -527,8 +579,18 @@ mod tests {
         // Sign and verify a fixed 32-byte message. The nonce is derived per
         // the spec with a fresh random Z, so only verify is deterministic.
         let msg: [u8; 32] = core::array::from_fn(|i| (i as u8).wrapping_mul(7));
-        let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
-        pk.verify_view().unwrap().verify(&sig, Some(&msg)).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(&msg))
+            .unwrap();
 
         // Every signature is 64 bytes of R || s.
         let dv = sig.data_view().unwrap();
@@ -542,7 +604,7 @@ mod tests {
         // deterministic and returns sign 0.
         for _ in 0..16 {
             let (sk, pk) = key_pair_mks();
-            let dv = pk.data_view().unwrap();
+            let dv = ViewBuilder::new(&pk).data().build().unwrap();
             let mut u = [0u8; 32];
             u.copy_from_slice(dv.key_bytes().unwrap().as_slice());
             let lift = canonical_lift(&u).unwrap();
@@ -556,7 +618,12 @@ mod tests {
     fn test_xeddsa_small_order_keys_rejected() {
         let (sk, _pk) = key_pair_mks();
         let msg = message32();
-        let sig = sk.sign_view().unwrap().sign(&msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
 
         for small in &SMALL_ORDER_PUBKEYS {
             let pk = Builder::new(Codec::X25519Pub)
@@ -564,7 +631,12 @@ mod tests {
                 .try_build()
                 .unwrap();
             assert!(
-                pk.verify_view().unwrap().verify(&sig, Some(&msg)).is_err(),
+                ViewBuilder::new(&pk)
+                    .verify()
+                    .build()
+                    .unwrap()
+                    .verify(&sig, Some(&msg))
+                    .is_err(),
                 "small-order key {small:?} must not verify"
             );
         }

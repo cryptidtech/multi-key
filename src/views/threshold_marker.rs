@@ -272,10 +272,9 @@ pub fn verify_marker(mk: &Multikey, verifier_pubkey: &Multikey) -> Result<(), Er
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{Builder, Views};
+    use crate::{Builder, ViewBuilder};
     fn g1_priv() -> Multikey {
         Builder::new_from_random_bytes(Codec::Bls12381G1Priv, &mut rand::rng())
             .unwrap()
@@ -286,7 +285,12 @@ mod tests {
     #[test]
     fn classify_split_share_g1() {
         let mk = g1_priv();
-        let shares = mk.threshold_view().unwrap().split(3, 5).unwrap();
+        let shares = ViewBuilder::new(&mk)
+            .threshold()
+            .build()
+            .unwrap()
+            .split(3, 5)
+            .unwrap();
         let share = &shares[0];
         assert_eq!(threshold_kind(share), Some(ThresholdScheme::ShamirSplit));
         assert_eq!(threshold_params(share), Some((3, 5)));
@@ -295,8 +299,18 @@ mod tests {
     #[test]
     fn classify_split_pub_share_g1() {
         let mk = g1_priv();
-        let shares = mk.threshold_view().unwrap().split(2, 4).unwrap();
-        let pub_share = shares[0].conv_view().unwrap().to_public_key().unwrap();
+        let shares = ViewBuilder::new(&mk)
+            .threshold()
+            .build()
+            .unwrap()
+            .split(2, 4)
+            .unwrap();
+        let pub_share = ViewBuilder::new(&shares[0])
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         assert_eq!(pub_share.codec, Codec::Bls12381G1PubShare);
         assert_eq!(
             threshold_kind(&pub_share),

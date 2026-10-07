@@ -4,9 +4,8 @@
 
 #![cfg(feature = "lamport")]
 #![allow(clippy::uninlined_format_args)]
-#![allow(deprecated)]
 use multi_codec::Codec;
-use multi_key::{Builder, Multikey, Views as _};
+use multi_key::{Builder, Multikey, ViewBuilder};
 use multi_sig::{Multisig, Views as _};
 
 #[test]
@@ -17,16 +16,22 @@ fn test_merkle_sign_advance_and_verify() {
             .unwrap()
             .try_build()
             .unwrap();
-    let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+    let pk = ViewBuilder::new(&sk)
+        .conv()
+        .build()
+        .unwrap()
+        .to_public_key()
+        .unwrap();
 
-    let sv = sk.merkle_state_view().unwrap();
+    let sv = ViewBuilder::new(&sk).merkle_state().build().unwrap();
     assert_eq!(sv.depth().unwrap(), 1);
     assert_eq!(sv.capacity().unwrap(), 2);
     assert_eq!(sv.remaining_signatures().unwrap(), 2);
 
     let msg = b"integration merkle message";
-    let (ms, advanced) = sk
-        .sign_view()
+    let (ms, advanced) = ViewBuilder::new(&sk)
+        .sign()
+        .build()
         .unwrap()
         .sign_advance(msg, true, None)
         .unwrap();
@@ -34,10 +39,15 @@ fn test_merkle_sign_advance_and_verify() {
     // depth attribute travels on the signature
     assert_eq!(ms.depth(), Some(1));
 
-    pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+    ViewBuilder::new(&pk)
+        .verify()
+        .build()
+        .unwrap()
+        .verify(&ms, Some(msg))
+        .unwrap();
 
     // advanced key must be persisted and reflect the consumed leaf
-    let av = advanced.merkle_state_view().unwrap();
+    let av = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
     assert_eq!(av.next_index().unwrap(), 1);
     assert_eq!(av.remaining_signatures().unwrap(), 1);
 
@@ -45,7 +55,7 @@ fn test_merkle_sign_advance_and_verify() {
     let bytes: Vec<u8> = advanced.clone().into();
     let restored = Multikey::try_from(bytes.as_slice()).unwrap();
     assert_eq!(restored, advanced);
-    let rv = restored.merkle_state_view().unwrap();
+    let rv = ViewBuilder::new(&restored).merkle_state().build().unwrap();
     assert_eq!(rv.next_index().unwrap(), 1);
 }
 
@@ -57,10 +67,20 @@ fn test_merkle_threshold_split_sign_combine_verify() {
             .unwrap()
             .try_build()
             .unwrap();
-    let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+    let pk = ViewBuilder::new(&sk)
+        .conv()
+        .build()
+        .unwrap()
+        .to_public_key()
+        .unwrap();
 
     // split 2-of-3
-    let shares = sk.threshold_view().unwrap().split(2, 3).unwrap();
+    let shares = ViewBuilder::new(&sk)
+        .threshold()
+        .build()
+        .unwrap()
+        .split(2, 3)
+        .unwrap();
     assert_eq!(shares.len(), 3);
 
     let msg = b"threshold integration message";
@@ -70,8 +90,9 @@ fn test_merkle_threshold_split_sign_combine_verify() {
         .iter()
         .take(2)
         .map(|share| {
-            let (ms, _adv) = share
-                .sign_view()
+            let (ms, _adv) = ViewBuilder::new(share)
+                .sign()
+                .build()
                 .unwrap()
                 .sign_advance(msg, false, None)
                 .unwrap();
@@ -94,7 +115,9 @@ fn test_merkle_threshold_split_sign_combine_verify() {
     assert_eq!(combined.depth(), Some(1));
 
     // verify under the tree-root public key
-    pk.verify_view()
+    ViewBuilder::new(&pk)
+        .verify()
+        .build()
         .unwrap()
         .verify(&combined, Some(msg))
         .unwrap();

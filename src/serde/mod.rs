@@ -4,9 +4,8 @@ mod de;
 mod ser;
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
-    use crate::{Builder, EncodedMultikey, Multikey, Views, cipher, kdf, nonce};
+    use crate::{Builder, EncodedMultikey, Multikey, ViewBuilder, cipher, kdf, nonce};
     use multi_base::Base;
     use multi_codec::Codec;
     use multi_hash::EncodedMultihash;
@@ -38,15 +37,15 @@ mod tests {
             .try_build()
             .unwrap();
         let skh = {
-            let fv = sk.fingerprint_view().unwrap();
+            let fv = ViewBuilder::new(&sk).fingerprint().build().unwrap();
             EncodedMultihash::new(Base::Base58Btc, fv.fingerprint(Codec::Blake2S256).unwrap())
         };
         let pk = {
-            let cv = sk.conv_view().unwrap();
+            let cv = ViewBuilder::new(&sk).conv().build().unwrap();
             cv.to_public_key().unwrap()
         };
         let pkh = {
-            let fv = sk.fingerprint_view().unwrap();
+            let fv = ViewBuilder::new(&sk).fingerprint().build().unwrap();
             EncodedMultihash::new(Base::Base58Btc, fv.fingerprint(Codec::Blake2S256).unwrap())
         };
 
@@ -74,7 +73,7 @@ mod tests {
 
         // try to get the associated public key
         let mk = {
-            let conv = sk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&sk).conv().build().unwrap();
 
             conv.to_public_key().unwrap()
         };
@@ -130,7 +129,7 @@ mod tests {
             .unwrap();
 
         let mk = {
-            let conv = sk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&sk).conv().build().unwrap();
 
             conv.to_public_key().unwrap()
         };
@@ -168,11 +167,11 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk1.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk1.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk1).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
 
@@ -193,13 +192,13 @@ mod tests {
                 .unwrap();
 
             // get the kdf view
-            let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+            let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
             // derive a key from the passphrase and add it to the cipher multikey
             let ciphermk = kdf
                 .derive_key(b"for great justice, move every zig!")
                 .unwrap();
             // get the cipher view
-            let cipher = mk1.cipher_view(&ciphermk).unwrap();
+            let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
             // encrypt the multikey using the cipher
             cipher.encrypt().unwrap()
         };
@@ -217,7 +216,13 @@ mod tests {
         // assert exact ciphertext bytes: ChaCha20Poly1305 appends a 16-byte
         // Poly1305 tag, so the encrypted form differs from the legacy bare-stream
         // output (see test_chacha20_aead_roundtrip for the crypto itself).
-        assert!(mk2.attr_view().unwrap().is_encrypted());
+        assert!(
+            ViewBuilder::new(&mk2)
+                .attr()
+                .build()
+                .unwrap()
+                .is_encrypted()
+        );
         let json = serde_json::to_string(&mk2).unwrap();
         let mk3: Multikey = serde_json::from_str(&json).unwrap();
         assert_eq!(mk2, mk3);
@@ -233,11 +238,11 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk1.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk1.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk1).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
 
@@ -257,20 +262,26 @@ mod tests {
                 .unwrap();
 
             // get the kdf view
-            let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+            let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
             // derive a key from the passphrase and add it to the cipher multikey
             let ciphermk = kdf
                 .derive_key(b"for great justice, move every zig!")
                 .unwrap();
             // get the cipher view
-            let cipher = mk1.cipher_view(&ciphermk).unwrap();
+            let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
             // encrypt the multikey using the cipher
             cipher.encrypt().unwrap()
         };
 
         // No exact-ciphertext assertion (ChaCha20Poly1305 tag); assert the
         // encrypted key round-trips through serde unchanged.
-        assert!(mk2.attr_view().unwrap().is_encrypted());
+        assert!(
+            ViewBuilder::new(&mk2)
+                .attr()
+                .build()
+                .unwrap()
+                .is_encrypted()
+        );
         let json = serde_json::to_string(&mk2).unwrap();
         let mk3: Multikey = serde_json::from_str(&json).unwrap();
         assert_eq!(mk2, mk3);
@@ -286,11 +297,11 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk1.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk1.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk1).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
 
@@ -311,13 +322,13 @@ mod tests {
                 .unwrap();
 
             // get the kdf view
-            let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+            let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
             // derive a key from the passphrase and add it to the cipher multikey
             let ciphermk = kdf
                 .derive_key(b"for great justice, move every zig!")
                 .unwrap();
             // get the cipher view
-            let cipher = mk1.cipher_view(&ciphermk).unwrap();
+            let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
             // encrypt the multikey using the cipher
             cipher.encrypt().unwrap()
         };
@@ -351,11 +362,11 @@ mod tests {
         .unwrap();
         let mk1 = emk.to_inner();
 
-        let attr = mk1.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk1.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk1).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
 
@@ -376,13 +387,13 @@ mod tests {
                 .unwrap();
 
             // get the kdf view
-            let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+            let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
             // derive a key from the passphrase and add it to the cipher multikey
             let ciphermk = kdf
                 .derive_key(b"for great justice, move every zig!")
                 .unwrap();
             // get the cipher view
-            let cipher = mk1.cipher_view(&ciphermk).unwrap();
+            let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
             // encrypt the multikey using the cipher
             cipher.encrypt().unwrap()
         };
@@ -419,24 +430,53 @@ mod tests {
             .with_nonce(&nonce)
             .try_build()
             .unwrap();
-        let ciphermk = ciphermk
-            .kdf_view(&kdfmk)
+        let ciphermk = ViewBuilder::new(&ciphermk)
+            .kdf(&kdfmk)
+            .build()
             .unwrap()
             .derive_key(b"for great justice, move every zig!")
             .unwrap();
 
         // encrypt → must be longer by the 16-byte tag
-        let enc = mk1.cipher_view(&ciphermk).unwrap().encrypt().unwrap();
-        assert!(enc.attr_view().unwrap().is_encrypted());
+        let enc = ViewBuilder::new(&mk1)
+            .cipher(&ciphermk)
+            .build()
+            .unwrap()
+            .encrypt()
+            .unwrap();
+        assert!(
+            ViewBuilder::new(&enc)
+                .attr()
+                .build()
+                .unwrap()
+                .is_encrypted()
+        );
         assert_eq!(
-            enc.data_view().unwrap().key_bytes().unwrap().len(),
+            ViewBuilder::new(&enc)
+                .data()
+                .build()
+                .unwrap()
+                .key_bytes()
+                .unwrap()
+                .len(),
             plain.len() + 16
         );
 
         // decrypt → recovers the original plaintext
-        let dec = enc.cipher_view(&ciphermk).unwrap().decrypt().unwrap();
+        let dec = ViewBuilder::new(&enc)
+            .cipher(&ciphermk)
+            .build()
+            .unwrap()
+            .decrypt()
+            .unwrap();
         assert_eq!(
-            dec.data_view().unwrap().secret_bytes().unwrap().as_slice(),
+            ViewBuilder::new(&dec)
+                .data()
+                .build()
+                .unwrap()
+                .secret_bytes()
+                .unwrap()
+                .as_slice(),
             plain.as_slice()
         );
     }
@@ -453,7 +493,7 @@ mod tests {
 
         // try to get the associated public key
         let pk = {
-            let conv = sk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&sk).conv().build().unwrap();
             conv.to_public_key().unwrap()
         };
 

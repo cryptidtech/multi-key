@@ -166,10 +166,9 @@ impl Builder {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
-    use crate::{Views, mk};
+    use crate::{ViewBuilder, mk};
 
     #[test]
     fn test_random() {
@@ -216,7 +215,7 @@ mod tests {
         let msg = hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
             .unwrap();
 
-        let signmk = mk.sign_view().unwrap();
+        let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
         let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
 
         let s: Vec<u8> = signature.into();

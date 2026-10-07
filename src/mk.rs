@@ -2057,11 +2057,10 @@ impl Builder {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::views::{bcrypt, chacha20};
-    use crate::{cipher, kdf};
+    use crate::{ViewBuilder, cipher, kdf};
     use multi_sig::EncodedMultisig;
     use ssh_key::private::Ed25519Keypair;
 
@@ -2075,7 +2074,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -2120,7 +2119,7 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = conv.to_public_key().unwrap();
             let ssh_key = conv.to_ssh_public_key().unwrap();
             let mk2 = Builder::new_from_ssh_public_key(&ssh_key)
@@ -2140,7 +2139,7 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let ssh_key = conv.to_ssh_private_key().unwrap();
             let mk2 = Builder::new_from_ssh_private_key(&ssh_key)
                 .unwrap()
@@ -2159,12 +2158,12 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let cv = sk1.conv_view().unwrap();
+            let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
             let public_key = cv.to_ssh_public_key().unwrap();
             let private_key = cv.to_ssh_private_key().unwrap();
 
             let pk1 = cv.to_public_key().unwrap();
-            let cv = pk1.conv_view().unwrap();
+            let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
             assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
 
             let sk2 = Builder::new_from_ssh_private_key(&private_key)
@@ -2190,11 +2189,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk1.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk1.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk1).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -2210,7 +2209,7 @@ mod tests {
                     .unwrap();
                 // get the kdf view on the cipher multikey so we can generate a
                 // new cipher multikey with the same parameters and the generated key
-                let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
                 // derive a key from the passphrase and add it to the cipher multikey
                 let ciphermk = kdf
                     .derive_key(b"for great justice, move every zig!")
@@ -2218,17 +2217,17 @@ mod tests {
                 // get the cipher view on the unencrypted ed25519 secret key so
                 // that we can create a new ed25519 secret key with an encrypted
                 // key and the kdf and cipher attributes and data
-                let cipher = mk1.cipher_view(&ciphermk).unwrap();
+                let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
                 // encrypt the multikey using the cipher
 
                 cipher.encrypt().unwrap()
             };
 
-            let attr = mk2.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk2).attr().build().unwrap();
             assert!(attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk2.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk2).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_err()); // encrypted key
 
@@ -2244,23 +2243,23 @@ mod tests {
                     .try_build()
                     .unwrap();
                 // get the kdf view
-                let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
                 // derive a key from the passphrase and add it to the cipher multikey
                 let ciphermk = kdf
                     .derive_key(b"for great justice, move every zig!")
                     .unwrap();
                 // get the cipher view
-                let cipher = mk2.cipher_view(&ciphermk).unwrap();
+                let cipher = ViewBuilder::new(&mk2).cipher(&ciphermk).build().unwrap();
                 // decrypt the multikey using the cipher
 
                 cipher.decrypt().unwrap()
             };
 
-            let attr = mk3.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk3).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk3.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk3).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -2279,20 +2278,20 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
             println!("{} pubkey: {}", codec, pk);
 
             let msg = b"for great justice, move every zig!";
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
                 signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap()
             } else {
@@ -2301,7 +2300,7 @@ mod tests {
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
             println!("signaure: {}", sig);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
         }
     }
@@ -2316,11 +2315,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -2328,7 +2327,7 @@ mod tests {
                 hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
                     .unwrap();
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
                 signmk.sign(&msg, true, Some(2_u8)).unwrap()
             } else {
@@ -2338,7 +2337,7 @@ mod tests {
             // make sure the message is stored correctly in the signature
             assert_eq!(signature.message, msg);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, None).is_ok());
         }
     }
@@ -2353,7 +2352,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -2398,25 +2397,25 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
             println!("{} pubkey: {}", codec, pk);
 
             let msg = b"for great justice, move every zig!";
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
             println!("signature: {}", sig);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
         }
     }
@@ -2431,11 +2430,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -2443,13 +2442,13 @@ mod tests {
                 hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
                     .unwrap();
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = signmk.sign(&msg, true, None).unwrap();
 
             // make sure the message is stored correctly in the signature
             assert_eq!(signature.message, msg);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, None).is_ok());
         }
     }
@@ -2464,7 +2463,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -2515,25 +2514,25 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
-                    let conv = mk.conv_view().unwrap();
+                    let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                     let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
                     println!("{} pubkey: {}", codec, pk);
 
                     let msg = b"for great justice, move every zig!";
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
                 }
             })
@@ -2558,11 +2557,11 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
 
@@ -2571,13 +2570,13 @@ mod tests {
                     )
                     .unwrap();
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(&msg, true, None).unwrap();
 
                     // make sure the message is stored correctly in the signature
                     assert_eq!(signature.message, msg);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, None).is_ok());
                 }
             })
@@ -2597,7 +2596,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -2649,25 +2648,25 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
-                    let conv = mk.conv_view().unwrap();
+                    let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                     let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
                     println!("{} pubkey: {}", codec, pk);
 
                     let msg = b"for great justice, move every zig!";
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
                 }
             })
@@ -2692,11 +2691,11 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
 
@@ -2705,13 +2704,13 @@ mod tests {
                     )
                     .unwrap();
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(&msg, true, None).unwrap();
 
                     // make sure the message is stored correctly in the signature
                     assert_eq!(signature.message, msg);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, None).is_ok());
                 }
             })
@@ -2730,7 +2729,7 @@ mod tests {
             .unwrap();
         assert_eq!("test key".to_string(), mk1.comment);
 
-        let tv = mk1.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk1).threshold().build().unwrap();
         let shares = tv.split(3, 4).unwrap();
         assert_eq!(4, shares.len());
         for share in &shares {
@@ -2740,7 +2739,7 @@ mod tests {
         let msg = hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
             .unwrap();
 
-        let signmk = shares[0].sign_view().unwrap();
+        let signmk = ViewBuilder::new(&shares[0]).sign().build().unwrap();
         let signature = signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap();
         let ms: EncodedMultisig = BaseEncoded::new(Base::Base32Z, signature);
         let s = ms.to_string();
@@ -2753,11 +2752,11 @@ mod tests {
         let mk2 = builder.try_build().unwrap();
         assert_eq!("test key".to_string(), mk2.comment);
 
-        let av = mk2.threshold_attr_view().unwrap();
+        let av = ViewBuilder::new(&mk2).threshold_attr().build().unwrap();
         assert_eq!(3, av.threshold().unwrap());
         assert_eq!(4, av.limit().unwrap());
 
-        let tv = mk2.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk2).threshold().build().unwrap();
         let mk3 = tv.combine().unwrap();
         assert_eq!("test key".to_string(), mk3.comment);
 
@@ -2772,16 +2771,16 @@ mod tests {
             .with_comment("test key")
             .try_build()
             .unwrap();
-        let tv = mk.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk).threshold().build().unwrap();
         let sk1 = { tv.split(3, 4).unwrap()[0].clone() };
 
         assert_eq!(Codec::Bls12381G1PrivShare, sk1.codec);
-        let cv = sk1.conv_view().unwrap();
+        let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
         let public_key = cv.to_ssh_public_key().unwrap();
         let private_key = cv.to_ssh_private_key().unwrap();
 
         let pk1 = cv.to_public_key().unwrap();
-        let cv = pk1.conv_view().unwrap();
+        let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
         assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
 
         let sk2 = Builder::new_from_ssh_private_key(&private_key)
@@ -2808,13 +2807,13 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec, Codec::Ed25519Pub);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -2830,13 +2829,13 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -2845,14 +2844,14 @@ mod tests {
     fn test_pub_from_string() {
         let s = "fba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Pub);
         assert_eq!(mk.encoding(), Base::Base16Lower);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -2861,14 +2860,14 @@ mod tests {
     fn test_priv_from_string() {
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.encoding(), Base::Base16Lower);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -2877,13 +2876,13 @@ mod tests {
     fn test_pub_from_vec() {
         let b = hex::decode("ba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Pub);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -2892,13 +2891,13 @@ mod tests {
     fn test_priv_from_vec() {
         let b = hex::decode("ba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -2921,13 +2920,13 @@ mod tests {
             .with_comment("test key")
             .try_build()
             .unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }

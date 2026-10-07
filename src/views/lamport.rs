@@ -687,11 +687,10 @@ pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, E
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::Builder as MkBuilder;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_lamport_sign_verify_roundtrip() {
@@ -713,13 +712,30 @@ mod tests {
                 .unwrap()
                 .try_build()
                 .unwrap();
-            let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+            let pk = ViewBuilder::new(&sk)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .unwrap();
 
             let msg = b"lamport multikey message";
-            let ms = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
-            pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+            let ms = ViewBuilder::new(&sk)
+                .sign()
+                .build()
+                .unwrap()
+                .sign(msg, false, None)
+                .unwrap();
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&ms, Some(msg))
+                .unwrap();
             assert!(
-                pk.verify_view()
+                ViewBuilder::new(&pk)
+                    .verify()
+                    .build()
                     .unwrap()
                     .verify(&ms, Some(b"tampered"))
                     .is_err()
@@ -737,22 +753,40 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let msg = b"threshold lamport message";
 
         // split the signing key into 2-of-3 key shares
-        let shares = sk.threshold_view().unwrap().split(2, 3).unwrap();
+        let shares = ViewBuilder::new(&sk)
+            .threshold()
+            .build()
+            .unwrap()
+            .split(2, 3)
+            .unwrap();
         assert_eq!(shares.len(), 3);
-        assert!(shares[0].attr_view().unwrap().is_secret_key_share());
+        assert!(
+            ViewBuilder::new(&shares[0])
+                .attr()
+                .build()
+                .unwrap()
+                .is_secret_key_share()
+        );
 
         // any two shareholders each produce a signature share
-        let share_sig_a = shares[0]
-            .sign_view()
+        let share_sig_a = ViewBuilder::new(&shares[0])
+            .sign()
+            .build()
             .unwrap()
             .sign(msg, false, None)
             .unwrap();
-        let share_sig_c = shares[2]
-            .sign_view()
+        let share_sig_c = ViewBuilder::new(&shares[2])
+            .sign()
+            .build()
             .unwrap()
             .sign(msg, false, None)
             .unwrap();
@@ -776,7 +810,9 @@ mod tests {
         assert_eq!(combined.codec(), Codec::LamportSha3256Sig);
 
         // the combined signature verifies under the ORIGINAL public key
-        pk.verify_view()
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
             .unwrap()
             .verify(&combined, Some(msg))
             .unwrap();
