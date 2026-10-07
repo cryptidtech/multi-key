@@ -15,11 +15,11 @@
 //! and 1 respectively (`[depth, root]`, `[version, depth, next_index, …]`);
 //! `MtSignature`/`MtSignatureShare` embed depth at byte 0 (`[depth, index, …]`).
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, MerkleStateView,
     Multikey, SignView, ThresholdView, VerifyView,
     error::{AttributesError, ConversionsError, SignError, ThresholdError, VerifyError},
-    views::Views,
     views::lamport::{
         Blake2b512Digest, Blake2s256Digest, Blake3_256Digest, Sha2_256Digest, Sha2_384Digest,
         Sha2_512Digest, Sha3_256Digest, Sha3_384Digest, Sha3_512Digest, Shake128Digest,
@@ -600,7 +600,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let depth = wire_depth_at(secret_bytes.as_slice(), 1)?;
@@ -631,7 +631,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -667,7 +667,7 @@ impl<'a> SignView for View<'a> {
     ) -> Result<(ms::Multisig, Multikey), Error> {
         let codec = self.mk.codec;
         let key_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.key_bytes()?
         };
         // A private-key SHARE signs to a signature SHARE (stateful, but the
@@ -717,14 +717,14 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            self.mk.conv_view()?.to_public_key()?
+            dispatch_conv_view(self.mk)?.to_public_key()?
         } else {
             self.mk.clone()
         };
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
         // Cross-check the pubkey's depth attribute against the MtVerifyingKey
@@ -760,11 +760,11 @@ impl<'a> ThresholdView for View<'a> {
     /// data is a GF(256) share of the whole tree state that can sign
     /// independently to a signature share.
     fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error> {
-        if !self.mk.attr_view()?.is_secret_key() {
+        if !dispatch_attr_view(self.mk)?.is_secret_key() {
             return Err(ThresholdError::NotASecretKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let depth = state_depth(secret_bytes.as_slice())?;
@@ -836,7 +836,7 @@ impl<'a> ThresholdView for View<'a> {
 impl<'a> MerkleStateView for View<'a> {
     fn depth(&self) -> Result<u8, Error> {
         let key_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.key_bytes()?
         };
         let depth = if self.is_secret_key() {
@@ -858,7 +858,7 @@ impl<'a> MerkleStateView for View<'a> {
             return Err(AttributesError::NotSecretKey(self.mk.codec).into());
         }
         let key_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         // [version, depth, next_index, …]
@@ -870,7 +870,7 @@ impl<'a> MerkleStateView for View<'a> {
             return Err(AttributesError::NotSecretKey(self.mk.codec).into());
         }
         let key_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let sk = MtSigningKey::<Sha3_256Digest>::from_bytes(key_bytes.as_slice());
@@ -1012,9 +1012,11 @@ pub(crate) fn generate_private_key_with_depth(
 const MAX_DECODED_SIZE: usize = crate::mk::MAX_DECODED_SIZE;
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::LAMPORT_MERKLE_KEY_CODECS;
+    use crate::views::Views;
     use multi_sig::AttrId as MsAttrId;
 
     fn build_priv(codec: Codec, depth: u8) -> Multikey {

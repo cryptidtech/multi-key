@@ -4,6 +4,7 @@ mod de;
 mod ser;
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use crate::{Builder, EncodedMultikey, Multikey, Views, cipher, kdf, nonce};
     use multi_base::Base;

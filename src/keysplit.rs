@@ -20,7 +20,7 @@
 //! normal Multikey encoders.
 
 use crate::mk::Attributes;
-use crate::{AttrId, Builder, Error, Multikey, Views};
+use crate::{AttrId, Builder, Error, Multikey};
 use blsful::inner_types::{G1Projective, G2Projective, Scalar as BlsScalar};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as DalekScalar};
 use elliptic_curve::ff::PrimeField;
@@ -440,7 +440,7 @@ pub fn split(
         return Err(err("need 2 <= threshold <= limit <= 255"));
     }
     let codec = mk.codec();
-    let secret = mk.data_view()?.secret_bytes()?;
+    let secret = crate::views::dispatch::dispatch_data_view(mk)?.secret_bytes()?;
     let payloads = build_payloads(codec, &secret, threshold, limit, rng)?;
     payloads.iter().map(|p| wrap_share(mk, p)).collect()
 }
@@ -524,9 +524,11 @@ pub fn combine(shares: &[Multikey]) -> Result<Multikey, Error> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::mk;
+    use crate::views::Views;
 
     fn gen_key(codec: Codec) -> Multikey {
         Builder::new_from_random_bytes(codec, &mut rand::rng())

@@ -13,11 +13,11 @@
 //! [`SignView::sign_advance`] to obtain both the signature and the advanced
 //! secret key in one step.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -285,7 +285,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let pub_bytes = public_from_private(self.mk.codec, secret_bytes.as_slice())?;
@@ -313,7 +313,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -329,12 +329,12 @@ impl<'a> SignView for View<'a> {
         combined: bool,
         _scheme: Option<u8>,
     ) -> Result<multi_sig::Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
@@ -352,12 +352,12 @@ impl<'a> SignView for View<'a> {
         combined: bool,
         _scheme: Option<u8>,
     ) -> Result<(multi_sig::Multisig, Multikey), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() || !is_xmss_priv(self.mk.codec) {
             return Err(SignError::NotSigningKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
@@ -377,16 +377,16 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
         let sv = sig.data_view()?;
@@ -402,11 +402,14 @@ pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, E
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     #[cfg(feature = "slow-tests")]
     use super::*;
     #[cfg(feature = "slow-tests")]
     use crate::Builder;
+    #[cfg(feature = "slow-tests")]
+    use crate::views::Views;
 
     #[cfg(feature = "slow-tests")]
     #[test]

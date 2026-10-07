@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#[allow(deprecated)]
+use crate::views::Views;
 #[cfg(feature = "lamport")]
 use crate::views::lamport;
 #[cfg(feature = "lamport")]
@@ -8,7 +10,7 @@ use crate::views::xmss;
 use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
-    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView,
     error::{ConversionsError, ThresholdError},
     views::{
         bls12381, fn_dsa, frodokem, ml_dsa, rsa, secp256k1, slh_dsa, threshold_meta,
@@ -391,7 +393,7 @@ impl Null for Multikey {
 impl fmt::Debug for Multikey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // get an attributes view on the key
-        let attr = self.attr_view().map_err(|_| fmt::Error)?;
+        let attr = crate::views::dispatch::dispatch_attr_view(self).map_err(|_| fmt::Error)?;
 
         write!(
             f,
@@ -403,6 +405,7 @@ impl fmt::Debug for Multikey {
     }
 }
 
+#[allow(deprecated)]
 impl Views for Multikey {
     /// Provide a read-only view of the basic attributes in the viewed Multikey
     fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error> {
@@ -2015,7 +2018,7 @@ impl Builder {
         if let Some(shares) = self.shares {
             for share in &shares {
                 mk = {
-                    let tv = mk.threshold_view()?;
+                    let tv = crate::views::dispatch::dispatch_threshold_view(&mk)?;
                     tv.add_share(share)?
                 };
             }
@@ -2027,6 +2030,7 @@ impl Builder {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::views::{bcrypt, chacha20};

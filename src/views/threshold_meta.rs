@@ -22,7 +22,7 @@ pub use multi_sig::{
 };
 
 use crate::{
-    AttrId, Error, Multikey, Views,
+    AttrId, Error, Multikey,
     error::{AttributesError, ThresholdError},
     mk::Attributes,
 };
@@ -35,7 +35,7 @@ use zeroize::Zeroizing;
 /// `Multikey` at-rest encryption infrastructure to the threshold metadata
 /// encryption helpers in `multi_sig`.
 fn extract_meta_key(meta_key: &Multikey) -> Result<Zeroizing<Vec<u8>>, Error> {
-    let dv = meta_key.data_view()?;
+    let dv = crate::views::dispatch::dispatch_data_view(meta_key)?;
     let key = dv.key_bytes()?;
     if key.len() != 32 {
         return Err(Error::Threshold(ThresholdError::MetaEncryption(format!(
@@ -274,9 +274,11 @@ impl<'a> ThresholdDisclosureView for DisclosureView<'a> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::Builder;
+    use crate::views::Views;
     use multi_codec::Codec;
 
     fn make_meta_key() -> Multikey {

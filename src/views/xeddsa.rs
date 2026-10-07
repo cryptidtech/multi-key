@@ -21,9 +21,10 @@
 //! 4. The verification equation is standard Ed25519 over the lifted point,
 //!    checked with strict verification.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
-    VerifyView, Views,
+    VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
 };
 use curve25519_dalek::{edwards::EdwardsPoint, montgomery::MontgomeryPoint, scalar::Scalar};
@@ -222,7 +223,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -239,7 +240,7 @@ impl<'a> ConvView for View<'a> {
     /// point, so the derived key verifies under the XEdDSA verifier.
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let public = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(
@@ -275,7 +276,7 @@ impl<'a> SignView for View<'a> {
     /// is the only authorized caller class, and its messages are 32-byte
     /// transcript challenges.
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
@@ -286,7 +287,7 @@ impl<'a> SignView for View<'a> {
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -337,9 +338,9 @@ impl<'a> VerifyView for View<'a> {
     /// non-canonical u encoding, a small-order key, and a mixed-order key.
     /// Signature verification is strict: a non-canonical R or S is rejected.
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            self.mk.conv_view()?.to_public_key()?
+            dispatch_conv_view(self.mk)?.to_public_key()?
         } else {
             self.mk.clone()
         };
@@ -349,7 +350,7 @@ impl<'a> VerifyView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 
@@ -397,6 +398,7 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::{Builder, Views};

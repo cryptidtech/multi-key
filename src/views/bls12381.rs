@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+use crate::views::dispatch::{
+    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_disclosure_view,
+    dispatch_fingerprint_view, dispatch_threshold_attr_view,
+};
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, Multikey, OpenView, SealView, SignView, ThresholdAttrView, ThresholdView,
-    VerifyView, Views,
+    VerifyView,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError,
         ThresholdError, VerifyError,
@@ -349,19 +353,19 @@ impl<'a> KdfAttrView for View<'a> {
 
 impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if attr.is_secret_key() {
             // convert to a public key Multikey
             let pk = self.to_public_key()?;
             // get a conversions view on the public key
-            let fp = pk.fingerprint_view()?;
+            let fp = dispatch_fingerprint_view(&pk)?;
             // get the fingerprint
             let f = fp.fingerprint(codec)?;
             Ok(f)
         } else {
             // get the key bytes
             let bytes = {
-                let kd = self.mk.data_view()?;
+                let kd = dispatch_data_view(self.mk)?;
 
                 kd.key_bytes()?
             };
@@ -376,7 +380,7 @@ impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         // get the secret key bytes
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -405,7 +409,7 @@ impl<'a> ConvView for View<'a> {
                     .try_build()
             }
             Codec::Bls12381G1PrivShare => {
-                let av = self.mk.threshold_attr_view()?;
+                let av = dispatch_threshold_attr_view(self.mk)?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
@@ -450,7 +454,7 @@ impl<'a> ConvView for View<'a> {
                     .try_build()
             }
             Codec::Bls12381G2PrivShare => {
-                let av = self.mk.threshold_attr_view()?;
+                let av = dispatch_threshold_attr_view(self.mk)?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
@@ -484,7 +488,7 @@ impl<'a> ConvView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
 
             kd.key_bytes()?
         };
@@ -499,7 +503,7 @@ impl<'a> ConvView for View<'a> {
                 ALGORITHM_NAME_G1
             }
             Codec::Bls12381G1PubShare => {
-                let tav = pk.threshold_attr_view()?;
+                let tav = dispatch_threshold_attr_view(&pk)?;
                 let key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(tav.identifier()?)?,
                     tav.threshold()?,
@@ -519,7 +523,7 @@ impl<'a> ConvView for View<'a> {
                 ALGORITHM_NAME_G2
             }
             Codec::Bls12381G2PubShare => {
-                let tav = pk.threshold_attr_view()?;
+                let tav = dispatch_threshold_attr_view(&pk)?;
                 let key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(tav.identifier()?)?,
                     tav.threshold()?,
@@ -553,14 +557,14 @@ impl<'a> ConvView for View<'a> {
     /// try to convert a Multikey to an ssh_key::PrivateKey
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
 
         let pk = self.to_public_key()?;
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
 
             kd.key_bytes()?
         };
@@ -579,7 +583,7 @@ impl<'a> ConvView for View<'a> {
                 ALGORITHM_NAME_G1
             }
             Codec::Bls12381G1PrivShare => {
-                let sav = self.mk.threshold_attr_view()?;
+                let sav = dispatch_threshold_attr_view(self.mk)?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(sav.identifier()?)?,
                     sav.threshold()?,
@@ -587,7 +591,7 @@ impl<'a> ConvView for View<'a> {
                     secret_bytes.to_vec(),
                 )
                 .into();
-                let pav = pk.threshold_attr_view()?;
+                let pav = dispatch_threshold_attr_view(&pk)?;
                 let public_key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(pav.identifier()?)?,
                     pav.threshold()?,
@@ -613,7 +617,7 @@ impl<'a> ConvView for View<'a> {
                 ALGORITHM_NAME_G2
             }
             Codec::Bls12381G2PrivShare => {
-                let sav = self.mk.threshold_attr_view()?;
+                let sav = dispatch_threshold_attr_view(self.mk)?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(sav.identifier()?)?,
                     sav.threshold()?,
@@ -621,7 +625,7 @@ impl<'a> ConvView for View<'a> {
                     secret_bytes.to_vec(),
                 )
                 .into();
-                let pav = pk.threshold_attr_view()?;
+                let pav = dispatch_threshold_attr_view(&pk)?;
                 let public_key_share: Vec<u8> = KeyShare(
                     bytes_to_identifier(pav.identifier()?)?,
                     pav.threshold()?,
@@ -670,14 +674,14 @@ impl<'a> SignView for View<'a> {
     fn sign(&self, msg: &[u8], combined: bool, scheme: Option<u8>) -> Result<Multisig, Error> {
         let scheme = scheme.ok_or(SignError::MissingScheme)?;
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         // get the secret key bytes
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -715,7 +719,7 @@ impl<'a> SignView for View<'a> {
                 Ok(ms.try_build()?)
             }
             Codec::Bls12381G1PrivShare => {
-                let av = self.mk.threshold_attr_view()?;
+                let av = dispatch_threshold_attr_view(self.mk)?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
@@ -769,7 +773,7 @@ impl<'a> SignView for View<'a> {
                 Ok(ms.try_build()?)
             }
             Codec::Bls12381G2PrivShare => {
-                let av = self.mk.threshold_attr_view()?;
+                let av = dispatch_threshold_attr_view(self.mk)?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
@@ -805,14 +809,14 @@ impl<'a> ThresholdView for View<'a> {
             return Err(ThresholdError::InvalidThresholdLimit(threshold, limit).into());
         }
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(ThresholdError::NotASecretKey.into());
         }
 
         // get the secret key bytes
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -920,12 +924,12 @@ impl<'a> ThresholdView for View<'a> {
 
         let (key_share, identifier, threshold, limit) = {
             // get the share attributes
-            let av = share.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(share)?;
             let identifier = bytes_to_identifier(av.identifier()?)?;
             let threshold = av.threshold()?;
             let limit = av.limit()?;
             // get the key data
-            let dv = share.data_view()?;
+            let dv = dispatch_data_view(share)?;
             let key_bytes = dv.key_bytes()?;
             // return the data
             (
@@ -937,7 +941,7 @@ impl<'a> ThresholdView for View<'a> {
         };
 
         let threshold_data: Vec<u8> = {
-            let av = self.mk.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(self.mk)?;
             let mut tdata = match av.threshold_data() {
                 Ok(b) => ThresholdData::try_from(b)
                     .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
@@ -954,7 +958,7 @@ impl<'a> ThresholdView for View<'a> {
 
         // if this multikey doesn't already have the threshold/limit set, then
         // set it to match the values from the first share
-        let av = share.threshold_attr_view()?;
+        let av = dispatch_threshold_attr_view(share)?;
         let threshold = av.threshold().unwrap_or(threshold);
         let limit = av.limit().unwrap_or(limit);
         let comment = if self.mk.comment.is_empty() {
@@ -975,7 +979,7 @@ impl<'a> ThresholdView for View<'a> {
     fn combine(&self) -> Result<Multikey, Error> {
         // get the current threshold data
         let (threshold_data, threshold) = {
-            let av = self.mk.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(self.mk)?;
             (
                 match av.threshold_data() {
                     Ok(b) => ThresholdData::try_from(b)
@@ -1047,7 +1051,7 @@ impl<'a> ThresholdView for View<'a> {
         let shares = self.split(threshold, limit)?;
         shares
             .iter()
-            .map(|s| s.disclosure_view()?.to_disclosure(mode, meta_key, None))
+            .map(|s| dispatch_disclosure_view(s).to_disclosure(mode, meta_key, None))
             .collect()
     }
 
@@ -1062,9 +1066,9 @@ impl<'a> ThresholdView for View<'a> {
 
         // get the share data
         let (key_share, identifier) = {
-            let av = share.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(share)?;
             let identifier = bytes_to_identifier(av.identifier()?)?;
-            let dv = share.data_view()?;
+            let dv = dispatch_data_view(share)?;
             let key_bytes = dv.key_bytes()?;
             (
                 KeyShare(identifier, share_t, share_n, key_bytes.to_vec()),
@@ -1074,7 +1078,7 @@ impl<'a> ThresholdView for View<'a> {
 
         // update threshold data
         let threshold_data: Vec<u8> = {
-            let av = self.mk.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(self.mk)?;
             let mut tdata = match av.threshold_data() {
                 Ok(b) => ThresholdData::try_from(b)
                     .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
@@ -1109,7 +1113,7 @@ impl<'a> ThresholdView for View<'a> {
 
         // get the current threshold data
         let threshold_data = {
-            let av = self.mk.threshold_attr_view()?;
+            let av = dispatch_threshold_attr_view(self.mk)?;
             match av.threshold_data() {
                 Ok(b) => ThresholdData::try_from(b)
                     .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?,
@@ -1181,9 +1185,9 @@ impl<'a> VerifyView for View<'a> {
     /// error rather than being misverified on the wrong curve. This avoids the
     /// downgrade heuristic described in the security audit (M1).
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
 
             kc.to_public_key()?
         } else {
@@ -1192,7 +1196,7 @@ impl<'a> VerifyView for View<'a> {
 
         // get the secret key bytes
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             let key_bytes = kd.key_bytes()?;
             key_bytes.to_vec()
         };
@@ -1261,7 +1265,7 @@ impl<'a> VerifyView for View<'a> {
                         "Invalid public key share point".to_string(),
                     ))?;
                 let pk_identifier = {
-                    let pav = pubmk.threshold_attr_view()?;
+                    let pav = dispatch_threshold_attr_view(&pubmk)?;
                     bytes_to_identifier(pav.identifier()?)?
                 };
                 let public_key: PublicKeyShare<Bls12381G1Impl> = PublicKeyShare(
@@ -1362,7 +1366,7 @@ impl<'a> VerifyView for View<'a> {
                         "Invalid public key share point".to_string(),
                     ))?;
                 let pk_identifier = {
-                    let pav = pubmk.threshold_attr_view()?;
+                    let pav = dispatch_threshold_attr_view(&pubmk)?;
                     bytes_to_identifier(pav.identifier()?)?
                 };
                 let public_key: PublicKeyShare<Bls12381G2Impl> = PublicKeyShare(
@@ -1443,12 +1447,12 @@ impl<'a> SealView for View<'a> {
         _aead_codec: Codec,
         _aad: &[u8],
     ) -> Result<(Vec<u8>, Option<Multikey>), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_public_key() {
             return Err(SealError::NotEncapsulationKey.into());
         }
 
-        let key_bytes = self.mk.data_view()?.key_bytes()?;
+        let key_bytes = dispatch_data_view(self.mk)?.key_bytes()?;
 
         // Generate a fresh per-message identifier.  The recipient proves key
         // ownership by signing this id; the resulting signature is the
@@ -1501,12 +1505,12 @@ impl<'a> OpenView for View<'a> {
         _ephemeral: Option<&Multikey>,
         _aad: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SealError::NotDecapsulationKey.into());
         }
 
-        let secret_bytes = self.mk.data_view()?.secret_bytes()?;
+        let secret_bytes = dispatch_data_view(self.mk)?.secret_bytes()?;
 
         // Parse the sealed blob: [id Varbytes][ciphertext bytes (remainder)]
         let (id_vb, ct_bytes) = Varbytes::try_decode_from(sealed_msg)

@@ -1214,6 +1214,7 @@ impl<'mk> ViewBuilder<'mk, MerkleStateKind> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::{AttrId, Builder, KEY_CODECS, ThresholdDisclosure, Views};

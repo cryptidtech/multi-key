@@ -142,6 +142,8 @@ pub mod kdf;
 
 /// Key views
 pub mod views;
+#[allow(deprecated)]
+pub use views::Views;
 pub use views::builder::{
     AttrKind, CipherAttrKind, CipherKind, ConvKind, DataKind, DisclosureKind, FingerprintKind,
     KdfAttrKind, KdfKind, MerkleStateKind, OpenKind, SealKind, SignKind, ThresholdAttrKind,
@@ -159,7 +161,7 @@ pub use views::threshold_meta::{
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
     KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
-    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView,
 };
 
 /// Key splitting / recombination (verifiable threshold shares)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Security-focused tests for multi-key
 #![allow(clippy::redundant_clone, clippy::doc_markdown)]
-
+#![allow(deprecated)]
 use multi_codec::Codec;
 use multi_key::{Builder, Error, Multikey};
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{AttrId, Error, KdfAttrView, KdfView, Multikey, Views, error::KdfError};
+use crate::views::dispatch::{dispatch_cipher_attr_view, dispatch_kdf_attr_view};
+use crate::{AttrId, Error, KdfAttrView, KdfView, Multikey, error::KdfError};
 use multi_codec::Codec;
 use multi_util::Varuint;
 use zeroize::Zeroizing;
@@ -35,13 +36,13 @@ impl<'a> KdfView for View<'a> {
 
         // get the salt data and rounds attribute
         let (salt, rounds) = {
-            let kattr = kdf.kdf_attr_view()?;
+            let kattr = dispatch_kdf_attr_view(kdf)?;
             (kattr.salt_bytes()?, kattr.rounds()?)
         };
 
         // get the key length from the viewed Multikey
         let key_length = {
-            let cattr = self.mk.cipher_attr_view()?;
+            let cattr = dispatch_cipher_attr_view(self.mk)?;
 
             cattr.key_length()?
         };

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! X25519 ECIES multikey view; Curve25519 Diffie-Hellman key agreement + AEAD.
 
+use crate::views::dispatch::dispatch_data_view;
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
     error::{AttributesError, ConversionsError, SealError},
-    views::{Views, aead},
+    views::aead,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -76,7 +77,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -119,7 +120,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -221,7 +222,7 @@ impl<'a> OpenView for View<'a> {
             return Err(SealError::UnsupportedAeadCodec(aead_codec).into());
         }
 
-        let ephemeral_pub_bytes = ephemeral_mk.data_view()?.key_bytes()?;
+        let ephemeral_pub_bytes = dispatch_data_view(ephemeral_mk)?.key_bytes()?;
         if ephemeral_pub_bytes.len() != X25519_PUBLIC_LENGTH {
             return Err(
                 SealError::InvalidFormat("invalid ephemeral public key length".into()).into(),
@@ -229,7 +230,7 @@ impl<'a> OpenView for View<'a> {
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -260,6 +261,7 @@ impl<'a> OpenView for View<'a> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::mk::X25519_KEY_CODECS;

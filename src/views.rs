@@ -306,6 +306,10 @@ pub trait MerkleStateView {
 }
 
 /// trait for getting the other views
+#[deprecated(
+    since = "2.1.0",
+    note = "use ViewBuilder instead; this shim trait and its impl for Multikey will be removed in the next major release"
+)]
 pub trait Views {
     /// Provide a read-only view of the basic attributes in the viewed Multikey
     fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error>;

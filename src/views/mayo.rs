@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //! MAYO-1/2/3/5 multikey view; post-quantum multivariate signature.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -99,7 +99,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -149,7 +149,7 @@ impl<'a> ConvView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
             kd.key_bytes()?
         };
 
@@ -182,7 +182,7 @@ impl<'a> ConvView for View<'a> {
 
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -204,7 +204,7 @@ impl<'a> ConvView for View<'a> {
 
         let pk = self.to_public_key()?;
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
             kd.key_bytes()?
         };
 
@@ -240,8 +240,8 @@ impl<'a> FingerprintView for View<'a> {
             // Ed25519 / BLS / SLH-DSA views. Earlier revisions returned an
             // "not yet implemented" error here even though `to_public_key()`
             // was implemented, which broke fingerprinting of secret keys.
-            let pk = self.mk.conv_view()?.to_public_key()?;
-            let dv = pk.data_view()?;
+            let pk = dispatch_conv_view(self.mk)?.to_public_key()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -259,13 +259,13 @@ impl<'a> SignView for View<'a> {
     ) -> Result<multi_sig::Multisig, Error> {
         use ml_dsa::signature::Signer;
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let (signature, codec) = match (self.mk.codec, secret_bytes.len()) {
@@ -337,16 +337,16 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 
@@ -402,6 +402,7 @@ impl<'a> VerifyView for View<'a> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::views::Views;

@@ -4,7 +4,7 @@
 
 #![cfg(feature = "lamport")]
 #![allow(clippy::uninlined_format_args)]
-
+#![allow(deprecated)]
 use multi_codec::Codec;
 use multi_key::{Builder, Multikey, Views as _};
 use multi_sig::{Multisig, Views as _};
