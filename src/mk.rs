@@ -481,7 +481,7 @@ impl Views for Multikey {
 
     /// Provide an interface for threshold disclosure mode operations
     fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
-        crate::views::dispatch::dispatch_disclosure_view(self)
+        Ok(crate::views::dispatch::dispatch_disclosure_view(self))
     }
 
     /// Provide an interface for merkle-tree state introspection

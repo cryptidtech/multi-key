@@ -61,6 +61,10 @@ pub(crate) mod xmss;
 // shared dispatch core: every view-kind constructor dispatches on the codec here
 pub(crate) mod dispatch;
 
+// builder-pattern view creation (`ViewBuilder`): fluent kind selection,
+// optional local-codec factories, and a `.build()` terminal
+pub mod builder;
+
 // shared AEAD helper used by ml_kem, sntrup, x25519, and hybrid KEM views
 // (plus the deprecated classic_mceliece views)
 pub(crate) mod aead;

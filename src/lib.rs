@@ -142,6 +142,11 @@ pub mod kdf;
 
 /// Key views
 pub mod views;
+pub use views::builder::{
+    AttrKind, CipherAttrKind, CipherKind, ConvKind, DataKind, DisclosureKind, FingerprintKind,
+    KdfAttrKind, KdfKind, MerkleStateKind, OpenKind, SealKind, SignKind, ThresholdAttrKind,
+    ThresholdKeyKind, ThresholdKind, Unselected, VerifyKind, ViewBuilder, ViewKind,
+};
 pub use views::threshold_marker::{
     self, MarkerView, ThresholdParticipant, ThresholdScheme, group_public_key, participants,
     set_group_public_key, set_participants, threshold_kind, threshold_params,

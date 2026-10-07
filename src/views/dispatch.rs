@@ -1522,10 +1522,13 @@ pub(crate) fn dispatch_verify_view<'a>(
     }
 }
 /// Builds the threshold-disclosure view for the viewed Multikey.
+///
+/// Construction cannot fail: the built-in disclosure view applies to every
+/// codec.
 pub(crate) fn dispatch_disclosure_view<'a>(
     mk: &'a Multikey,
-) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
-    Ok(Box::new(threshold_meta::DisclosureView::new(mk)))
+) -> Box<dyn ThresholdDisclosureView + 'a> {
+    Box::new(threshold_meta::DisclosureView::new(mk))
 }
 /// Builds the merkle-tree state view for the viewed Multikey.
 pub(crate) fn dispatch_merkle_state_view<'a>(
