@@ -60,6 +60,13 @@ multi-util = "1.1"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+# Compatibility pin. sad-rsa 0.2.3 (the newest release of its line) cannot
+# compile against pkcs1 0.8.0-rc.5, which changed `RsaPrivateKey` and
+# `RsaPublicKey` from lifetime parameters to generic parameters. sad-rsa
+# permits `pkcs1 ^0.8.0-rc.4`, so a fresh resolve picks rc.5 and fails. Pin
+# the exact rc.4 dependency to force it; remove this entry once sad-rsa
+# publishes a rc.5-compatible release.
+pkcs1 = "=0.8.0-rc.4"
 poly1305 = "0.9"
 pq-mayo = "0.6.0"
 rand = "0.10"

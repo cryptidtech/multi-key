@@ -15,6 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - The `cipher_view`, `kdf_view`, `cipher_attr_view`, and `kdf_attr_view` fallthrough errors now report the codec that actually lacks support (the second key's codec or the attribute-derived codec) instead of the multikey's own codec. Error variants are unchanged.
+- Added an exact `pkcs1 = "=0.8.0-rc.4"` dependency pin. `sad-rsa 0.2.3` does not compile against `pkcs1 0.8.0-rc.5` (published 2026-10-05), so a fresh dependency resolve fails. The pin forces rc.4 until sad-rsa ships a compatible release.
 
 ### Deprecated
 
