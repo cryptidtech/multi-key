@@ -58,6 +58,9 @@ pub(crate) mod x25519_sntrup761;
 #[cfg(feature = "xmss")]
 pub(crate) mod xmss;
 
+// shared dispatch core: every view-kind constructor dispatches on the codec here
+pub(crate) mod dispatch;
+
 // shared AEAD helper used by ml_kem, sntrup, x25519, and hybrid KEM views
 // (plus the deprecated classic_mceliece views)
 pub(crate) mod aead;
