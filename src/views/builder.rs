@@ -4,8 +4,9 @@
 //!
 //! A [`ViewBuilder`] selects one view kind, optionally registers local codec
 //! factories for that kind, and builds the view. It is the builder-pattern
-//! alternative to the many `*_view()` methods of the [`crate::Views`] trait
-//! and covers standard codecs and custom protocol keys alike.
+//! alternative to the many `*_view()` methods of the deprecated
+//! [`crate::Views`] trait: it dispatches through the same dispatch core and
+//! covers standard codecs and custom protocol keys alike.
 //!
 //! The three steps for a standard key:
 //!
@@ -81,6 +82,18 @@
 //! let err = view.sign(b"message", false, None).err().unwrap();
 //! assert_eq!(err.to_string(), "Unsupported key algorithm: custom");
 //! ```
+//!
+//! # Custom keys that share a codec
+//!
+//! Custom protocol keys of different protocols share the
+//! [`multi_codec::Codec::Identity`] codec, so the codec alone cannot say
+//! which protocol a key serves. The `AlgorithmName` attribute does: a
+//! local-codec factory reads it from the passed-in Multikey and branches on
+//! it, serving its own protocol and erroring for other protocols (or
+//! branching internally between view structs).
+//! `Builder::with_algorithm_name` stamps the attribute and
+//! `Builder::with_key_type` stamps the key type byte convention of
+//! provenance-specifications#4: absent or 0 means public, 1 means secret.
 //!
 //! # Differences from the issuing report
 //!

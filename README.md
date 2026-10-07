@@ -147,6 +147,98 @@ Two additional modules provide threshold functionality outside the view traits:
 
 Operations that seem to mutate the Multi-Key (for example, encrypt, decrypt, convert) in fact do a copy-on-write (CoW) operation. They return a new Multi-Key with the mutation applied.
 
+### Creating Views
+
+Views are created through the builder-pattern `multi_key::ViewBuilder`
+(re-exported at the crate root and in the prelude). Select a view kind
+fluently, then build:
+
+```rust
+use multi_key::{Builder, ViewBuilder};
+use multi_codec::Codec;
+
+let mut rng = rand::rng();
+let mk = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+    .unwrap()
+    .try_build()
+    .unwrap();
+
+// sign a message and verify it
+let signer = ViewBuilder::new(&mk).sign().build().unwrap();
+let sig = signer.sign(b"message", false, None).unwrap();
+let verifier = ViewBuilder::new(&mk).verify().build().unwrap();
+verifier.verify(&sig, Some(b"message")).unwrap();
+```
+
+The 15 kinds that need no second key all follow this shape: `attr`,
+`cipher_attr`, `data`, `kdf_attr`, `threshold_attr`, `threshold_key`,
+`conv`, `fingerprint`, `sign`, `verify`, `seal`, `open`, `threshold`,
+`disclosure`, and `merkle_state`. The `cipher` and `kdf` kinds attach the
+second key their dispatch reads. A view borrows its Multikey, so keep the
+Multikey alive while the view is in use:
+
+```rust
+// encrypt/decrypt the Multi-Key at rest
+let encrypter = ViewBuilder::new(&mk).cipher(&cipher_key).build()?;
+let encrypted = encrypter.encrypt()?;
+
+// derive a cipher key from a passphrase
+let kdf = ViewBuilder::new(&mk).kdf(&kdf_key).build()?;
+let derived = kdf.derive_key(b"passphrase")?;
+```
+
+The original `multi_key::Views` extension trait is deprecated since 2.1.0
+in favor of `ViewBuilder`. It stays as a source-compatible delegating shim
+with the same `*_view()` methods, marked as deprecated at compile time.
+Note that `multi_sig::Views` is a different, unrelated trait.
+
+### Custom Protocol Keys
+
+A custom protocol key (sigil-0) carries the `Codec::Identity` codec with the `AlgorithmName` attribute (code 27, the protocol name) and the `KeyType` attribute (code 28, one raw byte) from [provenance-specifications][PROVENANCE]. The `KeyType` byte convention is absent or 0 for public keys and 1 for secret keys. Custom keys have no built-in views, so `ViewBuilder` dispatches them to caller-supplied local-codec factories registered with `with_local_codec`. Different custom protocols share the `Codec::Identity` codec, so a factory identifies the key's protocol through the `AlgorithmName` attribute (not through the codec):
+
+```rust
+use multi_key::{AttrId, Builder, Error, SignView, ViewBuilder};
+use multi_codec::Codec;
+use multi_sig::Multisig;
+
+let mk = Builder::new(Codec::Identity)
+    .with_key_bytes(b"my-custom-key-material".as_slice())
+    .with_algorithm_name("my-protocol")
+    .with_key_type(1) // 1 = secret key
+    .try_build()
+    .unwrap();
+
+struct MyProtocolSign {
+    algorithm: String,
+}
+
+impl SignView for MyProtocolSign {
+    fn sign(&self, _: &[u8], _: bool, _: Option<u8>) -> Result<Multisig, Error> {
+        Err(Error::UnsupportedAlgorithm(format!("{} sign", self.algorithm)))
+    }
+}
+
+// the factory builds a MyProtocolSign for the key it is handed. a real
+// factory for several protocols sharing Identity reads the AlgorithmName
+// attribute from the passed-in key and branches on it, serving only its
+// own protocol.
+let signer = ViewBuilder::new(&mk)
+    .sign()
+    .with_local_codec(Codec::Identity, |key| {
+        let name = key
+            .attributes
+            .get(&AttrId::AlgorithmName)
+            .ok_or_else(|| Error::UnsupportedAlgorithm("AlgorithmName missing".into()))?;
+        Ok(Box::new(MyProtocolSign {
+            algorithm: String::from_utf8_lossy(name).into_owned(),
+        }))
+    })
+    .build()
+    .unwrap();
+```
+
+Built-in views always win: a factory registered for a standard codec whose built-in view exists is never consulted. A repeat `with_local_codec` call for the same kind and codec replaces the earlier factory. Factory errors propagate unchanged. The `disclosure` kind is codec-independent (its view applies to every key), so a factory registered for that kind is never consulted.
+
 ## SSH Key Conversions
 
 This crate converts to and from the SSH key format with the [`ssh-key`][SSHKEY] crate. Standard SSH algorithms are handled natively. Non-standard algorithms use the [RFC 4251][RFC4251] "additional algorithms" mechanism with an `ssh_key::Algorithm::Other` opaque key and an algorithm name ending in the literal `@multikey` suffix. This is a wire-format identifier, distinct from the crate name.
@@ -263,7 +355,7 @@ There are three ways to produce shares in a given disclosure mode:
 **1. Direct creation via `split_with_disclosure()`:**
 
 ```rust
-use multi_key::{Builder, Views, ThresholdDisclosure};
+use multi_key::{Builder, ViewBuilder, ThresholdDisclosure};
 
 let meta_key = multi_key::generate_meta_key();
 let meta_mk = Builder::new(Codec::Chacha20Poly1305)
@@ -271,8 +363,9 @@ let meta_mk = Builder::new(Codec::Chacha20Poly1305)
     .try_build()?;
 
 // BLS Shamir split with FullConfidentialial disclosure
-let shares = mk.threshold_view()?.split_with_disclosure(3, 5,
-    ThresholdDisclosure::FullConfidentialial, Some(&meta_mk))?;
+let shares = ViewBuilder::new(&mk).threshold().build()?
+    .split_with_disclosure(3, 5,
+        ThresholdDisclosure::FullConfidentialial, Some(&meta_mk))?;
 ```
 
 **2. Builder construction:**
@@ -288,7 +381,7 @@ let share = Builder::new(Codec::Bls12381G2PrivShare)
 **3. Convert an existing share:**
 
 ```rust
-let encrypted = share.disclosure_view()?
+let encrypted = ViewBuilder::new(&share).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), None)?;
 ```
 
@@ -297,14 +390,14 @@ let encrypted = share.disclosure_view()?
 Use `read_threshold_params()` with the `meta_key` to decrypt `t` and `n`:
 
 ```rust
-let (t, n) = encrypted.disclosure_view()?
+let (t, n) = ViewBuilder::new(&encrypted).disclosure().build()?
     .read_threshold_params(Some(&meta_mk))?;
 ```
 
 ### Combining Encrypted Shares
 
 ```rust
-let combined = mk.threshold_view()?
+let combined = ViewBuilder::new(&mk).threshold().build()?
     .combine_with_meta(Some(&meta_mk))?;
 ```
 
@@ -324,15 +417,15 @@ The `to_disclosure()` method converts between any pair of modes. It reads the cu
 
 ```rust
 // Full → Partial
-let partial = full.disclosure_view()?
+let partial = ViewBuilder::new(&full).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::Partial, Some(&meta_mk), None)?;
 
 // Partial → FullConfidentialial
-let confidential = partial.disclosure_view()?
+let confidential = ViewBuilder::new(&partial).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), Some(&meta_mk))?;
 
 // FullConfidentialial → Full
-let full_again = confidential.disclosure_view()?
+let full_again = ViewBuilder::new(&confidential).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::Full, None, Some(&meta_mk))?;
 ```
 
@@ -366,7 +459,7 @@ Individual KEM views may restrict the allowed AEAD codec. For example, X25519-ML
 
 - Private keys are wrapped in `Zeroizing` buffers and automatically zeroized on drop.
 - `Debug` output for private key material is redacted.
-- All views are thread-safe (`Send` + `Sync`) for concurrent operations.
+- The `ViewBuilder` is `Send` + `Sync` (with and without registered factories). The view trait objects it returns carry no `Send`/`Sync` supertrait, so they do not carry that bound at the type level.
 - Mutation operations use copy-on-write semantics. They return a new `Multi-Key` rather than mutating in place.
 
 ## Links
