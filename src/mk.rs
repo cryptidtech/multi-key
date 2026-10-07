@@ -1898,6 +1898,33 @@ impl Builder {
         self.with_attribute(AttrId::KeyData, &bytes.as_ref().to_vec())
     }
 
+    /// Set the algorithm name attribute of a custom protocol key.
+    ///
+    /// Stores `name` as UTF-8 bytes under [`AttrId::AlgorithmName`] (code 27).
+    /// A sigil-0 custom protocol key (the [`multi_codec::Codec::Identity`]
+    /// codec, carrying `AlgorithmName` and `KeyType` per
+    /// provenance-specifications#4) has no built-in views, so the
+    /// [`crate::views::builder::ViewBuilder`] local-codec factories identify
+    /// the key's protocol through this attribute.
+    ///
+    /// The name is stored as given and the empty string is accepted:
+    /// validation of custom-key semantics is future spec work.
+    pub fn with_algorithm_name(self, name: &str) -> Self {
+        self.with_attribute(AttrId::AlgorithmName, &name.as_bytes().to_vec())
+    }
+
+    /// Set the key type attribute of a custom protocol key.
+    ///
+    /// Stores `key_type` as one raw byte under [`AttrId::KeyType`] (code 28).
+    /// The byte convention from provenance-specifications#4: absent or 0
+    /// means public, 1 means secret.
+    ///
+    /// The byte is stored unvalidated: validation of custom-key semantics is
+    /// future spec work.
+    pub fn with_key_type(self, key_type: u8) -> Self {
+        self.with_attribute(AttrId::KeyType, &vec![key_type])
+    }
+
     /// add in the merkle-tree depth value (one raw byte, 1..=3)
     pub fn with_depth(self, depth: u8) -> Self {
         self.with_attribute(AttrId::Depth, &vec![depth])
