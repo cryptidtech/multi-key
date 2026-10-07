@@ -20,7 +20,7 @@
 //! normal Multikey encoders.
 
 use crate::mk::Attributes;
-use crate::{AttrId, Builder, Error, Multikey, Views};
+use crate::{AttrId, Builder, Error, Multikey};
 use blsful::inner_types::{G1Projective, G2Projective, Scalar as BlsScalar};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as DalekScalar};
 use elliptic_curve::ff::PrimeField;
@@ -440,7 +440,7 @@ pub fn split(
         return Err(err("need 2 <= threshold <= limit <= 255"));
     }
     let codec = mk.codec();
-    let secret = mk.data_view()?.secret_bytes()?;
+    let secret = crate::views::dispatch::dispatch_data_view(mk)?.secret_bytes()?;
     let payloads = build_payloads(codec, &secret, threshold, limit, rng)?;
     payloads.iter().map(|p| wrap_share(mk, p)).collect()
 }
@@ -526,6 +526,7 @@ pub fn combine(shares: &[Multikey]) -> Result<Multikey, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk;
 
     fn gen_key(codec: Codec) -> Multikey {
@@ -536,7 +537,13 @@ mod tests {
     }
 
     fn secret(mk: &Multikey) -> Vec<u8> {
-        mk.data_view().unwrap().secret_bytes().unwrap().to_vec()
+        ViewBuilder::new(mk)
+            .data()
+            .build()
+            .unwrap()
+            .secret_bytes()
+            .unwrap()
+            .to_vec()
     }
 
     /// Split → verify every share → combine a non-contiguous subset → assert the
@@ -750,8 +757,9 @@ mod tests {
             "mixed codecs"
         );
         assert!(combine(&[]).is_err(), "empty set");
-        let pk = gen_key(Codec::P256Priv)
-            .conv_view()
+        let pk = ViewBuilder::new(&gen_key(Codec::P256Priv))
+            .conv()
+            .build()
             .unwrap()
             .to_public_key()
             .unwrap();

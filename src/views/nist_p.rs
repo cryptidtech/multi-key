@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! NIST P-256, P-384, P-521 ECDSA multikey view.
 
+use crate::views::dispatch::{
+    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+};
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView, Views,
+    KdfAttrView, Multikey, OpenView, SealView, SignView, VerifyView,
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SealError, SignError, VerifyError,
     },
@@ -165,14 +168,14 @@ impl<'a> KdfAttrView for View<'a> {
 
 impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if attr.is_secret_key() {
             let pk = self.to_public_key()?;
-            let fp = pk.fingerprint_view()?;
+            let fp = dispatch_fingerprint_view(&pk)?;
             fp.fingerprint(codec)
         } else {
             let bytes = {
-                let kd = self.mk.data_view()?;
+                let kd = dispatch_data_view(self.mk)?;
                 kd.key_bytes()?
             };
             Ok(mh::Builder::new_from_bytes(codec, bytes)?.try_build()?)
@@ -183,7 +186,7 @@ impl<'a> FingerprintView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -224,7 +227,7 @@ impl<'a> ConvView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
             kd.key_bytes()?
         };
 
@@ -272,7 +275,7 @@ impl<'a> ConvView for View<'a> {
 
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -332,13 +335,13 @@ impl<'a> ConvView for View<'a> {
 
 impl<'a> SignView for View<'a> {
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -384,16 +387,16 @@ impl<'a> SignView for View<'a> {
 
 impl<'a> VerifyView for View<'a> {
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 
@@ -610,9 +613,9 @@ impl<'a> OpenView for View<'a> {
             return Err(SealError::UnsupportedAeadCodec(aead_codec).into());
         }
 
-        let eph_bytes = ephemeral_mk.data_view()?.key_bytes()?;
+        let eph_bytes = dispatch_data_view(ephemeral_mk)?.key_bytes()?;
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -672,7 +675,7 @@ impl<'a> OpenView for View<'a> {
 #[cfg(test)]
 mod ecies_tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     fn seal_open_roundtrip(priv_codec: Codec) {
         let mut rng = rand::rng();
@@ -681,7 +684,12 @@ mod ecies_tests {
             .with_comment("nistp ecies test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"the quick brown fox jumps over the lazy dog";
         for aead_codec in [
@@ -690,13 +698,15 @@ mod ecies_tests {
             Codec::AesGcm128,
             Codec::AesGcm256,
         ] {
-            let (sealed, ephemeral) = pk
-                .seal_view()
+            let (sealed, ephemeral) = ViewBuilder::new(&pk)
+                .seal()
+                .build()
                 .unwrap()
                 .seal(plaintext, aead_codec, b"")
                 .unwrap();
-            let opened = sk
-                .open_view()
+            let opened = ViewBuilder::new(&sk)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .unwrap();
@@ -730,15 +740,23 @@ mod ecies_tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
-        let (sealed, ephemeral) = pk1
-            .seal_view()
+        let (sealed, ephemeral) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
         assert!(
-            sk2.open_view()
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
                 .unwrap()
                 .open(&sealed, ephemeral.as_ref(), b"")
                 .is_err()

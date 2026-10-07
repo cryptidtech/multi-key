@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! SLH-DSA multikey view; FIPS 205. Supports all 12 parameter sets (Sha2_128f/s through Shake256f/s).
 
+use crate::views::dispatch::{
+    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
-    VerifyView, Views,
+    VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
 };
 use multi_codec::Codec;
@@ -138,7 +141,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -270,7 +273,7 @@ impl<'a> ConvView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
             kd.key_bytes()?
         };
 
@@ -312,7 +315,7 @@ impl<'a> ConvView for View<'a> {
 
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -343,7 +346,7 @@ impl<'a> ConvView for View<'a> {
 
         let pk = self.to_public_key()?;
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
             kd.key_bytes()?
         };
 
@@ -374,10 +377,10 @@ impl<'a> ConvView for View<'a> {
 
 impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if attr.is_secret_key() {
-            let pk = self.mk.conv_view()?.to_public_key()?;
-            return pk.fingerprint_view()?.fingerprint(codec);
+            let pk = dispatch_conv_view(self.mk)?.to_public_key()?;
+            return dispatch_fingerprint_view(&pk)?.fingerprint(codec);
         }
         let bytes = self.key_bytes()?;
         Ok(mh::Builder::new_from_bytes(codec, bytes.as_slice())?.try_build()?)
@@ -391,12 +394,12 @@ impl<'a> SignView for View<'a> {
         combined: bool,
         _scheme: Option<u8>,
     ) -> Result<multi_sig::Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let (signature, codec) = match self.mk.codec {
@@ -507,15 +510,15 @@ impl<'a> VerifyView for View<'a> {
         } else {
             return Err(VerifyError::MissingMessage.into());
         };
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 

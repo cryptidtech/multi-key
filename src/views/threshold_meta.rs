@@ -22,7 +22,7 @@ pub use multi_sig::{
 };
 
 use crate::{
-    AttrId, Error, Multikey, Views,
+    AttrId, Error, Multikey,
     error::{AttributesError, ThresholdError},
     mk::Attributes,
 };
@@ -35,7 +35,7 @@ use zeroize::Zeroizing;
 /// `Multikey` at-rest encryption infrastructure to the threshold metadata
 /// encryption helpers in `multi_sig`.
 fn extract_meta_key(meta_key: &Multikey) -> Result<Zeroizing<Vec<u8>>, Error> {
-    let dv = meta_key.data_view()?;
+    let dv = crate::views::dispatch::dispatch_data_view(meta_key)?;
     let key = dv.key_bytes()?;
     if key.len() != 32 {
         return Err(Error::Threshold(ThresholdError::MetaEncryption(format!(
@@ -277,6 +277,7 @@ impl<'a> ThresholdDisclosureView for DisclosureView<'a> {
 mod tests {
     use super::*;
     use crate::Builder;
+    use crate::ViewBuilder;
     use multi_codec::Codec;
 
     fn make_meta_key() -> Multikey {
@@ -381,14 +382,16 @@ mod tests {
         let meta_key = make_meta_key();
 
         // convert to Partial
-        let partial = share
-            .disclosure_view()
+        let partial = ViewBuilder::new(&share)
+            .disclosure()
+            .build()
             .unwrap()
             .to_disclosure(ThresholdDisclosure::Partial, Some(&meta_key), None)
             .unwrap();
         assert_eq!(
-            partial
-                .disclosure_view()
+            ViewBuilder::new(&partial)
+                .disclosure()
+                .build()
                 .unwrap()
                 .disclosure_mode()
                 .unwrap(),
@@ -401,13 +404,19 @@ mod tests {
         assert_eq!(n, 5);
 
         // convert back to Full
-        let full = partial
-            .disclosure_view()
+        let full = ViewBuilder::new(&partial)
+            .disclosure()
+            .build()
             .unwrap()
             .to_disclosure(ThresholdDisclosure::Full, None, Some(&meta_key))
             .unwrap();
         assert_eq!(
-            full.disclosure_view().unwrap().disclosure_mode().unwrap(),
+            ViewBuilder::new(&full)
+                .disclosure()
+                .build()
+                .unwrap()
+                .disclosure_mode()
+                .unwrap(),
             ThresholdDisclosure::Full
         );
         let (t, n) = read_threshold_params(&full, None).unwrap();
@@ -421,8 +430,9 @@ mod tests {
         let meta_key = make_meta_key();
 
         // convert to FullConfidentialial
-        let encrypted = share
-            .disclosure_view()
+        let encrypted = ViewBuilder::new(&share)
+            .disclosure()
+            .build()
             .unwrap()
             .to_disclosure(
                 ThresholdDisclosure::FullConfidentialial,
@@ -431,8 +441,9 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            encrypted
-                .disclosure_view()
+            ViewBuilder::new(&encrypted)
+                .disclosure()
+                .build()
                 .unwrap()
                 .disclosure_mode()
                 .unwrap(),
@@ -445,8 +456,9 @@ mod tests {
         assert_eq!(n, 5);
 
         // convert back to Full
-        let full = encrypted
-            .disclosure_view()
+        let full = ViewBuilder::new(&encrypted)
+            .disclosure()
+            .build()
             .unwrap()
             .to_disclosure(ThresholdDisclosure::Full, None, Some(&meta_key))
             .unwrap();
@@ -459,8 +471,9 @@ mod tests {
     fn test_read_encrypted_without_meta_key() {
         let share = make_share(3, 5);
         let meta_key = make_meta_key();
-        let encrypted = share
-            .disclosure_view()
+        let encrypted = ViewBuilder::new(&share)
+            .disclosure()
+            .build()
             .unwrap()
             .to_disclosure(
                 ThresholdDisclosure::FullConfidentialial,
@@ -474,11 +487,11 @@ mod tests {
     #[test]
     fn test_convert_to_partial_without_meta_key() {
         let share = make_share(3, 5);
-        let result = share.disclosure_view().unwrap().to_disclosure(
-            ThresholdDisclosure::Partial,
-            None,
-            None,
-        );
+        let result = ViewBuilder::new(&share)
+            .disclosure()
+            .build()
+            .unwrap()
+            .to_disclosure(ThresholdDisclosure::Partial, None, None);
         assert!(result.is_err());
     }
 

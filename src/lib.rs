@@ -13,6 +13,8 @@
 //! - Key encryption and decryption
 //! - Threshold key sharing (Shamir Secret Sharing)
 //! - SSH key format conversion
+//! - View creation through the fluent `ViewBuilder`, including
+//!   local-codec factories for custom protocol keys
 //! - Nonce generation
 //!
 //! ## Quick Start
@@ -50,6 +52,34 @@
 //! assert_eq!(mk1, mk2);
 //! ```
 //!
+//! ### Creating Views
+//!
+//! Views are created with [`ViewBuilder`]: select one view kind with a
+//! fluent selector, then build it. Standard codecs dispatch to the built-in
+//! views; custom protocol keys (the `Codec::Identity` codec carrying the
+//! `AlgorithmName`/`KeyType` attributes) have no built-in views and
+//! dispatch to caller-supplied local-codec factories registered with
+//! `with_local_codec`. The `cipher` and `kdf` kinds additionally attach the
+//! second key, for example
+//! `ViewBuilder::new(&mk).cipher(&cipher_key).build()`.
+//!
+//! ```rust
+//! use multi_key::{Builder, ViewBuilder};
+//! use multi_codec::Codec;
+//!
+//! let mut rng = rand::rng();
+//! let mk = Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
+//!     .unwrap()
+//!     .try_build()
+//!     .unwrap();
+//!
+//! let signer = ViewBuilder::new(&mk).sign().build().unwrap();
+//! let sig = signer.sign(b"message", false, None).unwrap();
+//!
+//! let verifier = ViewBuilder::new(&mk).verify().build().unwrap();
+//! verifier.verify(&sig, Some(b"message")).unwrap();
+//! ```
+//!
 //! ## Features
 //!
 //! - **`serde`** (default): Enables serde serialization
@@ -71,6 +101,12 @@
 //! McEliece views compile only with the `deprecated` feature. Stored
 //! McEliece multikeys still decode in default builds, but key generation
 //! fails with `UnsupportedCodec`.
+//!
+//! The `Views` extension trait (and its impl for `Multikey`) is deprecated
+//! since 2.1.0. It stays as a source-compatible delegating shim that calls
+//! the same dispatch core [`ViewBuilder`] uses; construct views with
+//! [`ViewBuilder`] instead. Note that `multi_sig::Views` is a different,
+//! unrelated trait.
 //!
 //! ## Security
 //!
@@ -142,6 +178,13 @@ pub mod kdf;
 
 /// Key views
 pub mod views;
+#[allow(deprecated)]
+pub use views::Views;
+pub use views::builder::{
+    AttrKind, CipherAttrKind, CipherKind, ConvKind, DataKind, DisclosureKind, FingerprintKind,
+    KdfAttrKind, KdfKind, MerkleStateKind, OpenKind, SealKind, SignKind, ThresholdAttrKind,
+    ThresholdKeyKind, ThresholdKind, Unselected, VerifyKind, ViewBuilder, ViewKind,
+};
 pub use views::threshold_marker::{
     self, MarkerView, ThresholdParticipant, ThresholdScheme, group_public_key, participants,
     set_group_public_key, set_participants, threshold_kind, threshold_params,
@@ -154,7 +197,7 @@ pub use views::threshold_meta::{
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
     KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
-    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView,
 };
 
 /// Key splitting / recombination (verifiable threshold shares)

@@ -4,11 +4,11 @@
 //! Verify: verify Ed25519(m, s1) && verify MlDsa65(m || s1, s2)
 //! Public encoding is classical-first: ed25519_pub (32) || mldsa65_pub.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
 };
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use ml_dsa::{
@@ -80,7 +80,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -133,7 +133,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -144,13 +144,13 @@ impl<'a> FingerprintView for View<'a> {
 
 impl<'a> SignView for View<'a> {
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -205,16 +205,16 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 
@@ -279,7 +279,7 @@ impl<'a> VerifyView for View<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_sign_verify_roundtrip() {
@@ -288,15 +288,32 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"hello Ed25519-ML-DSA-65 hybrid signing!";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
-        pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
 
         // wrong message must fail
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(b"wrong message"))
                 .is_err()
@@ -310,8 +327,13 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
-        let dv = pk.data_view().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
+        let dv = ViewBuilder::new(&pk).data().build().unwrap();
         assert_eq!(dv.key_bytes().unwrap().len(), PUB_KEY_LEN);
     }
 }

@@ -6,11 +6,12 @@
 //! Private key layout: `x25519_seed (32) || frodokem_secret_key`.
 //! Public key layout (classical-first): `x25519_pub (32) || frodokem_public_key`.
 
+use crate::views::dispatch::dispatch_data_view;
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
     error::{AttributesError, ConversionsError, SealError},
-    views::{Views, aead},
+    views::aead,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -154,7 +155,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -203,7 +204,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -330,7 +331,7 @@ impl<'a> OpenView for View<'a> {
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         if secret_bytes.len() <= X25519_SEED_LEN {
@@ -383,7 +384,7 @@ impl<'a> OpenView for View<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     fn roundtrip(priv_codec: Codec) {
         let mut rng = rand::rng();
@@ -392,15 +393,26 @@ mod tests {
             .with_comment("x25519-frodokem hybrid test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"hello X25519-FrodoKEM-640 hybrid KEM!";
-        let (sealed, _) = pk
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(plaintext, Codec::Chacha20Poly1305, b"")
             .unwrap();
-        let opened = sk.open_view().unwrap().open(&sealed, None, b"").unwrap();
+        let opened = ViewBuilder::new(&sk)
+            .open()
+            .build()
+            .unwrap()
+            .open(&sealed, None, b"")
+            .unwrap();
         assert_eq!(plaintext.as_slice(), opened.as_slice());
 
         // wrong key fails
@@ -408,7 +420,14 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        assert!(sk2.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 
     #[test]

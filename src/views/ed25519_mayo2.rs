@@ -3,11 +3,11 @@
 //! Sign: s1 = Ed25519(m), s2 = Mayo2(m || s1), sig = s1 || s2
 //! Verify: verify Ed25519(m, s1) && verify Mayo2(m || s1, s2)
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
 };
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use multi_codec::Codec;
@@ -75,7 +75,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -126,7 +126,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -137,13 +137,13 @@ impl<'a> FingerprintView for View<'a> {
 
 impl<'a> SignView for View<'a> {
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -201,16 +201,16 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
 
@@ -269,8 +269,8 @@ impl<'a> VerifyView for View<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ViewBuilder;
     use crate::mk::ED25519_MAYO2_KEY_CODECS;
-    use crate::views::Views;
 
     #[test]
     fn test_key_gen_roundtrip() {
@@ -282,7 +282,7 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(attr.is_secret_key());
             assert!(!attr.is_public_key());
 
@@ -301,10 +301,10 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let conv = mk.conv_view().unwrap();
+        let conv = ViewBuilder::new(&mk).conv().build().unwrap();
         let pk = conv.to_public_key().unwrap();
 
-        let attr = pk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&pk).attr().build().unwrap();
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
 
@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(pk, pk2);
 
         // check public key length
-        let dv = pk.data_view().unwrap();
+        let dv = ViewBuilder::new(&pk).data().build().unwrap();
         assert_eq!(dv.key_bytes().unwrap().len(), PUB_KEY_LEN);
     }
 
@@ -326,16 +326,23 @@ mod tests {
             .unwrap();
 
         // Fingerprint from private key (derives public key internally)
-        let fp1 = mk
-            .fingerprint_view()
+        let fp1 = ViewBuilder::new(&mk)
+            .fingerprint()
+            .build()
             .unwrap()
             .fingerprint(Codec::Sha3256)
             .unwrap();
 
         // Fingerprint from public key
-        let pk = mk.conv_view().unwrap().to_public_key().unwrap();
-        let fp2 = pk
-            .fingerprint_view()
+        let pk = ViewBuilder::new(&mk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
+        let fp2 = ViewBuilder::new(&pk)
+            .fingerprint()
+            .build()
             .unwrap()
             .fingerprint(Codec::Sha3256)
             .unwrap();
@@ -353,16 +360,36 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"hello Ed25519-MAYO2 hybrid signing!";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Verify with public key
-        pk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
 
         // Verify with private key (auto-derives public key)
-        sk.verify_view().unwrap().verify(&sig, Some(msg)).unwrap();
+        ViewBuilder::new(&sk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, Some(msg))
+            .unwrap();
     }
 
     #[test]
@@ -372,13 +399,28 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"combined message test";
-        let sig = sk.sign_view().unwrap().sign(msg, true, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, true, None)
+            .unwrap();
 
         // Verify without explicit message (uses embedded message)
-        pk.verify_view().unwrap().verify(&sig, None).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&sig, None)
+            .unwrap();
     }
 
     #[test]
@@ -388,14 +430,26 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"tamper test";
-        let sig = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Tamper with message
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&sig, Some(b"wrong message"))
                 .is_err()
@@ -413,12 +467,29 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk2 = sk2.conv_view().unwrap().to_public_key().unwrap();
+        let pk2 = ViewBuilder::new(&sk2)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"wrong key test";
-        let sig = sk1.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let sig = ViewBuilder::new(&sk1)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
 
         // Verify with wrong key should fail
-        assert!(pk2.verify_view().unwrap().verify(&sig, Some(msg)).is_err());
+        assert!(
+            ViewBuilder::new(&pk2)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&sig, Some(msg))
+                .is_err()
+        );
     }
 }

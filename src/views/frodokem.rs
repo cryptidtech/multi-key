@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! FrodoKEM AES/SHAKE multikey view.
 
+use crate::views::dispatch::dispatch_data_view;
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
     error::{AttributesError, ConversionsError, SealError},
-    views::{Views, aead},
+    views::aead,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -184,7 +185,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let pub_bytes = public_from_private(self.mk.codec, secret_bytes.as_slice())?;
@@ -212,7 +213,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -284,7 +285,7 @@ impl<'a> OpenView for View<'a> {
             return Err(SealError::UnsupportedAeadCodec(aead_codec).into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let shared_secret = decap(self.mk.codec, secret_bytes.as_slice(), &kem_ct)?;

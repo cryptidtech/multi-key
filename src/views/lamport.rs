@@ -7,11 +7,11 @@
 //! single use; the provenance-log / keystore layer must reject a second
 //! signature by the same Lamport public key.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     ThresholdView, VerifyView,
     error::{AttributesError, ConversionsError, SignError, ThresholdError, VerifyError},
-    views::Views,
 };
 use blake2::{Blake2b512, Blake2s256};
 use lamport_signature_plus::{
@@ -516,7 +516,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let pub_bytes = public_from_private(self.mk.codec, secret_bytes.as_slice())?;
@@ -544,7 +544,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -557,7 +557,7 @@ impl<'a> SignView for View<'a> {
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<ms::Multisig, Error> {
         let codec = self.mk.codec;
         let key_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.key_bytes()?
         };
         // A private-key SHARE signs to a signature SHARE; a full private key
@@ -593,14 +593,14 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            self.mk.conv_view()?.to_public_key()?
+            dispatch_conv_view(self.mk)?.to_public_key()?
         } else {
             self.mk.clone()
         };
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
         let sv = multisig.data_view()?;
@@ -614,11 +614,11 @@ impl<'a> ThresholdView for View<'a> {
     /// returned Multikey is a `Lamport*PrivShare` whose key data is a GF(256)
     /// Shamir share that can sign independently to a signature share.
     fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error> {
-        if !self.mk.attr_view()?.is_secret_key() {
+        if !dispatch_attr_view(self.mk)?.is_secret_key() {
             return Err(ThresholdError::NotASecretKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let share_codec = priv_share_codec(self.mk.codec)?;
@@ -690,6 +690,7 @@ pub(crate) fn generate_private_key(codec: Codec) -> Result<Zeroizing<Vec<u8>>, E
 mod tests {
     use super::*;
     use crate::Builder as MkBuilder;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_lamport_sign_verify_roundtrip() {
@@ -711,13 +712,30 @@ mod tests {
                 .unwrap()
                 .try_build()
                 .unwrap();
-            let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+            let pk = ViewBuilder::new(&sk)
+                .conv()
+                .build()
+                .unwrap()
+                .to_public_key()
+                .unwrap();
 
             let msg = b"lamport multikey message";
-            let ms = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
-            pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+            let ms = ViewBuilder::new(&sk)
+                .sign()
+                .build()
+                .unwrap()
+                .sign(msg, false, None)
+                .unwrap();
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&ms, Some(msg))
+                .unwrap();
             assert!(
-                pk.verify_view()
+                ViewBuilder::new(&pk)
+                    .verify()
+                    .build()
                     .unwrap()
                     .verify(&ms, Some(b"tampered"))
                     .is_err()
@@ -735,22 +753,40 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let msg = b"threshold lamport message";
 
         // split the signing key into 2-of-3 key shares
-        let shares = sk.threshold_view().unwrap().split(2, 3).unwrap();
+        let shares = ViewBuilder::new(&sk)
+            .threshold()
+            .build()
+            .unwrap()
+            .split(2, 3)
+            .unwrap();
         assert_eq!(shares.len(), 3);
-        assert!(shares[0].attr_view().unwrap().is_secret_key_share());
+        assert!(
+            ViewBuilder::new(&shares[0])
+                .attr()
+                .build()
+                .unwrap()
+                .is_secret_key_share()
+        );
 
         // any two shareholders each produce a signature share
-        let share_sig_a = shares[0]
-            .sign_view()
+        let share_sig_a = ViewBuilder::new(&shares[0])
+            .sign()
+            .build()
             .unwrap()
             .sign(msg, false, None)
             .unwrap();
-        let share_sig_c = shares[2]
-            .sign_view()
+        let share_sig_c = ViewBuilder::new(&shares[2])
+            .sign()
+            .build()
             .unwrap()
             .sign(msg, false, None)
             .unwrap();
@@ -774,7 +810,9 @@ mod tests {
         assert_eq!(combined.codec(), Codec::LamportSha3256Sig);
 
         // the combined signature verifies under the ORIGINAL public key
-        pk.verify_view()
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
             .unwrap()
             .verify(&combined, Some(msg))
             .unwrap();

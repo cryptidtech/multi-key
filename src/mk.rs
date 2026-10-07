@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
+#[allow(deprecated)]
+use crate::views::Views;
 #[cfg(feature = "lamport")]
 use crate::views::lamport;
 #[cfg(feature = "lamport")]
 use crate::views::lamport_merkle;
 #[cfg(feature = "xmss")]
 use crate::views::xmss;
-#[cfg(feature = "deprecated")]
-use crate::views::{classic_mceliece, x25519_mceliece348864};
 use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
-    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView, Views,
-    error::{AttributesError, CipherError, ConversionsError, KdfError, SealError, ThresholdError},
+    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView,
+    error::{ConversionsError, ThresholdError},
     views::{
-        bcrypt, bls12381, bls12381_g1_fndsa512, bls12381_g1_mayo1, bls12381_g1_mayo2,
-        bls12381_g1_mldsa65, chacha20, ed25519, ed25519_fndsa512, ed25519_mayo2, ed25519_mldsa65,
-        fn_dsa, frodokem, mayo, ml_dsa, ml_kem, nist_p, rsa, secp256k1, slh_dsa, sntrup,
-        threshold_meta, x25519, x25519_frodokem640, x25519_mlkem768, x25519_sntrup761, xeddsa,
+        bls12381, fn_dsa, frodokem, ml_dsa, rsa, secp256k1, slh_dsa, threshold_meta,
+        x25519_frodokem640,
     },
 };
 
@@ -395,7 +393,7 @@ impl Null for Multikey {
 impl fmt::Debug for Multikey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // get an attributes view on the key
-        let attr = self.attr_view().map_err(|_| fmt::Error)?;
+        let attr = crate::views::dispatch::dispatch_attr_view(self).map_err(|_| fmt::Error)?;
 
         write!(
             f,
@@ -407,1563 +405,91 @@ impl fmt::Debug for Multikey {
     }
 }
 
+#[allow(deprecated)]
 impl Views for Multikey {
     /// Provide a read-only view of the basic attributes in the viewed Multikey
     fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_attr_view(self)
     }
 
     /// Provide a read-only view of the cipher attributes in the viewed Multikey
     fn cipher_attr_view<'a>(&'a self) -> Result<Box<dyn CipherAttrView + 'a>, Error> {
-        let codec = if let Some(bytes) = self.attributes.get(&AttrId::CipherCodec) {
-            Codec::try_from(bytes.as_slice())?
-        } else {
-            self.codec
-        };
-        match codec {
-            Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_cipher_attr_view(self)
     }
 
     /// Provide a read-only view to key data in the viewed Multikey
     fn data_view<'a>(&'a self) -> Result<Box<dyn DataView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_data_view(self)
     }
 
     /// Provide a read-only view of the kdf attributes in the viewed Multikey
     fn kdf_attr_view<'a>(&'a self) -> Result<Box<dyn KdfAttrView + 'a>, Error> {
-        let codec = if let Some(bytes) = self.attributes.get(&AttrId::KdfCodec) {
-            Codec::try_from(bytes.as_slice())?
-        } else {
-            self.codec
-        };
-        match codec {
-            Codec::BcryptPbkdf => Ok(Box::new(bcrypt::View::try_from(self)?)),
-            _ => Err(KdfError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_kdf_attr_view(self)
     }
 
     /// Provide a read-only view of the threshold attributes in the viewed Multikey
     fn threshold_attr_view<'a>(&'a self) -> Result<Box<dyn ThresholdAttrView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519ThreshPrivShare
-            | Codec::P256ThreshPrivShare
-            | Codec::P384ThreshPrivShare
-            | Codec::Secp256K1ThreshPrivShare
-            | Codec::Bls12381ThreshPrivShare
-            | Codec::Ed448ThreshPrivShare => {
-                Ok(Box::new(crate::views::dkg_threshold::View::try_from(self)?))
-            }
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_threshold_attr_view(self)
     }
 
     /// Provide a read-only view of higher-level threshold key metadata in the viewed Multikey
     fn threshold_key_view<'a>(&'a self) -> Result<Box<dyn ThresholdKeyView + 'a>, Error> {
-        match self.codec {
-            Codec::Ed25519ThreshPrivShare
-            | Codec::P256ThreshPrivShare
-            | Codec::P384ThreshPrivShare
-            | Codec::Secp256K1ThreshPrivShare
-            | Codec::Bls12381ThreshPrivShare
-            | Codec::Ed448ThreshPrivShare => {
-                Ok(Box::new(crate::views::dkg_threshold::View::try_from(self)?))
-            }
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_threshold_key_view(self)
     }
 
     /// Provide an interface to do encryption/decryption of the viewed Multikey
     fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error> {
-        match cipher.codec {
-            Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::new(self, cipher))),
-            _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_cipher_view(self, cipher)
     }
 
     /// Provide an interface to do key conversions from the viewe Multikey
     fn conv_view<'a>(&'a self) -> Result<Box<dyn ConvView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_conv_view(self)
     }
 
     /// Provide an interface to do key conversions from the viewe Multikey
     fn fingerprint_view<'a>(&'a self) -> Result<Box<dyn FingerprintView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_fingerprint_view(self)
     }
 
     /// Provide an interface to do kdf operations from the viewed Multikey
     fn kdf_view<'a>(&'a self, kdf: &'a Multikey) -> Result<Box<dyn KdfView + 'a>, Error> {
-        match kdf.codec {
-            Codec::BcryptPbkdf => Ok(Box::new(bcrypt::View::new(self, kdf))),
-            _ => Err(KdfError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_kdf_view(self, kdf)
     }
 
     /// Provide an interface to seal (encrypt) plaintext
     fn seal_view<'a>(&'a self) -> Result<Box<dyn SealView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1Pub
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2Priv => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            _ => Err(SealError::NotEncryptionKey.into()),
-        }
+        crate::views::dispatch::dispatch_seal_view(self)
     }
 
     /// Provide an interface to open (decrypt) sealed data
     fn open_view<'a>(&'a self) -> Result<Box<dyn OpenView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1Pub
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2Priv => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Mlkem768Pub
-            | Codec::Mlkem768Priv
-            | Codec::Mlkem1024Pub
-            | Codec::Mlkem1024Priv => Ok(Box::new(ml_kem::View::try_from(self)?)),
-            Codec::Sntrup761Pub
-            | Codec::Sntrup761Priv
-            | Codec::Sntrup857Pub
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Pub
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Pub
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Pub
-            | Codec::Sntrup1277Priv => Ok(Box::new(sntrup::View::try_from(self)?)),
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::Mceliece348864Pub | Codec::Mceliece348864Priv => {
-                Ok(Box::new(classic_mceliece::View::try_from(self)?))
-            }
-            Codec::FrodoKem640AesPub
-            | Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPub
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPub
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePub
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePub
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePub
-            | Codec::FrodoKem1344ShakePriv => Ok(Box::new(frodokem::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(x25519::View::try_from(self)?)),
-            Codec::X25519Sntrup761Pub | Codec::X25519Sntrup761Priv => {
-                Ok(Box::new(x25519_sntrup761::View::try_from(self)?))
-            }
-            Codec::X25519Frodokem640AesPub
-            | Codec::X25519Frodokem640AesPriv
-            | Codec::X25519Frodokem640ShakePub
-            | Codec::X25519Frodokem640ShakePriv => {
-                Ok(Box::new(x25519_frodokem640::View::try_from(self)?))
-            }
-            #[cfg(feature = "deprecated")]
-            #[allow(deprecated)]
-            Codec::X25519Mceliece348864Pub | Codec::X25519Mceliece348864Priv => {
-                Ok(Box::new(x25519_mceliece348864::View::try_from(self)?))
-            }
-            Codec::X25519Mlkem768Pub | Codec::X25519Mlkem768Priv => {
-                Ok(Box::new(x25519_mlkem768::View::try_from(self)?))
-            }
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            _ => Err(SealError::NotEncryptionKey.into()),
-        }
+        crate::views::dispatch::dispatch_open_view(self)
     }
 
     /// Provide an interface to sign a message and return a Multisig
     fn sign_view<'a>(&'a self) -> Result<Box<dyn SignView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(xeddsa::View::try_from(self)?)),
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_sign_view(self)
     }
 
     /// Provide an interface to do threshold operations on the Multikey
     fn threshold_view<'a>(&'a self) -> Result<Box<dyn ThresholdView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1Priv | Codec::Bls12381G2Priv => {
-                Ok(Box::new(bls12381::View::try_from(self)?))
-            }
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_threshold_view(self)
     }
 
     /// Provide an interface to verify a Multisig and optional message
     fn verify_view<'a>(&'a self) -> Result<Box<dyn VerifyView + 'a>, Error> {
-        match self.codec {
-            Codec::Bls12381G1PrivShare
-            | Codec::Bls12381G1Priv
-            | Codec::Bls12381G1Pub
-            | Codec::Bls12381G1PubShare
-            | Codec::Bls12381G2PrivShare
-            | Codec::Bls12381G2Priv
-            | Codec::Bls12381G2Pub
-            | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
-            Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
-            Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
-                Ok(Box::new(secp256k1::View::try_from(self)?))
-            }
-            Codec::SlhDsaSha2128FPub
-            | Codec::SlhDsaSha2128SPub
-            | Codec::SlhDsaSha2192FPub
-            | Codec::SlhDsaSha2192SPub
-            | Codec::SlhDsaSha2256FPub
-            | Codec::SlhDsaSha2256SPub
-            | Codec::SlhDsaShake128FPub
-            | Codec::SlhDsaShake128SPub
-            | Codec::SlhDsaShake192FPub
-            | Codec::SlhDsaShake192SPub
-            | Codec::SlhDsaShake256FPub
-            | Codec::SlhDsaShake256SPub
-            | Codec::SlhDsaSha2128FPriv
-            | Codec::SlhDsaSha2128SPriv
-            | Codec::SlhDsaSha2192FPriv
-            | Codec::SlhDsaSha2192SPriv
-            | Codec::SlhDsaSha2256FPriv
-            | Codec::SlhDsaSha2256SPriv
-            | Codec::SlhDsaShake128FPriv
-            | Codec::SlhDsaShake128SPriv
-            | Codec::SlhDsaShake192FPriv
-            | Codec::SlhDsaShake192SPriv
-            | Codec::SlhDsaShake256FPriv
-            | Codec::SlhDsaShake256SPriv => Ok(Box::new(slh_dsa::View::try_from(self)?)),
-            Codec::MlDsa65Pub | Codec::MlDsa65Priv | Codec::MlDsa87Pub | Codec::MlDsa87Priv => {
-                Ok(Box::new(ml_dsa::View::try_from(self)?))
-            }
-            Codec::Mayo1Pub
-            | Codec::Mayo1Priv
-            | Codec::Mayo2Pub
-            | Codec::Mayo2Priv
-            | Codec::Mayo3Pub
-            | Codec::Mayo3Priv
-            | Codec::Mayo5Pub
-            | Codec::Mayo5Priv => Ok(Box::new(mayo::View::try_from(self)?)),
-            Codec::FnDsa512Pub
-            | Codec::FnDsa512Priv
-            | Codec::FnDsa1024Pub
-            | Codec::FnDsa1024Priv => Ok(Box::new(fn_dsa::View::try_from(self)?)),
-            Codec::Ed25519Mayo2Pub | Codec::Ed25519Mayo2Priv => {
-                Ok(Box::new(ed25519_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Mldsa65Pub | Codec::Ed25519Mldsa65Priv => {
-                Ok(Box::new(ed25519_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mldsa65Pub | Codec::Bls12381G1Mldsa65Priv => {
-                Ok(Box::new(bls12381_g1_mldsa65::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Fndsa512Pub | Codec::Bls12381G1Fndsa512Priv => {
-                Ok(Box::new(bls12381_g1_fndsa512::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo1Pub | Codec::Bls12381G1Mayo1Priv => {
-                Ok(Box::new(bls12381_g1_mayo1::View::try_from(self)?))
-            }
-            Codec::Bls12381G1Mayo2Pub | Codec::Bls12381G1Mayo2Priv => {
-                Ok(Box::new(bls12381_g1_mayo2::View::try_from(self)?))
-            }
-            Codec::Ed25519Fndsa512Pub | Codec::Ed25519Fndsa512Priv => {
-                Ok(Box::new(ed25519_fndsa512::View::try_from(self)?))
-            }
-            Codec::P256Pub
-            | Codec::P256Priv
-            | Codec::P384Pub
-            | Codec::P384Priv
-            | Codec::P521Pub
-            | Codec::P521Priv => Ok(Box::new(nist_p::View::try_from(self)?)),
-            Codec::Rsa2048Pub
-            | Codec::Rsa2048Priv
-            | Codec::Rsa3072Pub
-            | Codec::Rsa3072Priv
-            | Codec::Rsa4096Pub
-            | Codec::Rsa4096Priv => Ok(Box::new(rsa::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Pub
-            | Codec::LamportSha3256Priv
-            | Codec::LamportSha3256PrivShare
-            | Codec::LamportSha3384Pub
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3384PrivShare
-            | Codec::LamportSha3512Pub
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha3512PrivShare
-            | Codec::LamportSha2256Pub
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2256PrivShare
-            | Codec::LamportSha2384Pub
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2384PrivShare
-            | Codec::LamportSha2512Pub
-            | Codec::LamportSha2512Priv
-            | Codec::LamportSha2512PrivShare
-            | Codec::LamportBlake2B512Pub
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2B512PrivShare
-            | Codec::LamportBlake2S256Pub
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake2S256PrivShare
-            | Codec::LamportBlake3256Pub
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportBlake3256PrivShare
-            | Codec::LamportShake128Pub
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake128PrivShare
-            | Codec::LamportShake256Pub
-            | Codec::LamportShake256Priv
-            | Codec::LamportShake256PrivShare => Ok(Box::new(lamport::View::try_from(self)?)),
-            #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3256PrivShare
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3384PrivShare
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha3512PrivShare
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2256PrivShare
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2384PrivShare
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleSha2512PrivShare
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2B512PrivShare
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake2S256PrivShare
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleBlake3256PrivShare
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake128PrivShare
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv
-            | Codec::LamportMerkleShake256PrivShare => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Pub
-            | Codec::XmssSha210256Priv
-            | Codec::XmssSha216256Pub
-            | Codec::XmssSha216256Priv
-            | Codec::XmssSha220256Pub
-            | Codec::XmssSha220256Priv => Ok(Box::new(xmss::View::try_from(self)?)),
-            Codec::X25519Pub | Codec::X25519Priv => Ok(Box::new(xeddsa::View::try_from(self)?)),
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
+        crate::views::dispatch::dispatch_verify_view(self)
     }
 
     /// Provide an interface for threshold disclosure mode operations
     fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
-        Ok(Box::new(threshold_meta::DisclosureView::new(self)))
+        Ok(crate::views::dispatch::dispatch_disclosure_view(self))
     }
 
     /// Provide an interface for merkle-tree state introspection
     fn merkle_state_view<'a>(&'a self) -> Result<Box<dyn MerkleStateView + 'a>, Error> {
-        #[cfg(feature = "lamport")]
-        match self.codec {
-            Codec::LamportMerkleSha3256Pub
-            | Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3384Pub
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3512Pub
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha2256Pub
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2384Pub
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2512Pub
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleBlake2B512Pub
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2S256Pub
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake3256Pub
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleShake128Pub
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake256Pub
-            | Codec::LamportMerkleShake256Priv => {
-                Ok(Box::new(lamport_merkle::View::try_from(self)?))
-            }
-            _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
-        }
-        #[cfg(not(feature = "lamport"))]
-        Err(ConversionsError::UnsupportedCodec(self.codec).into())
+        crate::views::dispatch::dispatch_merkle_state_view(self)
     }
 }
 
@@ -3372,6 +1898,33 @@ impl Builder {
         self.with_attribute(AttrId::KeyData, &bytes.as_ref().to_vec())
     }
 
+    /// Set the algorithm name attribute of a custom protocol key.
+    ///
+    /// Stores `name` as UTF-8 bytes under [`AttrId::AlgorithmName`] (code 27).
+    /// A sigil-0 custom protocol key (the [`multi_codec::Codec::Identity`]
+    /// codec, carrying `AlgorithmName` and `KeyType` per
+    /// provenance-specifications#4) has no built-in views, so the
+    /// [`crate::views::builder::ViewBuilder`] local-codec factories identify
+    /// the key's protocol through this attribute.
+    ///
+    /// The name is stored as given and the empty string is accepted:
+    /// validation of custom-key semantics is future spec work.
+    pub fn with_algorithm_name(self, name: &str) -> Self {
+        self.with_attribute(AttrId::AlgorithmName, &name.as_bytes().to_vec())
+    }
+
+    /// Set the key type attribute of a custom protocol key.
+    ///
+    /// Stores `key_type` as one raw byte under [`AttrId::KeyType`] (code 28).
+    /// The byte convention from provenance-specifications#4: absent or 0
+    /// means public, 1 means secret.
+    ///
+    /// The byte is stored unvalidated: validation of custom-key semantics is
+    /// future spec work.
+    pub fn with_key_type(self, key_type: u8) -> Self {
+        self.with_attribute(AttrId::KeyType, &vec![key_type])
+    }
+
     /// add in the merkle-tree depth value (one raw byte, 1..=3)
     pub fn with_depth(self, depth: u8) -> Self {
         self.with_attribute(AttrId::Depth, &vec![depth])
@@ -3492,7 +2045,7 @@ impl Builder {
         if let Some(shares) = self.shares {
             for share in &shares {
                 mk = {
-                    let tv = mk.threshold_view()?;
+                    let tv = crate::views::dispatch::dispatch_threshold_view(&mk)?;
                     tv.add_share(share)?
                 };
             }
@@ -3506,7 +2059,8 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cipher, kdf};
+    use crate::views::{bcrypt, chacha20};
+    use crate::{ViewBuilder, cipher, kdf};
     use multi_sig::EncodedMultisig;
     use ssh_key::private::Ed25519Keypair;
 
@@ -3520,7 +2074,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -3565,7 +2119,7 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = conv.to_public_key().unwrap();
             let ssh_key = conv.to_ssh_public_key().unwrap();
             let mk2 = Builder::new_from_ssh_public_key(&ssh_key)
@@ -3585,7 +2139,7 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let ssh_key = conv.to_ssh_private_key().unwrap();
             let mk2 = Builder::new_from_ssh_private_key(&ssh_key)
                 .unwrap()
@@ -3604,12 +2158,12 @@ mod tests {
                 .with_comment("test key")
                 .try_build()
                 .unwrap();
-            let cv = sk1.conv_view().unwrap();
+            let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
             let public_key = cv.to_ssh_public_key().unwrap();
             let private_key = cv.to_ssh_private_key().unwrap();
 
             let pk1 = cv.to_public_key().unwrap();
-            let cv = pk1.conv_view().unwrap();
+            let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
             assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
 
             let sk2 = Builder::new_from_ssh_private_key(&private_key)
@@ -3635,11 +2189,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk1.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk1.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk1).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -3655,7 +2209,7 @@ mod tests {
                     .unwrap();
                 // get the kdf view on the cipher multikey so we can generate a
                 // new cipher multikey with the same parameters and the generated key
-                let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
                 // derive a key from the passphrase and add it to the cipher multikey
                 let ciphermk = kdf
                     .derive_key(b"for great justice, move every zig!")
@@ -3663,17 +2217,17 @@ mod tests {
                 // get the cipher view on the unencrypted ed25519 secret key so
                 // that we can create a new ed25519 secret key with an encrypted
                 // key and the kdf and cipher attributes and data
-                let cipher = mk1.cipher_view(&ciphermk).unwrap();
+                let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
                 // encrypt the multikey using the cipher
 
                 cipher.encrypt().unwrap()
             };
 
-            let attr = mk2.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk2).attr().build().unwrap();
             assert!(attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk2.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk2).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_err()); // encrypted key
 
@@ -3689,23 +2243,23 @@ mod tests {
                     .try_build()
                     .unwrap();
                 // get the kdf view
-                let kdf = ciphermk.kdf_view(&kdfmk).unwrap();
+                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
                 // derive a key from the passphrase and add it to the cipher multikey
                 let ciphermk = kdf
                     .derive_key(b"for great justice, move every zig!")
                     .unwrap();
                 // get the cipher view
-                let cipher = mk2.cipher_view(&ciphermk).unwrap();
+                let cipher = ViewBuilder::new(&mk2).cipher(&ciphermk).build().unwrap();
                 // decrypt the multikey using the cipher
 
                 cipher.decrypt().unwrap()
             };
 
-            let attr = mk3.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk3).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk3.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk3).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -3724,20 +2278,20 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
             println!("{} pubkey: {}", codec, pk);
 
             let msg = b"for great justice, move every zig!";
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
                 signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap()
             } else {
@@ -3746,7 +2300,7 @@ mod tests {
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
             println!("signaure: {}", sig);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
         }
     }
@@ -3761,11 +2315,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -3773,7 +2327,7 @@ mod tests {
                 hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
                     .unwrap();
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
                 signmk.sign(&msg, true, Some(2_u8)).unwrap()
             } else {
@@ -3783,7 +2337,7 @@ mod tests {
             // make sure the message is stored correctly in the signature
             assert_eq!(signature.message, msg);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, None).is_ok());
         }
     }
@@ -3798,7 +2352,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -3843,25 +2397,25 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
-            let conv = mk.conv_view().unwrap();
+            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
             let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
             println!("{} pubkey: {}", codec, pk);
 
             let msg = b"for great justice, move every zig!";
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
             println!("signature: {}", sig);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
         }
     }
@@ -3876,11 +2430,11 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let attr = mk.attr_view().unwrap();
+            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
             assert!(!attr.is_encrypted());
             assert!(!attr.is_public_key());
             assert!(attr.is_secret_key());
-            let kd = mk.data_view().unwrap();
+            let kd = ViewBuilder::new(&mk).data().build().unwrap();
             assert!(kd.key_bytes().is_ok());
             assert!(kd.secret_bytes().is_ok());
 
@@ -3888,13 +2442,13 @@ mod tests {
                 hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
                     .unwrap();
 
-            let signmk = mk.sign_view().unwrap();
+            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
             let signature = signmk.sign(&msg, true, None).unwrap();
 
             // make sure the message is stored correctly in the signature
             assert_eq!(signature.message, msg);
 
-            let verifymk = mk.verify_view().unwrap();
+            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
             assert!(verifymk.verify(&signature, None).is_ok());
         }
     }
@@ -3909,7 +2463,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -3960,25 +2514,25 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
-                    let conv = mk.conv_view().unwrap();
+                    let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                     let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
                     println!("{} pubkey: {}", codec, pk);
 
                     let msg = b"for great justice, move every zig!";
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
                 }
             })
@@ -4003,11 +2557,11 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
 
@@ -4016,13 +2570,13 @@ mod tests {
                     )
                     .unwrap();
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(&msg, true, None).unwrap();
 
                     // make sure the message is stored correctly in the signature
                     assert_eq!(signature.message, msg);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, None).is_ok());
                 }
             })
@@ -4042,7 +2596,7 @@ mod tests {
                 .try_build()
                 .unwrap();
             let (vpk, epk) = {
-                let conv = mk.conv_view().unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
@@ -4094,25 +2648,25 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
-                    let conv = mk.conv_view().unwrap();
+                    let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                     let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
                     println!("{} pubkey: {}", codec, pk);
 
                     let msg = b"for great justice, move every zig!";
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
                 }
             })
@@ -4137,11 +2691,11 @@ mod tests {
                         .try_build()
                         .unwrap();
 
-                    let attr = mk.attr_view().unwrap();
+                    let attr = ViewBuilder::new(&mk).attr().build().unwrap();
                     assert!(!attr.is_encrypted());
                     assert!(!attr.is_public_key());
                     assert!(attr.is_secret_key());
-                    let kd = mk.data_view().unwrap();
+                    let kd = ViewBuilder::new(&mk).data().build().unwrap();
                     assert!(kd.key_bytes().is_ok());
                     assert!(kd.secret_bytes().is_ok());
 
@@ -4150,13 +2704,13 @@ mod tests {
                     )
                     .unwrap();
 
-                    let signmk = mk.sign_view().unwrap();
+                    let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
                     let signature = signmk.sign(&msg, true, None).unwrap();
 
                     // make sure the message is stored correctly in the signature
                     assert_eq!(signature.message, msg);
 
-                    let verifymk = mk.verify_view().unwrap();
+                    let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
                     assert!(verifymk.verify(&signature, None).is_ok());
                 }
             })
@@ -4175,7 +2729,7 @@ mod tests {
             .unwrap();
         assert_eq!("test key".to_string(), mk1.comment);
 
-        let tv = mk1.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk1).threshold().build().unwrap();
         let shares = tv.split(3, 4).unwrap();
         assert_eq!(4, shares.len());
         for share in &shares {
@@ -4185,7 +2739,7 @@ mod tests {
         let msg = hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
             .unwrap();
 
-        let signmk = shares[0].sign_view().unwrap();
+        let signmk = ViewBuilder::new(&shares[0]).sign().build().unwrap();
         let signature = signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap();
         let ms: EncodedMultisig = BaseEncoded::new(Base::Base32Z, signature);
         let s = ms.to_string();
@@ -4198,11 +2752,11 @@ mod tests {
         let mk2 = builder.try_build().unwrap();
         assert_eq!("test key".to_string(), mk2.comment);
 
-        let av = mk2.threshold_attr_view().unwrap();
+        let av = ViewBuilder::new(&mk2).threshold_attr().build().unwrap();
         assert_eq!(3, av.threshold().unwrap());
         assert_eq!(4, av.limit().unwrap());
 
-        let tv = mk2.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk2).threshold().build().unwrap();
         let mk3 = tv.combine().unwrap();
         assert_eq!("test key".to_string(), mk3.comment);
 
@@ -4217,16 +2771,16 @@ mod tests {
             .with_comment("test key")
             .try_build()
             .unwrap();
-        let tv = mk.threshold_view().unwrap();
+        let tv = ViewBuilder::new(&mk).threshold().build().unwrap();
         let sk1 = { tv.split(3, 4).unwrap()[0].clone() };
 
         assert_eq!(Codec::Bls12381G1PrivShare, sk1.codec);
-        let cv = sk1.conv_view().unwrap();
+        let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
         let public_key = cv.to_ssh_public_key().unwrap();
         let private_key = cv.to_ssh_private_key().unwrap();
 
         let pk1 = cv.to_public_key().unwrap();
-        let cv = pk1.conv_view().unwrap();
+        let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
         assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
 
         let sk2 = Builder::new_from_ssh_private_key(&private_key)
@@ -4253,13 +2807,13 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec, Codec::Ed25519Pub);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -4275,13 +2829,13 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -4290,14 +2844,14 @@ mod tests {
     fn test_pub_from_string() {
         let s = "fba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Pub);
         assert_eq!(mk.encoding(), Base::Base16Lower);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -4306,14 +2860,14 @@ mod tests {
     fn test_priv_from_string() {
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.encoding(), Base::Base16Lower);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -4322,13 +2876,13 @@ mod tests {
     fn test_pub_from_vec() {
         let b = hex::decode("ba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Pub);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(attr.is_public_key());
         assert!(!attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_err()); // public key
     }
@@ -4337,13 +2891,13 @@ mod tests {
     fn test_priv_from_vec() {
         let b = hex::decode("ba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }
@@ -4366,13 +2920,13 @@ mod tests {
             .with_comment("test key")
             .try_build()
             .unwrap();
-        let attr = mk.attr_view().unwrap();
+        let attr = ViewBuilder::new(&mk).attr().build().unwrap();
         assert_eq!(mk.codec(), Codec::Ed25519Priv);
         assert_eq!(mk.comment, "test key".to_string());
         assert!(!attr.is_encrypted());
         assert!(!attr.is_public_key());
         assert!(attr.is_secret_key());
-        let kd = mk.data_view().unwrap();
+        let kd = ViewBuilder::new(&mk).data().build().unwrap();
         assert!(kd.key_bytes().is_ok());
         assert!(kd.secret_bytes().is_ok());
     }

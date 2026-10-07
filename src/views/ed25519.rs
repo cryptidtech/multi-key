@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+use crate::views::dispatch::{
+    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+};
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, Multikey, SignView, VerifyView, Views,
+    KdfAttrView, Multikey, SignView, VerifyView,
     error::{AttributesError, CipherError, ConversionsError, KdfError, SignError, VerifyError},
 };
 use ed25519_dalek::{
@@ -137,19 +140,19 @@ impl<'a> KdfAttrView for View<'a> {
 
 impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if attr.is_secret_key() {
             // convert to a public key Multikey
             let pk = self.to_public_key()?;
             // get a conversions view on the public key
-            let fp = pk.fingerprint_view()?;
+            let fp = dispatch_fingerprint_view(&pk)?;
             // get the fingerprint
             let f = fp.fingerprint(codec)?;
             Ok(f)
         } else {
             // get the key bytes
             let bytes = {
-                let kd = self.mk.data_view()?;
+                let kd = dispatch_data_view(self.mk)?;
 
                 kd.key_bytes()?
             };
@@ -164,7 +167,7 @@ impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         // get the secret key bytes
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -192,7 +195,7 @@ impl<'a> ConvView for View<'a> {
         }
 
         let key_bytes = {
-            let kd = pk.data_view()?;
+            let kd = dispatch_data_view(&pk)?;
 
             kd.key_bytes()?
         };
@@ -213,7 +216,7 @@ impl<'a> ConvView for View<'a> {
     /// try to convert a Multikey to an ssh_key::PrivateKey
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -226,7 +229,7 @@ impl<'a> ConvView for View<'a> {
             })?;
 
         let pk = self.to_public_key()?;
-        let data = pk.data_view()?;
+        let data = dispatch_data_view(&pk)?;
         let public_bytes: [u8; PUBLIC_KEY_LENGTH] = data.key_bytes()?.as_slice()
             [..PUBLIC_KEY_LENGTH]
             .try_into()
@@ -248,14 +251,14 @@ impl<'a> ConvView for View<'a> {
 impl<'a> SignView for View<'a> {
     /// try to create a Multisig by siging the passed-in data with the Multikey
     fn sign(&self, msg: &[u8], combined: bool, _scheme: Option<u8>) -> Result<Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
 
         // get the secret key bytes
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
 
             kd.secret_bytes()?
         };
@@ -287,9 +290,9 @@ impl<'a> SignView for View<'a> {
 impl<'a> VerifyView for View<'a> {
     /// try to verify a Multisig using the Multikey
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
 
             kc.to_public_key()?
         } else {
@@ -298,7 +301,7 @@ impl<'a> VerifyView for View<'a> {
 
         // get the secret key bytes
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
 
             kd.key_bytes()?
         };

@@ -13,11 +13,11 @@
 //! [`SignView::sign_advance`] to obtain both the signature and the advanced
 //! secret key in one step.
 
+use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
     error::{AttributesError, ConversionsError, SignError, VerifyError},
-    views::Views,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -285,7 +285,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let pub_bytes = public_from_private(self.mk.codec, secret_bytes.as_slice())?;
@@ -313,7 +313,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -329,12 +329,12 @@ impl<'a> SignView for View<'a> {
         combined: bool,
         _scheme: Option<u8>,
     ) -> Result<multi_sig::Multisig, Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() {
             return Err(SignError::NotSigningKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
@@ -352,12 +352,12 @@ impl<'a> SignView for View<'a> {
         combined: bool,
         _scheme: Option<u8>,
     ) -> Result<(multi_sig::Multisig, Multikey), Error> {
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_secret_key() || !is_xmss_priv(self.mk.codec) {
             return Err(SignError::NotSigningKey.into());
         }
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         let sig = sign_bytes(self.mk.codec, secret_bytes.as_slice(), msg)?;
@@ -377,16 +377,16 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         let pubmk = if attr.is_secret_key() {
-            let kc = self.mk.conv_view()?;
+            let kc = dispatch_conv_view(self.mk)?;
             kc.to_public_key()?
         } else {
             self.mk.clone()
         };
 
         let key_bytes = {
-            let kd = pubmk.data_view()?;
+            let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
         let sv = sig.data_view()?;
@@ -407,6 +407,8 @@ mod tests {
     use super::*;
     #[cfg(feature = "slow-tests")]
     use crate::Builder;
+    #[cfg(feature = "slow-tests")]
+    use crate::ViewBuilder;
 
     #[cfg(feature = "slow-tests")]
     #[test]
@@ -417,20 +419,42 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let msg = b"provenance entry bytes";
-        let ms = sk.sign_view().unwrap().sign(msg, false, None).unwrap();
+        let ms = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(msg, false, None)
+            .unwrap();
         // the consumed leaf index (0) travels with the signature
         assert_eq!(ms.sig_index(), Some(0));
 
         // verify with the public key and with the secret key's derived public key
-        pk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
-        sk.verify_view().unwrap().verify(&ms, Some(msg)).unwrap();
+        ViewBuilder::new(&pk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
+        ViewBuilder::new(&sk)
+            .verify()
+            .build()
+            .unwrap()
+            .verify(&ms, Some(msg))
+            .unwrap();
 
         // wrong message must fail
         assert!(
-            pk.verify_view()
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
                 .unwrap()
                 .verify(&ms, Some(b"tampered"))
                 .is_err()
@@ -446,14 +470,20 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let (ms0, advanced) = sk
-            .sign_view()
+        let (ms0, advanced) = ViewBuilder::new(&sk)
+            .sign()
+            .build()
             .unwrap()
             .sign_advance(b"first", false, None)
             .unwrap();
         assert_eq!(ms0.sig_index(), Some(0));
         // advanced secret key now points at index 1
-        let advanced_bytes = advanced.data_view().unwrap().secret_bytes().unwrap();
+        let advanced_bytes = ViewBuilder::new(&advanced)
+            .data()
+            .build()
+            .unwrap()
+            .secret_bytes()
+            .unwrap();
         assert_eq!(xmss_wrapper::current_index(&advanced_bytes).unwrap(), 1);
     }
 }

@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-07
+
+### Added
+
+- `ViewBuilder` (`views::builder`): builder-pattern view creation with a fluent kind selector and a `.build()` terminal, re-exported at the crate root and in the prelude. Standard codecs dispatch to the built-in views. Custom protocol keys (codec `Codec::Identity` with `AlgorithmName`/`KeyType` attributes) dispatch to caller-supplied local-codec factories on fallthrough, per cryptidtech/multi-key#6.
+- `Builder::with_algorithm_name(name)` and `Builder::with_key_type(key_type)` stamp the `AlgorithmName` (27) and `KeyType` (28) attributes for custom keys, following the byte conventions from cryptidtech/provenance-specifications#4.
+
+### Changed
+
+- The `cipher_view`, `kdf_view`, `cipher_attr_view`, and `kdf_attr_view` fallthrough errors now report the codec that actually lacks support (the second key's codec or the attribute-derived codec) instead of the multikey's own codec. Error variants are unchanged.
+- Added an exact `pkcs1 = "=0.8.0-rc.4"` dependency pin. `sad-rsa 0.2.3` does not compile against `pkcs1 0.8.0-rc.5` (published 2026-10-05), so a fresh dependency resolve fails. The pin forces rc.4 until sad-rsa ships a compatible release.
+
+### Deprecated
+
+- The `Views` extension trait and `impl Views for Multikey`. Source-compatible in this release. Use `ViewBuilder` instead. Both will be removed in the next major release. Note: `multi_sig::Views` is a different, unrelated trait.
+
 ## [2.0.0] - 2026-09-14
 
 ### Added
@@ -243,6 +259,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Major dependency updates: ed25519-dalek 3, blsful 4, elliptic-curve 0.14, vsss-rs 6, ssh-key 0.7.
 - Initial published release on crates.io as `multi-key`.
 
+[2.1.0]: https://github.com/cryptidtech/multi-key/compare/v2.0.0...v2.1.0
 [1.1.1]: https://github.com/cryptidtech/multi-key/compare/v1.1.0...v1.1.1
 [1.2.2]: https://github.com/cryptidtech/multi-key/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/cryptidtech/multi-key/compare/v1.2.0...v1.2.1

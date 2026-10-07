@@ -1,4 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
+//! View traits and their per-algorithm implementations.
+//!
+//! A "view" is an abstract, algorithm-specific interface over the attributes
+//! and key material of a [`Multikey`](crate::Multikey). The traits here
+//! cover general, cipher, kdf, and threshold attribute inspection
+//! ([`AttrView`], [`CipherAttrView`], [`KdfAttrView`], [`ThresholdAttrView`],
+//! [`ThresholdKeyView`]), key data and conversion ([`DataView`],
+//! [`ConvView`], [`FingerprintView`]), key operation ([`CipherView`],
+//! [`KdfView`], [`SealView`], [`OpenView`], [`SignView`], [`VerifyView`],
+//! [`ThresholdView`]), and introspection ([`ThresholdDisclosureView`],
+//! [`MerkleStateView`]).
+//!
+//! Construct views with
+//! [`ViewBuilder`](crate::views::builder::ViewBuilder): a fluent
+//! kind selector plus optional local-codec factories for custom protocol
+//! keys. The deprecated [`Views`] trait delegates to the same internal
+//! dispatch core the builder uses. The marker and threshold metadata
+//! helpers are also public: [`threshold_marker`] and [`threshold_meta`].
 use crate::{Error, Multikey};
 use multi_codec::Codec;
 use multi_hash::Multihash;
@@ -57,6 +75,13 @@ pub(crate) mod x25519_mlkem768;
 pub(crate) mod x25519_sntrup761;
 #[cfg(feature = "xmss")]
 pub(crate) mod xmss;
+
+// shared dispatch core: every view-kind constructor dispatches on the codec here
+pub(crate) mod dispatch;
+
+// builder-pattern view creation (`ViewBuilder`): fluent kind selection,
+// optional local-codec factories, and a `.build()` terminal
+pub mod builder;
 
 // shared AEAD helper used by ml_kem, sntrup, x25519, and hybrid KEM views
 // (plus the deprecated classic_mceliece views)
@@ -299,6 +324,19 @@ pub trait MerkleStateView {
 }
 
 /// trait for getting the other views
+///
+/// Deprecated: construct views with [`ViewBuilder`](builder::ViewBuilder)
+/// instead. The builder selects a view kind fluently, dispatches through
+/// the same internal dispatch core this trait delegates to, and adds
+/// local-codec factories for custom protocol keys. This trait and its impl
+/// for `Multikey` remain as a source-compatible delegating shim.
+///
+/// Note: `multi_sig::Views` is a different, unrelated trait over
+/// [`Multisig`]; this deprecation does not affect it.
+#[deprecated(
+    since = "2.1.0",
+    note = "use ViewBuilder instead; this shim trait and its impl for Multikey will be removed in the next major release. multi_sig::Views is a different, unrelated trait"
+)]
 pub trait Views {
     /// Provide a read-only view of the basic attributes in the viewed Multikey
     fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error>;

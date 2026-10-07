@@ -12,11 +12,12 @@
 //! challenges; see <https://github.com/mjosaarinen/tii-solved> for the
 //! recovered keys. It compiles only with the `deprecated` feature.
 
+use crate::views::dispatch::dispatch_data_view;
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
     SealView,
     error::{AttributesError, ConversionsError, SealError},
-    views::{Views, aead},
+    views::aead,
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
@@ -87,7 +88,7 @@ impl<'a> DataView for View<'a> {
 impl<'a> ConvView for View<'a> {
     fn to_public_key(&self) -> Result<Multikey, Error> {
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -140,7 +141,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         let pub_bytes = if self.is_secret_key() {
             let pk = self.to_public_key()?;
-            let dv = pk.data_view()?;
+            let dv = dispatch_data_view(&pk)?;
             dv.key_bytes()?
         } else {
             self.key_bytes()?
@@ -275,7 +276,7 @@ impl<'a> OpenView for View<'a> {
         }
 
         let secret_bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
         if secret_bytes.len() != PRIV_SEED_LEN {
@@ -335,7 +336,7 @@ impl<'a> OpenView for View<'a> {
 #[cfg(all(test, feature = "slow-tests"))]
 mod tests {
     use super::*;
-    use crate::views::Views;
+    use crate::ViewBuilder;
 
     #[test]
     fn test_seal_open_roundtrip() {
@@ -345,15 +346,26 @@ mod tests {
             .with_comment("x25519-mceliece hybrid test")
             .try_build()
             .unwrap();
-        let pk = sk.conv_view().unwrap().to_public_key().unwrap();
+        let pk = ViewBuilder::new(&sk)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
 
         let plaintext = b"hello X25519-Classic-McEliece-348864 hybrid KEM!";
-        let (sealed, _) = pk
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk)
+            .seal()
+            .build()
             .unwrap()
             .seal(plaintext, Codec::Chacha20Poly1305, b"")
             .unwrap();
-        let opened = sk.open_view().unwrap().open(&sealed, None, b"").unwrap();
+        let opened = ViewBuilder::new(&sk)
+            .open()
+            .build()
+            .unwrap()
+            .open(&sealed, None, b"")
+            .unwrap();
         assert_eq!(plaintext.as_slice(), opened.as_slice());
     }
 
@@ -364,17 +376,30 @@ mod tests {
             .unwrap()
             .try_build()
             .unwrap();
-        let pk1 = sk1.conv_view().unwrap().to_public_key().unwrap();
+        let pk1 = ViewBuilder::new(&sk1)
+            .conv()
+            .build()
+            .unwrap()
+            .to_public_key()
+            .unwrap();
         let sk2 = Builder::new_from_random_bytes(Codec::X25519Mceliece348864Priv, &mut rng)
             .unwrap()
             .try_build()
             .unwrap();
 
-        let (sealed, _) = pk1
-            .seal_view()
+        let (sealed, _) = ViewBuilder::new(&pk1)
+            .seal()
+            .build()
             .unwrap()
             .seal(b"secret", Codec::Chacha20Poly1305, b"")
             .unwrap();
-        assert!(sk2.open_view().unwrap().open(&sealed, None, b"").is_err());
+        assert!(
+            ViewBuilder::new(&sk2)
+                .open()
+                .build()
+                .unwrap()
+                .open(&sealed, None, b"")
+                .is_err()
+        );
     }
 }

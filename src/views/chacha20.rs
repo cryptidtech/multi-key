@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+use crate::views::dispatch::{
+    dispatch_attr_view, dispatch_cipher_attr_view, dispatch_data_view, dispatch_kdf_attr_view,
+};
 use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
-    Multikey, Views,
+    Multikey,
     error::{AttributesError, CipherError, KdfError},
 };
 #[cfg(feature = "legacy_chacha20_fallback")]
@@ -155,14 +158,14 @@ impl<'a> CipherView for View<'a> {
     fn decrypt(&self) -> Result<Multikey, Error> {
         let cipher = self.cipher.ok_or(CipherError::MissingCodec)?;
         // make sure the viewed key is an encrypted secret key
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if !attr.is_encrypted() || !attr.is_secret_key() {
             return Err(CipherError::DecryptionFailed.into());
         }
 
         // get the nonce data from the passed-in Multikey
         let nonce = {
-            let cattr = cipher.cipher_attr_view()?;
+            let cattr = dispatch_cipher_attr_view(cipher)?;
             cattr.nonce_bytes()?
         };
 
@@ -172,7 +175,7 @@ impl<'a> CipherView for View<'a> {
 
         // get the key data from the passed-in Multikey
         let key = {
-            let kd = cipher.data_view()?;
+            let kd = dispatch_data_view(cipher)?;
             let key = kd.secret_bytes()?;
             if key.len() != self.key_length()? {
                 return Err(CipherError::InvalidKey.into());
@@ -186,7 +189,7 @@ impl<'a> CipherView for View<'a> {
 
         // get the encrypted key bytes from the viewed Multikey (self)
         let msg = {
-            let attr = self.mk.data_view()?;
+            let attr = dispatch_data_view(self.mk)?;
             attr.key_bytes()?
         };
 
@@ -249,7 +252,7 @@ impl<'a> CipherView for View<'a> {
     fn encrypt(&self) -> Result<Multikey, Error> {
         let cipher = self.cipher.ok_or(CipherError::MissingCodec)?;
         // make sure the viewed key is not encrypted
-        let attr = self.mk.attr_view()?;
+        let attr = dispatch_attr_view(self.mk)?;
         if attr.is_encrypted() {
             return Err(
                 CipherError::EncryptionFailed("key is encrypted already".to_string()).into(),
@@ -258,13 +261,13 @@ impl<'a> CipherView for View<'a> {
 
         // get the nonce data from the passed-in Multikey
         let nonce = {
-            let cattr = cipher.cipher_attr_view()?;
+            let cattr = dispatch_cipher_attr_view(cipher)?;
             cattr.nonce_bytes()?
         };
 
         // get the key data from the passed-in Multikey
         let key = {
-            let kd = cipher.data_view()?;
+            let kd = dispatch_data_view(cipher)?;
             let key = kd.secret_bytes()?;
             if key.len() != self.key_length()? {
                 return Err(CipherError::InvalidKey.into());
@@ -274,7 +277,7 @@ impl<'a> CipherView for View<'a> {
 
         // get the secret bytes from the viewed Multikey
         let msg = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.secret_bytes()?
         };
 
@@ -294,13 +297,13 @@ impl<'a> CipherView for View<'a> {
         };
 
         // prepare the cipher attributes
-        let cattr = cipher.cipher_attr_view()?;
+        let cattr = dispatch_cipher_attr_view(cipher)?;
         let cipher_codec: Vec<u8> = cipher.codec.into();
         let key_length: Vec<u8> = Varuint(cattr.key_length()?).into();
         let is_encrypted: Vec<u8> = Varuint(true).into();
 
         // get a view on the kdf attributes
-        let kattr = cipher.kdf_attr_view()?;
+        let kattr = dispatch_kdf_attr_view(cipher)?;
         let kdf_codec: Vec<u8> = kattr.kdf_codec()?.into();
         let salt = kattr.salt_bytes()?;
         let rounds: Vec<u8> = Varuint(kattr.rounds()?).into();
@@ -328,7 +331,7 @@ impl<'a> FingerprintView for View<'a> {
     fn fingerprint(&self, codec: Codec) -> Result<Multihash, Error> {
         // get the key bytes
         let bytes = {
-            let kd = self.mk.data_view()?;
+            let kd = dispatch_data_view(self.mk)?;
             kd.key_bytes()?
         };
         // hash the key bytes using the given codec
