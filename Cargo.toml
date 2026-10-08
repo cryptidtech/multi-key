@@ -2,7 +2,7 @@
 name = "multi-key"
 version = "2.1.1"
 edition = "2024"
-rust-version = "1.96"
+rust-version = "1.99"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Multikey self-describing cryptographic key data"
 repository = "https://github.com/cryptidtech/multi-key.git"
@@ -53,7 +53,7 @@ ml-dsa = "0.1.1"
 ml-kem = "0.3"
 multi-base = { version = "1.0", default-features = false }
 multi-codec = "1.5"
-multi-hash = "1.1"
+multi-hash = "2.0"
 multi-sig = "1.5"
 multi-trait = { version = "1.0", default-features = false }
 multi-util = "1.1"

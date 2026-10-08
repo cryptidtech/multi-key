@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn test_error_display() {
         let err = Error::MissingSigil;
-        assert!(!err.to_string().is_empty());
+        assert_ne!(err.to_string(), "");
     }
 
     #[test]

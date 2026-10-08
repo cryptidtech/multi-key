@@ -329,7 +329,7 @@ mod tests {
             let encoded = mode.encode_into();
             let (decoded, rest) = ThresholdDisclosure::try_decode_from(&encoded).unwrap();
             assert_eq!(mode, decoded);
-            assert!(rest.is_empty());
+            assert_eq!(rest.len(), 0);
         }
     }
 
