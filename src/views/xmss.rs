@@ -21,7 +21,7 @@ use crate::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Views as _, ms};
+use multi_sig::{ViewBuilder, ms};
 use zeroize::Zeroizing;
 
 // ---- Inlined bs-xmss wrapper logic ----
@@ -389,7 +389,7 @@ impl<'a> VerifyView for View<'a> {
             let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
-        let sv = sig.data_view()?;
+        let sv = ViewBuilder::new(sig).data().build()?;
         let sig_bytes = sv.sig_bytes()?;
 
         verify_bytes(pubmk.codec, key_bytes.as_slice(), &sig_bytes, msg_bytes)

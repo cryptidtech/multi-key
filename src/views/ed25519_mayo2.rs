@@ -12,7 +12,7 @@ use crate::{
 use ed25519_dalek::{Signature as Ed25519Sig, SigningKey, VerifyingKey};
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use pq_mayo::{KeyPair, Mayo2};
 use zeroize::Zeroizing;
 
@@ -222,7 +222,7 @@ impl<'a> VerifyView for View<'a> {
         }
 
         // Get signature bytes
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig_bytes = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
         if sig_bytes.len() != HYBRID_SIG_LEN {

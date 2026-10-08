@@ -15,7 +15,7 @@ use fn_dsa::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Views as _, ms};
+use multi_sig::{ViewBuilder, ms};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
 
@@ -273,7 +273,7 @@ impl<'a> VerifyView for View<'a> {
             ConversionsError::PublicKeyFailure("invalid public key length".into()),
         )?;
 
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig_bytes = sv.sig_bytes()?;
 
         let expected_sig_len = if key_bytes.len() == vrfy_key_size(FN_DSA_LOGN_512) {

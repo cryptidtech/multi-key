@@ -6,7 +6,7 @@
 #![allow(clippy::uninlined_format_args)]
 use multi_codec::Codec;
 use multi_key::{Builder, Multikey, ViewBuilder};
-use multi_sig::{Multisig, Views as _};
+use multi_sig::{Multisig, ViewBuilder as SigViewBuilder};
 
 #[test]
 fn test_merkle_sign_advance_and_verify() {
@@ -106,12 +106,22 @@ fn test_merkle_threshold_split_sign_combine_verify() {
         .try_build()
         .unwrap();
     for share in &sig_shares {
-        let next = acc.threshold_view().unwrap().add_share(share).unwrap();
+        let next = SigViewBuilder::new(&acc)
+            .threshold()
+            .build()
+            .unwrap()
+            .add_share(share)
+            .unwrap();
         acc = next;
     }
     assert_eq!(acc.depth(), Some(1));
 
-    let combined = acc.threshold_view().unwrap().combine().unwrap();
+    let combined = SigViewBuilder::new(&acc)
+        .threshold()
+        .build()
+        .unwrap()
+        .combine()
+        .unwrap();
     assert_eq!(combined.depth(), Some(1));
 
     // verify under the tree-root public key

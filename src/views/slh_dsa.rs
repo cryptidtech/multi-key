@@ -11,7 +11,7 @@ use crate::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::Views as _;
+use multi_sig::ViewBuilder;
 use multi_sig::ms;
 use slh_dsa::ParameterSet;
 use slh_dsa::signature::{Keypair, Signer, Verifier};
@@ -522,7 +522,7 @@ impl<'a> VerifyView for View<'a> {
             kd.key_bytes()?
         };
 
-        let sv = sig.data_view()?;
+        let sv = ViewBuilder::new(sig).data().build()?;
         let sig_bytes = sv.sig_bytes()?;
 
         match self.mk.codec {

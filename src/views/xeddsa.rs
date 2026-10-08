@@ -31,7 +31,7 @@ use curve25519_dalek::{edwards::EdwardsPoint, montgomery::MontgomeryPoint, scala
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use sha2::{Digest, Sha512};
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
@@ -363,7 +363,7 @@ impl<'a> VerifyView for View<'a> {
         let verifying_key = VerifyingKey::from_bytes(&verifying_key_bytes)
             .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
 
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
         if sig.len() != ED25519_SIGNATURE_LENGTH {
             return Err(VerifyError::BadSignature(
@@ -401,6 +401,7 @@ impl<'a> VerifyView for View<'a> {
 mod tests {
     use super::*;
     use crate::{Builder, ViewBuilder};
+    use multi_sig::ViewBuilder as SigViewBuilder;
 
     fn key_pair_mks() -> (Multikey, Multikey) {
         let mut rng = rand::rng();
@@ -518,7 +519,7 @@ mod tests {
             .unwrap()
             .sign(&msg, false, None)
             .unwrap();
-        let view = sig.data_view().unwrap();
+        let view = SigViewBuilder::new(&sig).data().build().unwrap();
         let mut bytes = view.sig_bytes().unwrap();
         bytes[0] ^= 1;
         let tampered = ms::Builder::new(Codec::XeddsaMsig)
@@ -593,7 +594,7 @@ mod tests {
             .unwrap();
 
         // Every signature is 64 bytes of R || s.
-        let dv = sig.data_view().unwrap();
+        let dv = SigViewBuilder::new(&sig).data().build().unwrap();
         assert_eq!(dv.sig_bytes().unwrap().len(), 64);
         let _ = a;
     }

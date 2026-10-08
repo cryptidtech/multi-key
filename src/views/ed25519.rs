@@ -12,7 +12,7 @@ use ed25519_dalek::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
 use zeroize::Zeroizing;
@@ -318,7 +318,7 @@ impl<'a> VerifyView for View<'a> {
             .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
 
         // get the signature data
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
         // create the signature
