@@ -22,7 +22,7 @@ use blsful::{
 use elliptic_curve::group::GroupEncoding;
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms, views::bls12381::SchemeTypeId};
+use multi_sig::{Multisig, ViewBuilder, ms, views::bls12381::SchemeTypeId};
 use multi_trait::TryDecodeFrom;
 use multi_util::{Varbytes, Varuint};
 use rand_core::Rng;
@@ -1202,7 +1202,7 @@ impl<'a> VerifyView for View<'a> {
         };
 
         // get the signature scheme
-        let av = multisig.attr_view()?;
+        let av = ViewBuilder::new(multisig).attr().build()?;
         let sig_scheme = SchemeTypeId::try_from(av.scheme()?)?;
 
         match pubmk.codec {
@@ -1212,7 +1212,7 @@ impl<'a> VerifyView for View<'a> {
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
 
                 // get the signature data
-                let sv = multisig.data_view()?;
+                let sv = ViewBuilder::new(multisig).data().build()?;
                 let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
                 let group_encoding: G1Projective = {
@@ -1273,11 +1273,11 @@ impl<'a> VerifyView for View<'a> {
                 );
 
                 // get the share identifier
-                let av = multisig.threshold_attr_view()?;
+                let av = ViewBuilder::new(multisig).threshold_attr().build()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
 
                 // get the signature data
-                let sv = multisig.data_view()?;
+                let sv = ViewBuilder::new(multisig).data().build()?;
                 let value = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
                 let bytes: [u8; 48] = value.as_slice().try_into().map_err(|_| {
                     VerifyError::BadSignature("Invalid signature share bytes".to_string())
@@ -1316,7 +1316,7 @@ impl<'a> VerifyView for View<'a> {
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
 
                 // get the signature data
-                let sv = multisig.data_view()?;
+                let sv = ViewBuilder::new(multisig).data().build()?;
                 let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
                 let group_encoding: G2Projective = {
@@ -1374,11 +1374,11 @@ impl<'a> VerifyView for View<'a> {
                 );
 
                 // get the share identifier
-                let av = multisig.threshold_attr_view()?;
+                let av = ViewBuilder::new(multisig).threshold_attr().build()?;
                 let identifier = bytes_to_identifier(av.identifier()?)?;
 
                 // get the signature data
-                let sv = multisig.data_view()?;
+                let sv = ViewBuilder::new(multisig).data().build()?;
                 let value = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
                 let bytes: [u8; 96] = value.as_slice().try_into().map_err(|_| {
                     VerifyError::BadSignature("Invalid signature share bytes".to_string())

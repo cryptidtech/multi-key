@@ -1,6 +1,6 @@
 [package]
 name = "multi-key"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2024"
 rust-version = "1.96"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
@@ -54,7 +54,7 @@ ml-kem = "0.3"
 multi-base = { version = "1.0", default-features = false }
 multi-codec = "1.5"
 multi-hash = "1.1"
-multi-sig = "1.4"
+multi-sig = "1.5"
 multi-trait = { version = "1.0", default-features = false }
 multi-util = "1.1"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }

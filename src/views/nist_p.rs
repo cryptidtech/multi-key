@@ -17,7 +17,7 @@ use elliptic_curve::Generate;
 use elliptic_curve::sec1::ToSec1Point;
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
 use multi_util::Varuint;
@@ -400,7 +400,7 @@ impl<'a> VerifyView for View<'a> {
             kd.key_bytes()?
         };
 
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
         let msg = if let Some(msg) = msg {

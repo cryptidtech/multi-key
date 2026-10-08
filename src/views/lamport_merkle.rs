@@ -31,7 +31,7 @@ use lamport_signature_plus::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{AttrId as MsAttrId, Views as _, ms};
+use multi_sig::{AttrId as MsAttrId, ViewBuilder, ms};
 use zeroize::Zeroizing;
 
 /// Mt state wire format version byte (lamport_signature_plus 0.5.0).
@@ -731,7 +731,7 @@ impl<'a> VerifyView for View<'a> {
         // wire depth (byte 0) and the signature wire depth (byte 0).
         let key_depth = wire_depth_at(key_bytes.as_slice(), 0)?;
         check_depth_attribute(&pubmk, key_depth)?;
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
         let sig_depth = wire_depth_at(&sig, 0)?;
         if sig_depth != key_depth {
@@ -1017,6 +1017,7 @@ mod tests {
     use crate::LAMPORT_MERKLE_KEY_CODECS;
     use crate::ViewBuilder;
     use multi_sig::AttrId as MsAttrId;
+    use multi_sig::ViewBuilder as SigViewBuilder;
 
     fn build_priv(codec: Codec, depth: u8) -> Multikey {
         Builder::new_from_random_bytes_with_depth(codec, depth, &mut rand::rng())
@@ -1312,10 +1313,20 @@ mod tests {
             .try_build()
             .unwrap();
         for share_ms in [&s1, &s2] {
-            let next = acc.threshold_view().unwrap().add_share(share_ms).unwrap();
+            let next = SigViewBuilder::new(&acc)
+                .threshold()
+                .build()
+                .unwrap()
+                .add_share(share_ms)
+                .unwrap();
             acc = next;
         }
-        let combined = acc.threshold_view().unwrap().combine().unwrap();
+        let combined = SigViewBuilder::new(&acc)
+            .threshold()
+            .build()
+            .unwrap()
+            .combine()
+            .unwrap();
         ViewBuilder::new(&pk)
             .verify()
             .build()

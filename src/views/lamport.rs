@@ -20,7 +20,7 @@ use lamport_signature_plus::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Views as _, ms};
+use multi_sig::{ViewBuilder, ms};
 use sha2::{Sha256, Sha384, Sha512};
 use sha3::{Sha3_256, Sha3_384, Sha3_512};
 use shake::{Shake128, Shake256};
@@ -603,7 +603,7 @@ impl<'a> VerifyView for View<'a> {
             let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?
         };
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
         verify_bytes(pubmk.codec, key_bytes.as_slice(), &sig, msg_bytes)
     }
@@ -745,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_lamport_threshold_sign_combine() {
-        use multi_sig::Views as _;
+        use multi_sig::ViewBuilder as SigViewBuilder;
         use multi_util::CodecInfo as _;
 
         let mut rng = rand::rng();
@@ -796,17 +796,24 @@ mod tests {
         let acc = ms::Builder::new(Codec::LamportSha3256Sig)
             .try_build()
             .unwrap();
-        let acc = acc
-            .threshold_view()
+        let acc = SigViewBuilder::new(&acc)
+            .threshold()
+            .build()
             .unwrap()
             .add_share(&share_sig_a)
             .unwrap();
-        let acc = acc
-            .threshold_view()
+        let acc = SigViewBuilder::new(&acc)
+            .threshold()
+            .build()
             .unwrap()
             .add_share(&share_sig_c)
             .unwrap();
-        let combined = acc.threshold_view().unwrap().combine().unwrap();
+        let combined = SigViewBuilder::new(&acc)
+            .threshold()
+            .build()
+            .unwrap()
+            .combine()
+            .unwrap();
         assert_eq!(combined.codec(), Codec::LamportSha3256Sig);
 
         // the combined signature verifies under the ORIGINAL public key

@@ -19,7 +19,7 @@ use ml_dsa::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use zeroize::Zeroizing;
 
 const MLDSA65_SEED_LEN: usize = 32;
@@ -211,7 +211,7 @@ impl<'a> VerifyView for View<'a> {
             .into());
         }
 
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig_bytes = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
         if sig_bytes.len() != HYBRID_SIG_LEN {
             return Err(VerifyError::BadSignature("invalid hybrid signature length".into()).into());

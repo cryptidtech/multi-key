@@ -9,7 +9,7 @@ use crate::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Views as _, ms};
+use multi_sig::{ViewBuilder, ms};
 use pq_mayo::{KeyPair, Mayo1, Mayo2, Mayo3, Mayo5, Signature, VerifyingKey};
 use ssh_encoding::{Decode, Encode};
 use zeroize::Zeroizing;
@@ -350,7 +350,7 @@ impl<'a> VerifyView for View<'a> {
             kd.key_bytes()?
         };
 
-        let sv = sig.data_view()?;
+        let sv = ViewBuilder::new(sig).data().build()?;
         let sig_bytes = sv.sig_bytes()?;
 
         match (key_bytes.len(), sig_bytes.len()) {

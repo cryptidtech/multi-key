@@ -18,7 +18,7 @@ use fn_dsa::{
 };
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
-use multi_sig::{Multisig, Views as SigViews, ms};
+use multi_sig::{Multisig, ViewBuilder, ms};
 use zeroize::Zeroizing;
 
 const LOGN: u32 = FN_DSA_LOGN_512;
@@ -223,7 +223,7 @@ impl<'a> VerifyView for View<'a> {
         }
 
         // Get signature bytes
-        let sv = multisig.data_view()?;
+        let sv = ViewBuilder::new(multisig).data().build()?;
         let sig_bytes = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
 
         if sig_bytes.len() != ED25519_SIG_LEN + signature_size(LOGN) {
