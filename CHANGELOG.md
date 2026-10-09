@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-10-09
+
+### Fixed
+
+- Switched the XEdDSA `VerifyView` from plain Ed25519 verification to `verify_strict`. The view documentation states strict verification, but the code called plain `verify`. `verify_strict` also rejects a small-order `R` and a small-order verifying key on top of the canonicality checks, so the `xeddsa-msig` verifier no longer accepts malleable or weak-key signature forms. Verification of signatures produced by the `SignView` is unchanged. Added reject tests for non-canonical `R`, non-canonical `S`, and small-order keys.
+
 ## [2.2.0] - 2026-10-08
 
 ### Changed
@@ -272,6 +278,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Major dependency updates: ed25519-dalek 3, blsful 4, elliptic-curve 0.14, vsss-rs 6, ssh-key 0.7.
 - Initial published release on crates.io as `multi-key`.
 
+[2.3.0]: https://github.com/cryptidtech/multi-key/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/cryptidtech/multi-key/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/cryptidtech/multi-key/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/cryptidtech/multi-key/compare/v2.0.0...v2.1.0
