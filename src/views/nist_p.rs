@@ -178,7 +178,10 @@ impl<'a> FingerprintView for View<'a> {
                 let kd = dispatch_data_view(self.mk)?;
                 kd.key_bytes()?
             };
-            Ok(mh::Builder::new_from_bytes(codec, bytes)?.try_build()?)
+            let mut b = mh::Builder::new(codec)?;
+            b.update(bytes);
+            b.output_len(32);
+            Ok(b.try_build()?)
         }
     }
 }

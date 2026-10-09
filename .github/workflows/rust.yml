@@ -11,14 +11,14 @@ env:
 
 jobs:
   msrv:
-    name: Verify MSRV (1.96)
+    name: Verify MSRV (1.99)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust Toolchain (1.96)
-        uses: dtolnay/rust-toolchain@1.96.0
+      - name: Install Rust Toolchain (1.99)
+        uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Check
         run: cargo check --all-features

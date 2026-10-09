@@ -119,7 +119,10 @@ struct CustomFingerprint {
 
 impl FingerprintView for CustomFingerprint {
     fn fingerprint(&self, hash: Codec) -> Result<Multihash, Error> {
-        Ok(mh::Builder::new_from_bytes(hash, &self.key_bytes)?.try_build()?)
+        let mut b = mh::Builder::new(hash)?;
+        b.update(&self.key_bytes);
+        b.output_len(32);
+        Ok(b.try_build()?)
     }
 }
 
@@ -376,10 +379,10 @@ fn test_custom_key_factory_dispatch() {
         .with_local_codec(Codec::Identity, fingerprint_factory)
         .build()
         .unwrap();
-    let expected = mh::Builder::new_from_bytes(Codec::Blake2S256, b"custom-key-seed".as_slice())
-        .unwrap()
-        .try_build()
-        .unwrap();
+    let mut b = mh::Builder::new(Codec::Blake2S256).unwrap();
+    b.update(b"custom-key-seed".as_slice());
+    b.output_len(32);
+    let expected = b.try_build().unwrap();
     assert_eq!(fp.fingerprint(Codec::Blake2S256).unwrap(), expected);
 }
 

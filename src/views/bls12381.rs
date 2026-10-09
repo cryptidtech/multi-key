@@ -370,7 +370,10 @@ impl<'a> FingerprintView for View<'a> {
                 kd.key_bytes()?
             };
             // hash the key bytes using the given codec
-            Ok(mh::Builder::new_from_bytes(codec, bytes)?.try_build()?)
+            let mut b = mh::Builder::new(codec)?;
+            b.update(bytes);
+            b.output_len(32);
+            Ok(b.try_build()?)
         }
     }
 }

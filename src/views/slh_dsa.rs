@@ -383,7 +383,10 @@ impl<'a> FingerprintView for View<'a> {
             return dispatch_fingerprint_view(&pk)?.fingerprint(codec);
         }
         let bytes = self.key_bytes()?;
-        Ok(mh::Builder::new_from_bytes(codec, bytes.as_slice())?.try_build()?)
+        let mut b = mh::Builder::new(codec)?;
+        b.update(bytes.as_slice());
+        b.output_len(32);
+        Ok(b.try_build()?)
     }
 }
 

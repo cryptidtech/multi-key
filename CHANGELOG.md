@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-08
+
+### Changed
+
+- Migrated the `FingerprintView` implementation bodies (30 key views) and the custom-codec test builder from the removed `Builder::new_from_bytes` API to the streaming shape `Builder::new(codec)?` + `update(bytes)` + `output_len(32)` + `try_build()`. The value 32 preserves the 32-byte fingerprints multi-hash 1.x produced. Requirement `multi-hash` raised 1.1 → 2.0. The crate requires multi-hash 2.0.0, which declares `rust-version = "1.99"`. No public API changes.
+- Raised `rust-version` from 1.96 to 1.99 and applied clippy 0.1.99 fixes.
+
 ## [2.1.1] - 2026-10-07
 
 ### Changed
@@ -265,6 +272,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Major dependency updates: ed25519-dalek 3, blsful 4, elliptic-curve 0.14, vsss-rs 6, ssh-key 0.7.
 - Initial published release on crates.io as `multi-key`.
 
+[2.2.0]: https://github.com/cryptidtech/multi-key/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/cryptidtech/multi-key/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/cryptidtech/multi-key/compare/v2.0.0...v2.1.0
 [1.1.1]: https://github.com/cryptidtech/multi-key/compare/v1.1.0...v1.1.1

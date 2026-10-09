@@ -146,7 +146,10 @@ impl<'a> FingerprintView for View<'a> {
         } else {
             self.key_bytes()?
         };
-        Ok(mh::Builder::new_from_bytes(codec, pub_bytes.as_slice())?.try_build()?)
+        let mut b = mh::Builder::new(codec)?;
+        b.update(pub_bytes.as_slice());
+        b.output_len(32);
+        Ok(b.try_build()?)
     }
 }
 

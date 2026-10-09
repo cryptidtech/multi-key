@@ -131,7 +131,10 @@ impl<'a> FingerprintView for View<'a> {
         } else {
             self.key_bytes()?
         };
-        Ok(mh::Builder::new_from_bytes(codec, pub_bytes.as_slice())?.try_build()?)
+        let mut b = mh::Builder::new(codec)?;
+        b.update(pub_bytes.as_slice());
+        b.output_len(32);
+        Ok(b.try_build()?)
     }
 }
 
@@ -350,7 +353,7 @@ mod tests {
         let fp1_bytes: Vec<u8> = fp1.into();
         let fp2_bytes: Vec<u8> = fp2.into();
         assert_eq!(fp1_bytes, fp2_bytes);
-        assert!(!fp1_bytes.is_empty());
+        assert_ne!(fp1_bytes, Vec::<u8>::new());
     }
 
     #[test]
