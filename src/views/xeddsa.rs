@@ -28,7 +28,7 @@ use crate::{
     error::{AttributesError, ConversionsError, SignError, VerifyError},
 };
 use curve25519_dalek::{edwards::EdwardsPoint, montgomery::MontgomeryPoint, scalar::Scalar};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
 use multi_sig::{Multisig, ViewBuilder, ms};
@@ -391,9 +391,10 @@ impl<'a> VerifyView for View<'a> {
             );
         }
 
-        // Ed25519 strict verification: a non-canonical R or S fails.
+        // Ed25519 strict verification: a non-canonical R or S fails, and a
+        // small-order R or verifying key fails.
         verifying_key
-            .verify(msg, &sig)
+            .verify_strict(msg, &sig)
             .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
 
         Ok(())
@@ -536,6 +537,73 @@ mod tests {
                 .unwrap()
                 .verify(&tampered, Some(&msg))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn test_xeddsa_rejects_non_canonical_r() {
+        let (sk, pk) = key_pair_mks();
+        let msg = message32();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
+        let view = SigViewBuilder::new(&sig).data().build().unwrap();
+        let mut bytes = view.sig_bytes().unwrap();
+        // Non-canonical R: the y coordinate encodes 2^255 - 1, which is above
+        // the field modulus p = 2^255 - 19, so the bytes are not a canonical
+        // compressed Edwards point encoding.
+        for byte in &mut bytes[..32] {
+            *byte = 0xff;
+        }
+        bytes[31] &= 0x7f;
+        let tampered = ms::Builder::new(Codec::XeddsaMsig)
+            .with_signature_bytes(&bytes)
+            .try_build()
+            .unwrap();
+        assert!(
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&tampered, Some(&msg))
+                .is_err(),
+            "non-canonical R must not verify"
+        );
+    }
+
+    #[test]
+    fn test_xeddsa_rejects_non_canonical_s() {
+        let (sk, pk) = key_pair_mks();
+        let msg = message32();
+        let sig = ViewBuilder::new(&sk)
+            .sign()
+            .build()
+            .unwrap()
+            .sign(&msg, false, None)
+            .unwrap();
+        let view = SigViewBuilder::new(&sig).data().build().unwrap();
+        let mut bytes = view.sig_bytes().unwrap();
+        // Non-canonical S: the scalar encodes 2^255 - 1, which is above the
+        // group order l, so the S component is not a reduced scalar.
+        for byte in &mut bytes[32..] {
+            *byte = 0xff;
+        }
+        bytes[63] &= 0x7f;
+        let tampered = ms::Builder::new(Codec::XeddsaMsig)
+            .with_signature_bytes(&bytes)
+            .try_build()
+            .unwrap();
+        assert!(
+            ViewBuilder::new(&pk)
+                .verify()
+                .build()
+                .unwrap()
+                .verify(&tampered, Some(&msg))
+                .is_err(),
+            "non-canonical S must not verify"
         );
     }
 
