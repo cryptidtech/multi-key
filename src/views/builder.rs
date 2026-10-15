@@ -3,14 +3,13 @@
 //! Builder-pattern view creation over Multikeys.
 //!
 //! A [`ViewBuilder`] selects one view kind, optionally registers local codec
-//! factories for that kind, and builds the view. It is the builder-pattern
-//! alternative to the many `*_view()` methods of the deprecated
-//! [`crate::Views`] trait: it dispatches through the same dispatch core and
-//! covers standard codecs and custom protocol keys alike.
+//! factories for that kind, and builds the view. It covers standard codecs
+//! and custom protocol keys alike.
 //!
 //! The three steps for a standard key:
 //!
 //! ```
+//! # #[cfg(feature = "curve25519")] {
 //! use multi_codec::Codec;
 //! use multi_key::{Builder, ViewBuilder};
 //!
@@ -24,6 +23,7 @@
 //! let sig = signer.sign(b"message", false, None).unwrap();
 //! let verifier = ViewBuilder::new(&mk).verify().build().unwrap();
 //! verifier.verify(&sig, Some(b"message")).unwrap();
+//! # }
 //! ```
 //!
 //! A custom protocol key (codec [`multi_codec::Codec::Identity`] carrying the
@@ -48,7 +48,7 @@
 //!     .attributes
 //!     .insert(AttrId::KeyType, Zeroizing::new(vec![1]));
 //! // decode the key from wire bytes, the way a custom key usually arrives
-//! let bytes: Vec<u8> = custom.clone().into();
+//! let bytes = Vec::<u8>::from(&custom);
 //! let decoded = Multikey::try_from(bytes.as_ref()).unwrap();
 //!
 //! struct CustomSign {
@@ -108,9 +108,7 @@
 //! # Second key lifetime
 //!
 //! The `cipher` and `kdf` kinds store their second key by reference for the
-//! builder's lifetime (`'mk`). This is slightly narrower than
-//! [`crate::Views::cipher_view`]/[`crate::Views::kdf_view`], which let the
-//! caller choose the overlap of the two borrows at the call site.
+//! builder's lifetime (`'mk`).
 
 use crate::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView, KdfAttrView,
@@ -411,11 +409,11 @@ type MerkleStateFactories = BTreeMap<Codec, MerkleStateFactory>;
 ///
 /// # Dispatch order
 ///
-/// 1. The built-in views dispatch first, exactly as the `Views` trait
-///    methods do: on the Multikey's codec, on the second key's codec for the
-///    `cipher` and `kdf` kinds, and on the attribute-derived codec (the
-///    `CipherCodec`/`KdfCodec` attribute value, falling back to the key's
-///    codec) for the `cipher_attr` and `kdf_attr` kinds.
+/// 1. The built-in views dispatch first: on the Multikey's codec, on the
+///    second key's codec for the `cipher` and `kdf` kinds, and on the
+///    attribute-derived codec (the `CipherCodec`/`KdfCodec` attribute value,
+///    falling back to the key's codec) for the `cipher_attr` and `kdf_attr`
+///    kinds.
 /// 2. A local factory registered for the codec that has no built-in view
 ///    applies on fallthrough only. The factory lookup key is the codec the
 ///    built-in dispatch actually failed on: the codec carried by the
@@ -443,9 +441,8 @@ type MerkleStateFactories = BTreeMap<Codec, MerkleStateFactory>;
 /// `Send + Sync + 'static`, so a factory cannot capture the builder's borrows;
 /// it works from owned state (a clone, an `Arc`, static data).
 ///
-/// Note that the returned view boxes carry no `Send`/`Sync` supertrait, same
-/// as the `Views` trait today. The builder itself is `Send + Sync` with and
-/// without factories.
+/// Note that the returned view boxes carry no `Send`/`Sync` supertrait. The
+/// builder itself is `Send + Sync` with and without factories.
 pub struct ViewBuilder<'mk, K: ViewKind = Unselected> {
     /// the Multikey being viewed
     mk: &'mk Multikey,
@@ -1229,7 +1226,18 @@ impl<'mk> ViewBuilder<'mk, MerkleStateKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AttrId, Builder, KEY_CODECS, ThresholdDisclosure};
+    #[cfg(all(
+        feature = "bls12-381",
+        feature = "curve25519",
+        feature = "p256",
+        feature = "p384",
+        feature = "p521",
+        feature = "secp256k1"
+    ))]
+    use crate::KEY_CODECS;
+    #[cfg(feature = "curve25519")]
+    use crate::ThresholdDisclosure;
+    use crate::{AttrId, Builder};
     use multi_sig::Multisig;
     use std::sync::{Arc, Mutex};
     use zeroize::Zeroizing;
@@ -1242,6 +1250,14 @@ mod tests {
 
     fn record(rec: &Recorder, entry: &str) {
         rec.lock().unwrap().push(entry.to_string());
+    }
+
+    /// the key's `AlgorithmName` attribute, or "" when absent or not UTF-8
+    fn algorithm_name(mk: &Multikey) -> &str {
+        mk.attributes
+            .get(&AttrId::AlgorithmName)
+            .and_then(|v| std::str::from_utf8(v).ok())
+            .unwrap_or_default()
     }
 
     /// A custom protocol key: codec `Identity` plus the `AlgorithmName` and
@@ -1261,6 +1277,7 @@ mod tests {
         Multikey::try_from(bytes.as_ref()).unwrap()
     }
 
+    #[cfg(feature = "curve25519")]
     fn ed25519_key() -> Multikey {
         let mut rng = rand::rng();
         Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
@@ -1269,6 +1286,7 @@ mod tests {
             .unwrap()
     }
 
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     fn chacha_key() -> Multikey {
         let mut mk = Builder::new(Codec::Chacha20Poly1305)
             .with_key_bytes("chacha-key-material-32-bytes-x")
@@ -1322,7 +1340,9 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "curve25519")]
     struct NoKdfAttr;
+    #[cfg(feature = "curve25519")]
     impl KdfAttrView for NoKdfAttr {
         fn kdf_codec(&self) -> Result<Codec, Error> {
             Err(Error::UnsupportedAlgorithm("NoKdfAttr.kdf_codec".into()))
@@ -1335,7 +1355,9 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "curve25519")]
     struct NoDisclosure;
+    #[cfg(feature = "curve25519")]
     impl ThresholdDisclosureView for NoDisclosure {
         fn disclosure_mode(&self) -> Result<ThresholdDisclosure, Error> {
             Err(Error::UnsupportedAlgorithm(
@@ -1359,14 +1381,18 @@ mod tests {
         }
     }
 
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     struct NoSeal;
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     impl SealView for NoSeal {
         fn seal(&self, _: &[u8], _: Codec, _: &[u8]) -> Result<(Vec<u8>, Option<Multikey>), Error> {
             Err(Error::UnsupportedAlgorithm("NoSeal.seal".into()))
         }
     }
 
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     struct NoOpen;
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     impl OpenView for NoOpen {
         fn open(
             &self,
@@ -1378,8 +1404,16 @@ mod tests {
         }
     }
 
+    #[cfg(all(
+        feature = "bls12-381",
+        feature = "curve25519",
+        feature = "p256",
+        feature = "p384",
+        feature = "p521",
+        feature = "secp256k1"
+    ))]
     #[test]
-    fn test_builder_matches_shim() {
+    fn test_builder_matches_dispatch() {
         for codec in KEY_CODECS {
             let mut rng = rand::rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1387,80 +1421,87 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            // the basic-attributes view is identical to the shim (which
-            // delegates to the dispatch core)
-            let shim = dispatch_attr_view(&mk).unwrap();
+            // the basic-attributes view is identical to the dispatch core's
+            let direct = dispatch_attr_view(&mk).unwrap();
             let built = ViewBuilder::new(&mk).attr().build().unwrap();
-            assert_eq!(shim.is_encrypted(), built.is_encrypted());
-            assert_eq!(shim.is_public_key(), built.is_public_key());
-            assert_eq!(shim.is_secret_key(), built.is_secret_key());
-            assert_eq!(shim.is_secret_key_share(), built.is_secret_key_share());
+            assert_eq!(direct.is_encrypted(), built.is_encrypted());
+            assert_eq!(direct.is_public_key(), built.is_public_key());
+            assert_eq!(direct.is_secret_key(), built.is_secret_key());
+            assert_eq!(direct.is_secret_key_share(), built.is_secret_key_share());
 
-            // the key-data view is identical to the shim
-            let shim = dispatch_data_view(&mk).unwrap();
+            // the key-data view is identical to the dispatch core's
+            let direct = dispatch_data_view(&mk).unwrap();
             let built = ViewBuilder::new(&mk).data().build().unwrap();
-            assert_eq!(shim.key_bytes().unwrap(), built.key_bytes().unwrap());
-            assert_eq!(shim.secret_bytes().unwrap(), built.secret_bytes().unwrap());
+            assert_eq!(direct.key_bytes().unwrap(), built.key_bytes().unwrap());
+            assert_eq!(
+                direct.secret_bytes().unwrap(),
+                built.secret_bytes().unwrap()
+            );
         }
     }
 
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     #[test]
-    fn test_cipher_attr_matches_shim() {
+    fn test_cipher_attr_matches_dispatch() {
         let mk = chacha_key();
 
         // built-in path: both construct the chacha20 view
-        let shim = dispatch_cipher_attr_view(&mk).unwrap();
+        let direct = dispatch_cipher_attr_view(&mk).unwrap();
         let built = ViewBuilder::new(&mk).cipher_attr().build().unwrap();
-        assert_eq!(shim.cipher_codec().unwrap(), built.cipher_codec().unwrap());
         assert_eq!(
-            shim.nonce_bytes().unwrap().len(),
+            direct.cipher_codec().unwrap(),
+            built.cipher_codec().unwrap()
+        );
+        assert_eq!(
+            direct.nonce_bytes().unwrap().len(),
             built.nonce_bytes().unwrap().len()
         );
-        assert_eq!(shim.key_length().unwrap(), built.key_length().unwrap());
+        assert_eq!(direct.key_length().unwrap(), built.key_length().unwrap());
 
-        // a signing codec has no cipher-attributes view: same error as the shim
+        // a signing codec has no cipher-attributes view: same error as dispatch
         let mk = ed25519_key();
-        let shim = dispatch_cipher_attr_view(&mk).err().unwrap();
+        let direct = dispatch_cipher_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).cipher_attr().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
 
-        // a signing codec has no kdf-attributes view: same error as the shim
-        let shim = dispatch_kdf_attr_view(&mk).err().unwrap();
+        // a signing codec has no kdf-attributes view: same error as dispatch
+        let direct = dispatch_kdf_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).kdf_attr().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
-    fn test_unsupported_matches_shim_error() {
+    fn test_unsupported_matches_dispatch_error() {
         // a DKG share codec has no built-in sign view
         let mk = Builder::new(Codec::Ed25519ThreshPrivShare)
             .with_key_bytes("share")
             .try_build()
             .unwrap();
-        let shim = dispatch_sign_view(&mk).err().unwrap();
+        let direct = dispatch_sign_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).sign().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
         assert!(matches!(
             built,
             Error::Conversions(ConversionsError::UnsupportedCodec(_))
         ));
 
         // the same key also has no threshold view
-        let shim = dispatch_threshold_view(&mk).err().unwrap();
+        let direct = dispatch_threshold_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).threshold().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
 
         // a signing codec is not a seal/open key: exact variant preserved
         let mk = ed25519_key();
-        let shim = dispatch_seal_view(&mk).err().unwrap();
+        let direct = dispatch_seal_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).seal().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
         assert!(matches!(built, Error::Seal(SealError::NotEncryptionKey)));
 
         // a signing codec has no merkle state either
-        let shim = dispatch_merkle_state_view(&mk).err().unwrap();
+        let direct = dispatch_merkle_state_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).merkle_state().build().err().unwrap();
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
     }
 
     #[test]
@@ -1471,12 +1512,7 @@ mod tests {
         let view = ViewBuilder::new(&mk)
             .sign()
             .with_local_codec(Codec::Identity, move |key: &Multikey| {
-                let name = key
-                    .attributes
-                    .get(&AttrId::AlgorithmName)
-                    .map(|v| v.as_slice().to_vec())
-                    .unwrap_or_default();
-                record(&factory_rec, &String::from_utf8(name).unwrap_or_default());
+                record(&factory_rec, algorithm_name(key));
                 Ok(Box::new(NoSign))
             })
             .build()
@@ -1499,23 +1535,9 @@ mod tests {
         let view = ViewBuilder::new(&mk)
             .cipher(&ck)
             .with_local_codec(Codec::Identity, move |mk: &Multikey, cipher: &Multikey| {
-                let viewed = mk
-                    .attributes
-                    .get(&AttrId::AlgorithmName)
-                    .map(|v| v.as_slice().to_vec())
-                    .unwrap_or_default();
-                let attached = cipher
-                    .attributes
-                    .get(&AttrId::AlgorithmName)
-                    .map(|v| v.as_slice().to_vec())
-                    .unwrap_or_default();
                 record(
                     &factory_rec,
-                    &format!(
-                        "{}|{}",
-                        String::from_utf8(viewed).unwrap_or_default(),
-                        String::from_utf8(attached).unwrap_or_default()
-                    ),
+                    &format!("{}|{}", algorithm_name(mk), algorithm_name(cipher)),
                 );
                 Ok(Box::new(NoCipher))
             })
@@ -1542,23 +1564,9 @@ mod tests {
         let view = ViewBuilder::new(&mk)
             .kdf(&kk)
             .with_local_codec(Codec::Identity, move |mk: &Multikey, kdf: &Multikey| {
-                let viewed = mk
-                    .attributes
-                    .get(&AttrId::AlgorithmName)
-                    .map(|v| v.as_slice().to_vec())
-                    .unwrap_or_default();
-                let attached = kdf
-                    .attributes
-                    .get(&AttrId::AlgorithmName)
-                    .map(|v| v.as_slice().to_vec())
-                    .unwrap_or_default();
                 record(
                     &factory_rec,
-                    &format!(
-                        "{}|{}",
-                        String::from_utf8(viewed).unwrap_or_default(),
-                        String::from_utf8(attached).unwrap_or_default()
-                    ),
+                    &format!("{}|{}", algorithm_name(mk), algorithm_name(kdf)),
                 );
                 Ok(Box::new(NoKdf))
             })
@@ -1576,6 +1584,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_builtin_wins() {
         let mk = ed25519_key();
@@ -1593,8 +1602,8 @@ mod tests {
         // a factory registered for a supported standard codec is never called
         assert!(rec.lock().unwrap().is_empty());
 
-        // the built-in view works: sign with the builder, verify with the
-        // shim's dispatch path
+        // the built-in view works: sign with the builder, verify through
+        // the dispatch core directly
         let sig = signer.sign(b"hello", false, None).unwrap();
         dispatch_verify_view(&mk)
             .unwrap()
@@ -1651,6 +1660,7 @@ mod tests {
         assert_eq!(err.to_string(), "Unsupported key algorithm: NoSign");
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_cipher_attr_factory_lookup_key() {
         // the key's CipherCodec attribute names Ed25519Pub: that derived codec
@@ -1691,17 +1701,18 @@ mod tests {
             })
             .build();
         assert!(rec.lock().unwrap().is_empty());
-        // the fallthrough error matches the shim and names the derived codec
+        // the fallthrough error matches dispatch and names the derived codec
         assert!(matches!(
             &built,
             Err(Error::Cipher(CipherError::UnsupportedCodec(
                 Codec::Ed25519Pub
             )))
         ));
-        let shim = dispatch_cipher_attr_view(&mk).err().unwrap();
-        assert_eq!(shim.to_string(), built.err().unwrap().to_string());
+        let direct = dispatch_cipher_attr_view(&mk).err().unwrap();
+        assert_eq!(direct.to_string(), built.err().unwrap().to_string());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_kdf_attr_factory_lookup_key() {
         // the key's KdfCodec attribute names Ed25519Priv: that derived codec
@@ -1713,15 +1724,15 @@ mod tests {
             Zeroizing::new(Vec::from(Codec::Ed25519Priv)),
         );
 
-        // no factory: the fallthrough error matches the shim and names the
+        // no factory: the fallthrough error matches dispatch and names the
         // derived codec
-        let shim = dispatch_kdf_attr_view(&mk).err().unwrap();
+        let direct = dispatch_kdf_attr_view(&mk).err().unwrap();
         let built = ViewBuilder::new(&mk).kdf_attr().build().err().unwrap();
         assert!(matches!(
             built,
             Error::Kdf(KdfError::UnsupportedCodec(Codec::Ed25519Priv))
         ));
-        assert_eq!(shim.to_string(), built.to_string());
+        assert_eq!(direct.to_string(), built.to_string());
 
         // a factory registered for the derived codec applies
         let rec = recorder();
@@ -1781,6 +1792,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_disclosure_factory_never_consulted() {
         let mk = ed25519_key();
@@ -1802,6 +1814,7 @@ mod tests {
         assert_eq!(mode, ThresholdDisclosure::Full);
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_send_sync() {
         fn assert_send<T: Send>() {}
@@ -1839,6 +1852,7 @@ mod tests {
         });
     }
 
+    #[cfg(all(feature = "chacha20", feature = "curve25519"))]
     #[test]
     fn test_seal_open_factory_keyed_on_key_codec() {
         // a signing codec is not an encryption key: seal and open fall
@@ -1888,6 +1902,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_cipher_kdf_factory_lookup_key_is_second_key_codec() {
         // the cipher and kdf kinds dispatch on the SECOND key's codec, so the
@@ -1907,7 +1922,7 @@ mod tests {
         assert!(matches!(built, Err(Error::UnsupportedAlgorithm(s)) if s == "second-key factory"));
 
         // a factory keyed on the VIEWED key's codec is never consulted; the
-        // fallthrough error matches the shim and names the second key's codec
+        // fallthrough error matches dispatch and names the second key's codec
         let rec = recorder();
         let factory_rec = rec.clone();
         let built = ViewBuilder::new(&mk)
@@ -1924,8 +1939,8 @@ mod tests {
                 Codec::Ed25519Priv
             )))
         ));
-        let shim = dispatch_cipher_view(&mk, &ck).err().unwrap();
-        assert_eq!(shim.to_string(), built.err().unwrap().to_string());
+        let direct = dispatch_cipher_view(&mk, &ck).err().unwrap();
+        assert_eq!(direct.to_string(), built.err().unwrap().to_string());
 
         // the kdf kind keys on the kdf key's codec the same way
         let rec = recorder();

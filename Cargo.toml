@@ -1,126 +1,272 @@
 [package]
-name = "multi-key"
-version = "2.3.0"
-edition = "2024"
-rust-version = "1.99"
-authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
-description = "Multikey self-describing cryptographic key data"
-repository = "https://github.com/cryptidtech/multi-key.git"
-readme = "README.md"
-license = "Apache-2.0"
-keywords = ["multiformats", "multikey", "crypto", "post-quantum"]
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>", "Michael Lodder <redmike7@gmail.com>"]
 categories = ["cryptography", "encoding"]
+description = "Multikey self-describing cryptographic key data"
+documentation = "https://docs.rs/multi-key"
+edition = "2024"
+homepage = "https://crates.io/crates/multi-key"
+keywords = ["multiformats", "multikey", "crypto", "post-quantum"]
+license = "Apache-2.0"
+name = "multi-key"
+readme = "README.md"
+repository = "https://github.com/cryptidtech/multi-key.git"
+rust-version = "1.99"
+version = "3.0.0"
 
 [features]
-default = ["serde", "lamport", "xmss"]
-wasm = ["getrandom/wasm_js"]
+# Each algorithm or curve is its own feature, so callers compile in only the
+# key types they use. With `default-features = false` the crate exposes only
+# the Multikey data type, its attributes, and the view traits; callers supply
+# their own implementations through `ViewBuilder::with_local_codec`. Hybrid
+# key types compile when every feature they combine is enabled, e.g.
+# Ed25519-ML-DSA-65 needs both `curve25519` and `ml-dsa`.
+#
+# Shared AEAD layer (AES-GCM, ChaCha20-Poly1305, HKDF) used by every sealing
+# (KEM/ECDH) key type. Enabled by the features that need it.
+aead = ["dep:aes-gcm", "dep:chacha20poly1305", "dep:hkdf", "dep:sha2"]
+# bcrypt-pbkdf key derivation.
+bcrypt = ["dep:bcrypt-pbkdf"]
+# BLS12-381 G1/G2 signing keys and their threshold shares.
+bls12-381 = ["dep:blsful", "dep:elliptic-curve", "dep:vsss-rs", "multi-sig/bls12-381"]
+# ChaCha20-Poly1305 symmetric cipher keys.
+chacha20 = ["dep:chacha20", "dep:chacha20poly1305", "dep:poly1305", "multi-sig/chacha20"]
+# Ed25519 signing, X25519 sealing, and XEdDSA.
+curve25519 = [
+    "aead",
+    "dep:curve25519-dalek",
+    "dep:ed25519-dalek",
+    "dep:getrandom",
+    "dep:sha2",
+    "dep:x25519-dalek",
+    "ssh-key/ed25519",
+]
+default = [
+    "bcrypt",
+    "bls12-381",
+    "chacha20",
+    "curve25519",
+    "fn-dsa",
+    "frodokem",
+    "lamport",
+    "mayo",
+    "ml-dsa",
+    "ml-kem",
+    "p256",
+    "p384",
+    "p521",
+    "rsa",
+    "secp256k1",
+    "serde",
+    "slh-dsa",
+    "sntrup",
+    "threshold",
+    "xmss",
+]
+# Deprecated Classic McEliece KEM support. 2026 structural key-recovery attacks
+# on binary Goppa codes led Germany's BSI to advise against it in new
+# developments; see the README's Deprecated Algorithms section.
+# Excluded from the default build; enable to keep the McEliece key views and
+# their tests compiling.
+deprecated = ["aead", "chacha20/rng", "dep:blake3", "dep:chacha20", "dep:pq-mceliece"]
+# FN-DSA (Falcon) signing keys.
+fn-dsa = ["dep:fn-dsa", "dep:rand_core_06"]
+# FrodoKEM sealing keys.
+frodokem = ["aead", "dep:blake3", "dep:frodo-kem-rs", "dep:getrandom"]
+# Lamport and merkle-tree Lamport one-time signing keys.
+lamport = [
+    "dep:blake2",
+    "dep:blake3",
+    "dep:lamport_signature_plus",
+    "dep:sha2",
+    "dep:sha3",
+    "dep:shake",
+    "multi-sig/lamport",
+]
 # Legacy bare-ChaCha20 fallback for keys encrypted before AEAD was added.
 # When disabled (default), AEAD decryption failure is a hard error — never
 # silently downgrade to unauthenticated ChaCha20. Enable only to migrate
 # pre-AEAD keystores; a warning is emitted on every fallback.
-legacy_chacha20_fallback = []
-lamport = ["dep:lamport_signature_plus", "dep:sha3", "dep:blake2", "dep:shake"]
-xmss = ["dep:xmss"]
-# Deprecated Classic McEliece KEM support (key recovery attacks now solve the
-# TII McEliece challenges; see https://github.com/mjosaarinen/tii-solved).
-# Excluded from the default build; enable to keep the McEliece key views and
-# their tests compiling.
-deprecated = ["dep:mceliece348864"]
+legacy_chacha20_fallback = ["chacha20"]
+# MAYO signing keys.
+mayo = ["dep:pq-mayo", "dep:signature"]
+# ML-DSA (FIPS 204) signing keys.
+ml-dsa = ["dep:ml-dsa"]
+# ML-KEM (FIPS 203) sealing keys.
+ml-kem = ["aead", "dep:ml-kem"]
+# NIST P-256 ECDSA signing keys.
+p256 = [
+    "aead",
+    "dep:elliptic-curve",
+    "dep:p256",
+    "dep:sec1",
+    "dep:typenum",
+    "ssh-key/p256",
+    "ssh-key/rand_core",
+]
+# NIST P-384 ECDSA signing keys.
+p384 = [
+    "aead",
+    "dep:elliptic-curve",
+    "dep:p384",
+    "dep:sec1",
+    "dep:typenum",
+    "ssh-key/p384",
+    "ssh-key/rand_core",
+]
+# NIST P-521 ECDSA signing keys.
+p521 = [
+    "aead",
+    "dep:elliptic-curve",
+    "dep:p521",
+    "dep:sec1",
+    "dep:typenum",
+    "ssh-key/p521",
+    "ssh-key/rand_core",
+]
+# RSA signing keys.
+rsa = ["aead", "dep:getrandom", "dep:pkcs1", "dep:sad-rsa", "dep:sha2"]
+# secp256k1 ECDSA signing and ECDH sealing keys.
+secp256k1 = ["aead", "dep:elliptic-curve", "dep:k256"]
+serde = ["dep:serde", "multi-hash/serde", "multi-sig/serde"]
+# SLH-DSA (FIPS 205) signing keys.
+slh-dsa = ["dep:getrandom", "dep:slh-dsa"]
 # Tests that take over 60 seconds in debug builds (SLH-DSA, Classic McEliece,
 # XMSS). Excluded from the default `cargo test` run; enable with
 # `cargo test --features slow-tests` to run the full suite.
 slow-tests = []
+# Streamlined NTRU Prime sealing keys.
+sntrup = ["aead", "dep:blake3", "dep:sntrup"]
+# Key splitting into verifiable shares and the threshold marker attributes.
+threshold = ["dep:elliptic-curve", "dep:serde", "dep:serde_cbor_2", "dep:vsss-rs"]
+wasm = ["dep:getrandom_02", "getrandom/wasm_js"]
+# XMSS stateful signing keys.
+xmss = ["dep:pq-xmss", "multi-sig/xmss"]
 
 [dependencies]
-aes-gcm = "0.11"
-bcrypt-pbkdf = "0.11"
-blake3 = { version = "1.8", features = ["traits-preview", "zeroize"] }
-ciborium = "0.2"
-curve25519-dalek = { version = "5.0.0", features = ["group"] }
+aes-gcm = { version = "0.11", optional = true }
+bcrypt-pbkdf = { version = "0.11", optional = true }
+blake2 = { version = "0.11.0", optional = true }
+blake3 = { version = "1.8", features = ["traits-preview", "zeroize"], optional = true }
 # blsful configured per-target below (blst for native, rust for wasm)
-frodo-kem-rs = { version = "0.9", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"] }
-chacha20 = "0.10"
-chacha20poly1305 = "0.11"
-ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"] }
-elliptic-curve = "0.14"
-fn-dsa = "0.4"
-getrandom = { version = "0.4", features = ["sys_rng"] }
+chacha20 = { version = "0.10", optional = true }
+chacha20poly1305 = { version = "0.11", optional = true }
+curve25519-dalek = { version = "5.0.0", features = ["group"], optional = true }
+ed25519-dalek = { version = "3.0", features = ["pkcs8", "rand_core", "alloc"], optional = true }
+elliptic-curve = { version = "0.14", optional = true }
+fn-dsa = { version = "0.4", optional = true }
+frodo-kem-rs = { version = "0.9", default-features = false, features = ["frodo640aes", "frodo976aes", "frodo1344aes", "frodo640shake", "frodo976shake", "frodo1344shake"], optional = true }
+getrandom = { version = "0.4", features = ["sys_rng"], optional = true }
 hex = "0.4"
-hkdf = "0.13"
-k256 = { version = "0.14", features = ["ecdh"] }
-mceliece348864 = { version = "1.0", optional = true }
-ml-dsa = "0.1.1"
-ml-kem = "0.3"
+hkdf = { version = "0.13", optional = true }
+k256 = { version = "0.14", features = ["ecdh"], optional = true }
+lamport_signature_plus = { version = "0.5.0", optional = true }
+ml-dsa = { version = "0.1.1", optional = true }
+ml-kem = { version = "0.3", optional = true }
 multi-base = { version = "1.0", default-features = false }
 multi-codec = "1.6"
-multi-hash = "2.0"
-multi-sig = "1.6"
+multi-hash = { version = "3.0", default-features = false }
+multi-sig = { version = "2.0", default-features = false }
 multi-trait = { version = "1.1", default-features = false }
 multi-util = "1.2"
-p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
-p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
-p521 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+p256 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
+p384 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
+p521 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
 # Compatibility pin. sad-rsa 0.2.3 (the newest release of its line) cannot
 # compile against pkcs1 0.8.0-rc.5, which changed `RsaPrivateKey` and
 # `RsaPublicKey` from lifetime parameters to generic parameters. sad-rsa
 # permits `pkcs1 ^0.8.0-rc.4`, so a fresh resolve picks rc.5 and fails. Pin
 # the exact rc.4 dependency to force it; remove this entry once sad-rsa
 # publishes a rc.5-compatible release.
-pkcs1 = "=0.8.0-rc.4"
-poly1305 = "0.9"
-pq-mayo = "0.6.0"
+pkcs1 = { version = "=0.8.0-rc.4", optional = true }
+poly1305 = { version = "0.9", optional = true }
+pq-mayo = { version = "0.6.0", optional = true }
+pq-mceliece = { version = "0.3", default-features = false, features = ["decapsulate", "encapsulate", "keygen", "mceliece348864"], optional = true }
+pq-xmss = { version = "0.2.0", optional = true }
 rand = "0.10"
-rand_chacha = "0.3"
 rand_core = "0.10"
-rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
-sad-rsa = { version = "0.2.3", features = ["sha2"] }
-sec1 = "0.8"
+rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"], optional = true }
+sad-rsa = { version = "0.2.3", features = ["sha2"], optional = true }
+sec1 = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
-sha2 = "0.11"
-signature = "3"
-slh-dsa = "0.2.0-rc.5"
-sntrup = "0.4.0"
+serde_cbor_2 = { version = "0.13.0", optional = true }
+sha2 = { version = "0.11", optional = true }
+sha3 = { version = "0.12", optional = true }
+shake = { version = "0.1", optional = true }
+signature = { version = "3", optional = true }
+slh-dsa = { version = "0.2.0-rc.5", optional = true }
+sntrup = { version = "0.4.0", optional = true }
 ssh-encoding = "0.3"
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc"] }
 subtle = "2"
 thiserror = { version = "2.0" }
-typenum = "1.20"
+typenum = { version = "1.20", optional = true }
 unsigned-varint = { version = "0.8", features = ["std"] }
-vsss-rs = "6.0"
-x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"] }
-zeroize = "1"
-# Lamport support (feature-gated, default-enabled)
-lamport_signature_plus = { version = "0.5.0", optional = true }
-sha3 = { version = "0.12", optional = true }
-blake2 = { version = "0.11.0", optional = true }
-shake = { version = "0.1", optional = true }
-# XMSS support (feature-gated, default-enabled)
-xmss = { version = "0.1.0-pre.0", optional = true }
+vsss-rs = { version = "6", optional = true }
+x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"], optional = true }
+zeroize = { version = "1", features = ["derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-blsful = { version = "4.1.0", default-features = false, features = ["rust"] }
-getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
-ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
+blsful = { version = "4.1.0", default-features = false, features = ["rust"], optional = true }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-blsful = { version = "4.1.0", default-features = false, features = ["blst"] }
-ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["alloc", "ecdsa", "ed25519", "p256", "p384", "p521"] }
+blsful = { version = "4.1.0", default-features = false, features = ["blst"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
+# the hash families the tests fingerprint keys with
+multi-hash = { version = "3.0", default-features = false, features = ["blake2", "sha3"] }
 proptest = "1.11"
+serde_cbor_2 = "0.13.0"
 serde_json = "1.0"
 serde_test = "1.0"
 
 [[bench]]
-name = "multikey_bench"
 harness = false
+name = "multikey_bench"
 path = "benches/multikey_bench.rs"
+required-features = ["curve25519"]
 
+# Pedantic, nursery, and cargo lints are on. The allows suppress stylistic
+# lints that would require large-scale churn for minimal security benefit.
 [lints.clippy]
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
+branches_sharing_code = "allow"
 cargo = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+doc_markdown = "allow"
+elidable_lifetime_names = "allow"
+enum_glob_use = "allow"
+explicit_iter_loop = "allow"
+if_not_else = "allow"
+items_after_statements = "allow"
+large_stack_frames = "allow"
+match_same_arms = "allow"
+missing_const_for_fn = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 multiple_crate_versions = { level = "allow", priority = 1 }
+must_use_candidate = "allow"
+needless_pass_by_value = "allow"
+nursery = { level = "warn", priority = -1 }
+option_if_let_else = "allow"
+or_fun_call = "allow"
+pedantic = { level = "warn", priority = -1 }
+redundant_pub_crate = "allow"
+return_self_not_must_use = "allow"
+semicolon_if_nothing_returned = "allow"
+similar_names = "allow"
+single_char_pattern = "allow"
+single_match_else = "allow"
+too_long_first_doc_paragraph = "allow"
+too_many_lines = "allow"
+uninlined_format_args = "allow"
+use_self = "allow"
+useless_let_if_seq = "allow"
 
 [lints.rust]
+missing_docs = "warn"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
 unsafe_code = "deny"
+unused_import_braces = "deny"
+unused_qualifications = "deny"

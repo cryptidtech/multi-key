@@ -8,10 +8,13 @@
 //!
 //! # Deprecation
 //!
-//! This view is deprecated. Key-recovery attacks now solve the TII McEliece
-//! challenges; see <https://github.com/mjosaarinen/tii-solved> for the
-//! recovered keys. It compiles only with the `deprecated` feature.
+//! This view is deprecated: 2026 structural key-recovery attacks on binary
+//! Goppa codes led Germany's BSI to advise against Classic McEliece in new
+//! developments. See the crate-level Deprecations section for the papers and
+//! the BSI note. Use the X25519-ML-KEM-768 or X25519-FrodoKEM-640 hybrid
+//! instead. It compiles only with the `deprecated` feature.
 
+use crate::views::classic_mceliece::{self, ALGORITHM};
 use crate::views::dispatch::dispatch_data_view;
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, OpenView,
@@ -23,8 +26,6 @@ use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
-use rand_chacha::ChaCha20Rng;
-use rand_core_06::SeedableRng;
 use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::Zeroizing;
 
@@ -35,6 +36,12 @@ const X25519_PUB_LEN: usize = 32;
 
 /// Decoded sealed message: (ephemeral_x25519_pub, mceliece_ct, nonce, ciphertext+tag)
 type SealedParts = (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
+
+/// The Classic McEliece 348864 encapsulation key length, `mt * k / 8` bytes.
+const MCELIECE_PUB_LEN: usize = {
+    let p = ALGORITHM.params();
+    p.m * p.t * p.k / 8
+};
 
 /// Only ChaCha20-Poly1305 allowed (matches the other X-Wing-like hybrid KEMs).
 fn is_aead_allowed(codec: Codec) -> bool {
@@ -109,13 +116,12 @@ impl<'a> ConvView for View<'a> {
         let mceliece_seed: [u8; 32] = secret_bytes[X25519_SEED_LEN..PRIV_SEED_LEN]
             .try_into()
             .map_err(|_| ConversionsError::SecretKeyFailure("invalid mceliece seed".into()))?;
-        let mut rng = ChaCha20Rng::from_seed(mceliece_seed);
-        let (pk, _sk) = mceliece348864::keypair_boxed(&mut rng);
+        let (ek, _dk) = classic_mceliece::keypair_from_seed(mceliece_seed)?;
 
         // Concatenate (classical-first): x25519_pub (32) || mceliece_pub
-        let mut pub_bytes = Vec::with_capacity(X25519_PUB_LEN + pk.as_ref().len());
+        let mut pub_bytes = Vec::with_capacity(X25519_PUB_LEN + ek.value().len());
         pub_bytes.extend_from_slice(x25519_pub.as_bytes());
-        pub_bytes.extend_from_slice(pk.as_ref());
+        pub_bytes.extend_from_slice(ek.value());
 
         Builder::new(Codec::X25519Mceliece348864Pub)
             .with_comment(&self.mk.comment)
@@ -170,15 +176,6 @@ fn combine_shared_secrets(
     *hasher.finalize().as_bytes()
 }
 
-fn encode_sealed(ephemeral_pub: &[u8], mceliece_ct: &[u8], nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(ephemeral_pub.to_vec()).into());
-    out.append(&mut Varbytes::new(mceliece_ct.to_vec()).into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
 fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
     let (ephemeral_pub, ptr) = Varbytes::try_decode_from(data)
         .map_err(|_| SealError::InvalidFormat("missing ephemeral public key".into()))?;
@@ -211,7 +208,7 @@ impl<'a> SealView for View<'a> {
         }
 
         let pub_bytes = self.key_bytes()?;
-        if pub_bytes.len() != X25519_PUB_LEN + mceliece348864::CRYPTO_PUBLICKEYBYTES {
+        if pub_bytes.len() != X25519_PUB_LEN + MCELIECE_PUB_LEN {
             return Err(
                 SealError::EncapsulationFailed("invalid hybrid public key length".into()).into(),
             );
@@ -228,15 +225,13 @@ impl<'a> SealView for View<'a> {
         let ss_x25519 = ephemeral_secret.diffie_hellman(&recipient_x25519_pub);
 
         // McEliece encapsulate
-        let pk_array: Box<[u8; mceliece348864::CRYPTO_PUBLICKEYBYTES]> = pub_bytes
-            [X25519_PUB_LEN..]
-            .to_vec()
-            .into_boxed_slice()
-            .try_into()
-            .map_err(|_| SealError::EncapsulationFailed("invalid mceliece public key".into()))?;
-        let pk = mceliece348864::PublicKey::from(pk_array);
-        let (ct, ss_mceliece) = mceliece348864::encapsulate_boxed(&pk, &mut rand_core_06::OsRng);
-        let mceliece_ct: &[u8] = ct.as_ref();
+        let ek = ALGORITHM
+            .encapsulation_key_from_bytes(&pub_bytes[X25519_PUB_LEN..])
+            .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+        let (ct, ss_mceliece) = ALGORITHM
+            .encapsulate(&ek, rand::rng())
+            .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+        let mceliece_ct = ct.value();
 
         let combined_ss = combine_shared_secrets(
             ss_mceliece.as_ref(),
@@ -253,7 +248,7 @@ impl<'a> SealView for View<'a> {
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
         Ok((
-            encode_sealed(ephemeral_pub.as_bytes(), mceliece_ct, &nonce, &ct_tag),
+            aead::encode_hybrid_sealed(ephemeral_pub.as_bytes(), mceliece_ct, &nonce, &ct_tag),
             None,
         ))
     }
@@ -304,15 +299,13 @@ impl<'a> OpenView for View<'a> {
         let mceliece_seed: [u8; 32] = secret_bytes[X25519_SEED_LEN..PRIV_SEED_LEN]
             .try_into()
             .map_err(|_| SealError::DecapsulationFailed("invalid mceliece seed".into()))?;
-        let mut rng = ChaCha20Rng::from_seed(mceliece_seed);
-        let (_pk, sk) = mceliece348864::keypair_boxed(&mut rng);
-
-        let ct_array: [u8; mceliece348864::CRYPTO_CIPHERTEXTBYTES] = mceliece_ct_bytes
-            .clone()
-            .try_into()
-            .map_err(|_| SealError::DecapsulationFailed("invalid mceliece ciphertext".into()))?;
-        let ct = mceliece348864::Ciphertext::from(ct_array);
-        let ss_mceliece = mceliece348864::decapsulate_boxed(&ct, &sk);
+        let (_ek, dk) = classic_mceliece::keypair_from_seed(mceliece_seed)?;
+        let ct = ALGORITHM
+            .ciphertext_from_bytes(&mceliece_ct_bytes)
+            .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
+        let ss_mceliece = ALGORITHM
+            .decapsulate(&dk, &ct)
+            .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
 
         let combined_ss = combine_shared_secrets(
             ss_mceliece.as_ref(),

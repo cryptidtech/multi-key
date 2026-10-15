@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Security-focused tests for multi-key
-#![allow(clippy::redundant_clone, clippy::doc_markdown)]
+#![allow(clippy::redundant_clone)]
+#[cfg(feature = "curve25519")]
 use multi_codec::Codec;
-use multi_key::{Builder, Error, Multikey};
+#[cfg(feature = "curve25519")]
+use multi_key::Builder;
+use multi_key::{Error, Multikey};
 
 /// Test malformed multikey data
 #[test]
@@ -23,11 +26,13 @@ fn test_truncated_data() {
 /// Test empty bytes
 #[test]
 fn test_empty_bytes() {
-    let result = Multikey::try_from(&[] as &[u8]);
+    let empty: &[u8] = &[];
+    let result = Multikey::try_from(empty);
     assert!(result.is_err());
 }
 
 /// Test concurrent key generation
+#[cfg(feature = "curve25519")]
 #[test]
 fn test_concurrent_generation() {
     use rand::SeedableRng;
@@ -83,7 +88,12 @@ fn test_private_key_zeroization() {
 /// silently decrypted via the legacy bare-ChaCha20 fallback. Without the
 /// `legacy_chacha20_fallback` feature, AEAD failure must surface as a hard
 /// error so an attacker can never downgrade authentication.
-#[cfg(not(feature = "legacy_chacha20_fallback"))]
+#[cfg(all(
+    feature = "bcrypt",
+    feature = "chacha20",
+    feature = "curve25519",
+    not(feature = "legacy_chacha20_fallback")
+))]
 #[test]
 fn test_chacha20_aead_tamper_rejected() {
     use multi_key::{Builder, ViewBuilder, cipher, kdf};
@@ -160,7 +170,12 @@ fn test_chacha20_aead_tamper_rejected() {
 /// `legacy_chacha20_fallback` feature enabled, tampered AEAD ciphertext falls
 /// back to bare ChaCha20 and "succeeds" (producing garbage). This documents
 /// the downgrade risk the feature carries — it must stay off by default.
-#[cfg(feature = "legacy_chacha20_fallback")]
+#[cfg(all(
+    feature = "bcrypt",
+    feature = "chacha20",
+    feature = "curve25519",
+    feature = "legacy_chacha20_fallback"
+))]
 #[test]
 fn test_chacha20_legacy_fallback_downgrades_on_tamper() {
     use multi_key::{Builder, ViewBuilder, cipher, kdf};

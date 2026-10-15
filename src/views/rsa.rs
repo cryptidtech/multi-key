@@ -2,7 +2,7 @@
 //! RSA-2048/3072/4096 multikey view — signing (PSS SHA-256) + encryption (RSA-OAEP + AEAD).
 
 use crate::views::dispatch::{
-    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+    dispatch_attr_view, dispatch_data_view, dispatch_fingerprint_view, public_form,
 };
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
@@ -266,10 +266,7 @@ impl<'a> ConvView for View<'a> {
     }
 
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
-        let mut pk = self.mk.clone();
-        if self.is_secret_key() {
-            pk = self.to_public_key()?;
-        }
+        let pk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pk)?;
@@ -291,7 +288,7 @@ impl<'a> ConvView for View<'a> {
                 ),
                 key: opaque_key_bytes,
             }),
-            pk.comment,
+            pk.comment.clone(),
         ))
     }
 
@@ -388,13 +385,7 @@ impl<'a> SignView for View<'a> {
 
 impl<'a> VerifyView for View<'a> {
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;
@@ -436,16 +427,6 @@ fn is_rsa_aead_allowed(codec: Codec) -> bool {
         codec,
         Codec::AesGcm128 | Codec::AesGcm256 | Codec::Chacha20Poly1305 | Codec::Xchacha20Poly1305
     )
-}
-
-/// Encode: [rsa_oaep_ciphertext Varbytes][aead_codec Codec][nonce Varbytes][ciphertext Varbytes]
-fn encode_sealed(rsa_ct: &[u8], aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(rsa_ct.to_vec()).into());
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
 }
 
 /// RSA-OAEP ciphertext, AEAD codec, nonce, ciphertext+tag
@@ -511,7 +492,10 @@ impl<'a> SealView for View<'a> {
         // Encrypt plaintext with AEAD
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
-        Ok((encode_sealed(&rsa_ct, aead_codec, &nonce, &ct_tag), None))
+        Ok((
+            aead::encode_kem_sealed(&rsa_ct, aead_codec, &nonce, &ct_tag),
+            None,
+        ))
     }
 }
 

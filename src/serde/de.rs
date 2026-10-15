@@ -4,7 +4,7 @@ use crate::{
     mk::{self, Attributes},
     nonce,
 };
-use core::fmt;
+use core::{fmt, marker::PhantomData};
 use multi_codec::Codec;
 use multi_util::EncodedVarbytes;
 use serde::{
@@ -13,28 +13,31 @@ use serde::{
 };
 use zeroize::Zeroizing;
 
-/// Visitor that accepts borrowed bytes, owned bytes, and byte buffers.
-/// Used by the non-human-readable `Deserialize` paths so that deserializers
-/// which cannot lend borrowed slices (e.g. `ciborium`) still work.
-struct ByteBufVisitor;
+/// Visitor for the non-human-readable `Deserialize` paths. It decodes `T`
+/// straight from the input bytes, so it works with deserializers that lend
+/// borrowed slices and with reader-based ones that hand over an owned buffer.
+/// An owned buffer is zeroized after decoding because a `Multikey` can carry
+/// secret key bytes.
+struct ByteBufVisitor<T>(PhantomData<T>);
 
-impl<'de> Visitor<'de> for ByteBufVisitor {
-    type Value = Vec<u8>;
+impl<T> Visitor<'_> for ByteBufVisitor<T>
+where
+    T: for<'a> TryFrom<&'a [u8], Error = crate::Error>,
+{
+    type Value = T;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("byte buffer")
     }
 
-    fn visit_borrowed_bytes<E: Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
-        Ok(v.to_vec())
-    }
-
+    // serde's default `visit_borrowed_bytes` forwards here
     fn visit_bytes<E: Error>(self, v: &[u8]) -> Result<Self::Value, E> {
-        Ok(v.to_vec())
+        T::try_from(v).map_err(E::custom)
     }
 
     fn visit_byte_buf<E: Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-        Ok(v)
+        let v = Zeroizing::new(v);
+        self.visit_bytes(&v)
     }
 }
 
@@ -85,8 +88,7 @@ impl<'de> Deserialize<'de> for Nonce {
         if deserializer.is_human_readable() {
             deserializer.deserialize_struct(nonce::SIGIL.as_str(), FIELDS, NonceVisitor)
         } else {
-            let b = deserializer.deserialize_byte_buf(ByteBufVisitor)?;
-            Ok(Self::try_from(b.as_slice()).map_err(D::Error::custom)?)
+            deserializer.deserialize_byte_buf(ByteBufVisitor(PhantomData))
         }
     }
 }
@@ -113,25 +115,13 @@ impl<'de> Deserialize<'de> for AttrId {
                 AttrId::try_from(c).map_err(E::custom)
             }
 
+            // serde's default `visit_borrowed_str` and `visit_string`
+            // forward here
             fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
             where
                 E: Error,
             {
-                AttrId::try_from(s).map_err(E::custom)
-            }
-
-            fn visit_borrowed_str<E>(self, s: &'de str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                AttrId::try_from(s).map_err(E::custom)
-            }
-
-            fn visit_string<E>(self, s: String) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                AttrId::try_from(s.as_str()).map_err(E::custom)
+                s.parse().map_err(E::custom)
             }
         }
 
@@ -193,10 +183,9 @@ impl<'de> Deserialize<'de> for Multikey {
                             }
                             let attr: Vec<(AttrId, EncodedVarbytes)> = map.next_value()?;
                             let mut a = Attributes::new();
-                            attr.iter()
-                                .try_for_each(|(id, attr)| -> Result<(), V::Error> {
-                                    let i = *id;
-                                    let v: Zeroizing<Vec<u8>> = (***attr).clone().into();
+                            attr.into_iter()
+                                .try_for_each(|(i, attr)| -> Result<(), V::Error> {
+                                    let v: Zeroizing<Vec<u8>> = attr.to_inner().to_inner().into();
                                     if a.insert(i, v).is_some() {
                                         return Err(Error::duplicate_field(
                                             "duplicate attribute id",
@@ -223,8 +212,7 @@ impl<'de> Deserialize<'de> for Multikey {
         if deserializer.is_human_readable() {
             deserializer.deserialize_struct(mk::SIGIL.as_str(), FIELDS, MultikeyVisitor)
         } else {
-            let b = deserializer.deserialize_byte_buf(ByteBufVisitor)?;
-            Ok(Self::try_from(b.as_slice()).map_err(D::Error::custom)?)
+            deserializer.deserialize_byte_buf(ByteBufVisitor(PhantomData))
         }
     }
 }

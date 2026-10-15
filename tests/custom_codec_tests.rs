@@ -459,8 +459,7 @@ fn test_custom_key_serde_roundtrip() {
     assert_eq!(back, mk);
 
     // binary format
-    let mut cbor = Vec::new();
-    ciborium::into_writer(&mk, &mut cbor).unwrap();
-    let back: Multikey = ciborium::from_reader(cbor.as_slice()).unwrap();
+    let cbor = serde_cbor_2::to_vec(&mk).unwrap();
+    let back: Multikey = serde_cbor_2::from_slice(&cbor).unwrap();
     assert_eq!(back, mk);
 }

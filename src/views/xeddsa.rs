@@ -21,7 +21,7 @@
 //! 4. The verification equation is standard Ed25519 over the lifted point,
 //!    checked with strict verification.
 
-use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
+use crate::views::dispatch::{dispatch_attr_view, dispatch_data_view, public_form};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
@@ -341,12 +341,7 @@ impl<'a> VerifyView for View<'a> {
     /// non-canonical u encoding, a small-order key, and a mixed-order key.
     /// Signature verification is strict: a non-canonical R or S is rejected.
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            dispatch_conv_view(self.mk)?.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         if pubmk.codec != Codec::X25519Pub {
             return Err(AttributesError::UnsupportedCodec(pubmk.codec).into());

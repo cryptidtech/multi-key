@@ -3,7 +3,6 @@
 //! threshold split, share-sign, multi-sig accumulate, combine, verify.
 
 #![cfg(feature = "lamport")]
-#![allow(clippy::uninlined_format_args)]
 use multi_codec::Codec;
 use multi_key::{Builder, Multikey, ViewBuilder};
 use multi_sig::{Multisig, ViewBuilder as SigViewBuilder};
