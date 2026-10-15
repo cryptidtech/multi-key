@@ -132,16 +132,6 @@ impl<'a> FingerprintView for View<'a> {
     }
 }
 
-/// Encode a sealed message: [aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
-/// The ephemeral public key is carried externally (in the BsMessage outer format).
-fn encode_sealed(aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
 /// Decode a sealed message: [aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
 fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
     let (aead_codec, ptr) = Codec::try_decode_from(data)
@@ -198,7 +188,7 @@ impl<'a> SealView for View<'a> {
             .try_build()?;
 
         Ok((
-            encode_sealed(aead_codec, &nonce, &ct_tag),
+            aead::encode_sealed(aead_codec, &nonce, &ct_tag),
             Some(ephemeral_mk),
         ))
     }

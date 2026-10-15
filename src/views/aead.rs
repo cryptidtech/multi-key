@@ -1,24 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Shared AEAD helper functions for ML-KEM and X25519 seal/open operations.
+//! Shared AEAD helper functions for the KEM and ECDH seal/open operations.
 
-use crate::error::SealError;
+use crate::{error::SealError, mk::encode_varbytes_into};
 use aes_gcm::{
     Aes128Gcm, Aes256Gcm,
     aead::{Aead, KeyInit, Payload},
 };
 use chacha20poly1305::{ChaCha20Poly1305, XChaCha20Poly1305};
-use hkdf::Hkdf;
 use multi_codec::Codec;
-use sha2::Sha512;
+use multi_trait::EncodeIntoBuffer;
 use zeroize::Zeroizing;
 
 /// Derive an AEAD key from a shared secret using HKDF-SHA512.
+#[cfg(any(
+    feature = "curve25519",
+    feature = "deprecated",
+    feature = "frodokem",
+    feature = "ml-kem",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "secp256k1",
+    feature = "sntrup"
+))]
 pub(crate) fn derive_aead_key(
     shared_secret: &[u8],
     info: &[u8],
     key_len: usize,
 ) -> Result<Zeroizing<Vec<u8>>, SealError> {
-    let hk = Hkdf::<Sha512>::new(None, shared_secret);
+    let hk = hkdf::Hkdf::<sha2::Sha512>::new(None, shared_secret);
     let mut okm = Zeroizing::new(vec![0u8; key_len]);
     hk.expand(info, &mut okm)
         .map_err(|e| SealError::KeyDerivationFailed(e.to_string()))?;
@@ -174,6 +184,74 @@ pub(crate) fn aead_open(
     Ok(Zeroizing::new(pt))
 }
 
+/// Encode the AEAD part of a sealed message:
+/// `[aead_codec Codec][nonce Varbytes][ct+tag Varbytes]`. ECDH views carry the
+/// ephemeral public key outside this blob.
+#[cfg(any(
+    feature = "curve25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "secp256k1"
+))]
+pub(crate) fn encode_sealed(aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    encode_sealed_into(&mut out, aead_codec, nonce, ct_tag);
+    out
+}
+
+/// Encode a KEM-sealed message:
+/// `[kem_ct Varbytes][aead_codec Codec][nonce Varbytes][ct+tag Varbytes]`.
+#[cfg(any(
+    feature = "deprecated",
+    feature = "frodokem",
+    feature = "ml-kem",
+    feature = "rsa",
+    feature = "sntrup"
+))]
+pub(crate) fn encode_kem_sealed(
+    kem_ct: &[u8],
+    aead_codec: Codec,
+    nonce: &[u8],
+    ct_tag: &[u8],
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    encode_varbytes_into(&mut out, kem_ct);
+    encode_sealed_into(&mut out, aead_codec, nonce, ct_tag);
+    out
+}
+
+/// Encode a hybrid X25519 + KEM sealed message:
+/// `[ephemeral_x25519_pub Varbytes][kem_ct Varbytes][nonce Varbytes][ct+tag Varbytes]`.
+/// The AEAD codec is fixed by the hybrid codec, so it is not encoded.
+#[cfg(all(
+    feature = "curve25519",
+    any(
+        feature = "deprecated",
+        feature = "frodokem",
+        feature = "ml-kem",
+        feature = "sntrup"
+    )
+))]
+pub(crate) fn encode_hybrid_sealed(
+    ephemeral_pub: &[u8],
+    kem_ct: &[u8],
+    nonce: &[u8],
+    ct_tag: &[u8],
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    for field in [ephemeral_pub, kem_ct, nonce, ct_tag] {
+        encode_varbytes_into(&mut out, field);
+    }
+    out
+}
+
+fn encode_sealed_into(out: &mut Vec<u8>, aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) {
+    u64::from(aead_codec).encode_into_buffer(out);
+    encode_varbytes_into(out, nonce);
+    encode_varbytes_into(out, ct_tag);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,6 +301,17 @@ mod tests {
         assert!(aead_open(Codec::Chacha20Poly1305, &key, &nonce, &ct, b"").is_err());
     }
 
+    #[cfg(any(
+        feature = "curve25519",
+        feature = "deprecated",
+        feature = "frodokem",
+        feature = "ml-kem",
+        feature = "p256",
+        feature = "p384",
+        feature = "p521",
+        feature = "secp256k1",
+        feature = "sntrup"
+    ))]
     #[test]
     fn test_hkdf_derive() {
         let secret = [0xabu8; 32];
@@ -231,5 +320,32 @@ mod tests {
         // derive again with same inputs => same output
         let key2 = derive_aead_key(&secret, b"test", 32).unwrap();
         assert_eq!(key.as_slice(), key2.as_slice());
+    }
+
+    /// the sealed-message encoders produce the documented wire layout
+    #[cfg(all(
+        feature = "curve25519",
+        any(
+            feature = "deprecated",
+            feature = "frodokem",
+            feature = "ml-kem",
+            feature = "sntrup"
+        )
+    ))]
+    #[test]
+    fn test_sealed_wire_layout() {
+        let mut tail: Vec<u8> = Codec::Chacha20Poly1305.into();
+        tail.extend_from_slice(&[1, 4, 2, 5, 6]);
+        assert_eq!(encode_sealed(Codec::Chacha20Poly1305, &[4], &[5, 6]), tail);
+        let mut kem = vec![2, 8, 9];
+        kem.extend_from_slice(&tail);
+        assert_eq!(
+            encode_kem_sealed(&[8, 9], Codec::Chacha20Poly1305, &[4], &[5, 6]),
+            kem
+        );
+        assert_eq!(
+            encode_hybrid_sealed(&[1], &[2, 3], &[4], &[5, 6]),
+            vec![1, 1, 2, 2, 3, 1, 4, 2, 5, 6]
+        );
     }
 }

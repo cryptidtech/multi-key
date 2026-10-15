@@ -2,7 +2,7 @@
 //! FN-DSA (Falcon) 512/1024 multikey view; FIPS 206 (draft).
 
 use crate::views::dispatch::{
-    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+    dispatch_attr_view, dispatch_data_view, dispatch_fingerprint_view, public_form,
 };
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
@@ -125,10 +125,7 @@ impl<'a> ConvView for View<'a> {
     }
 
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
-        let mut pk = self.mk.clone();
-        if self.is_secret_key() {
-            pk = self.to_public_key()?;
-        }
+        let pk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pk)?;
@@ -157,7 +154,7 @@ impl<'a> ConvView for View<'a> {
                 ),
                 key: opaque_key_bytes,
             }),
-            pk.comment,
+            pk.comment.clone(),
         ))
     }
 
@@ -259,13 +256,7 @@ impl<'a> SignView for View<'a> {
 
 impl<'a> VerifyView for View<'a> {
     fn verify(&self, multisig: &multi_sig::Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;

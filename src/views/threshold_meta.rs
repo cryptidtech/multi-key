@@ -11,15 +11,14 @@
 //!
 //! - **[`ThresholdDisclosure::Full`]** — t and n are plaintext attributes (default).
 //! - **[`ThresholdDisclosure::Partial`]** — n is plaintext, t is encrypted.
-//! - **[`ThresholdDisclosure::FullConfidentialial`]** — both t and n are encrypted.
+//! - **[`ThresholdDisclosure::FullConfidential`]** — both t and n are encrypted.
 
 // Re-export the pure crypto types/functions owned by `multi_sig` so that the
 // historical `multi_key::ThresholdDisclosure` / `multi_key::encrypt_threshold_meta`
 // public API keeps working for downstream callers.
-pub use multi_sig::{
-    ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata, decrypt_threshold_meta,
-    encrypt_threshold_meta, generate_meta_key,
-};
+pub use multi_sig::{ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata};
+#[cfg(feature = "chacha20")]
+pub use multi_sig::{decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key};
 
 use crate::{
     AttrId, Error, Multikey,
@@ -34,6 +33,7 @@ use zeroize::Zeroizing;
 /// cipher key (e.g. a ChaCha20-Poly1305 key Multikey). This bridges the
 /// `Multikey` at-rest encryption infrastructure to the threshold metadata
 /// encryption helpers in `multi_sig`.
+#[cfg(feature = "chacha20")]
 fn extract_meta_key(meta_key: &Multikey) -> Result<Zeroizing<Vec<u8>>, Error> {
     let dv = crate::views::dispatch::dispatch_data_view(meta_key)?;
     let key = dv.key_bytes()?;
@@ -44,6 +44,38 @@ fn extract_meta_key(meta_key: &Multikey) -> Result<Zeroizing<Vec<u8>>, Error> {
         ))));
     }
     Ok(key)
+}
+
+/// Without `chacha20` the encrypted disclosure modes are unavailable, so every
+/// path that needs the meta key fails here, before any attribute is written;
+/// the confidential threshold is never written in plaintext.
+#[cfg(not(feature = "chacha20"))]
+fn extract_meta_key(_meta_key: &Multikey) -> Result<Zeroizing<Vec<u8>>, Error> {
+    Err(meta_encryption_unavailable())
+}
+
+#[cfg(not(feature = "chacha20"))]
+fn encrypt_threshold_meta(
+    _meta: &ThresholdMetadata,
+    _key: &[u8],
+) -> Result<(Vec<u8>, ThresholdMetaCipher), Error> {
+    Err(meta_encryption_unavailable())
+}
+
+#[cfg(not(feature = "chacha20"))]
+fn decrypt_threshold_meta(
+    _encrypted: &[u8],
+    _cipher_info: &ThresholdMetaCipher,
+    _key: &[u8],
+) -> Result<ThresholdMetadata, Error> {
+    Err(meta_encryption_unavailable())
+}
+
+#[cfg(not(feature = "chacha20"))]
+fn meta_encryption_unavailable() -> Error {
+    Error::Threshold(ThresholdError::MetaEncryption(
+        "encrypted threshold metadata needs the chacha20 feature".to_string(),
+    ))
 }
 
 /// Read the disclosure mode from a Multikey. Returns [`ThresholdDisclosure::Full`]
@@ -62,9 +94,9 @@ pub fn disclosure_mode(mk: &Multikey) -> Result<ThresholdDisclosure, Error> {
 ///
 /// In Full mode, reads plaintext `Threshold`/`Limit` attributes.
 /// In Partial mode, reads `Limit` from plaintext and decrypts `Threshold`.
-/// In FullConfidentialial mode, decrypts both from `EncryptedThresholdMeta`.
+/// In FullConfidential mode, decrypts both from `EncryptedThresholdMeta`.
 ///
-/// `meta_key` is required for Partial/FullConfidentialial modes.
+/// `meta_key` is required for Partial/FullConfidential modes.
 pub fn read_threshold_params(
     mk: &Multikey,
     meta_key: Option<&Multikey>,
@@ -108,7 +140,7 @@ pub fn read_threshold_params(
             ))? as usize;
             Ok((t, n))
         }
-        ThresholdDisclosure::FullConfidentialial => {
+        ThresholdDisclosure::FullConfidential => {
             let encrypted = mk.attributes.get(&AttrId::EncryptedThresholdMeta).ok_or(
                 ThresholdError::MetaEncryption("missing EncryptedThresholdMeta".to_string()),
             )?;
@@ -185,7 +217,7 @@ pub fn stamp_disclosure_attrs(
                 Zeroizing::new(mode.encode_into()),
             );
         }
-        ThresholdDisclosure::FullConfidentialial => {
+        ThresholdDisclosure::FullConfidential => {
             let meta_key = meta_key.ok_or(ThresholdError::MissingMetaKey)?;
             let key = extract_meta_key(meta_key)?;
 
@@ -276,10 +308,14 @@ impl<'a> ThresholdDisclosureView for DisclosureView<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(feature = "bls12-381", not(feature = "chacha20")))]
     use crate::Builder;
+    #[cfg(feature = "bls12-381")]
     use crate::ViewBuilder;
+    #[cfg(any(feature = "bls12-381", not(feature = "chacha20")))]
     use multi_codec::Codec;
 
+    #[cfg(all(feature = "bls12-381", feature = "chacha20"))]
     fn make_meta_key() -> Multikey {
         let key = generate_meta_key();
         Builder::new(Codec::Chacha20Poly1305)
@@ -288,6 +324,7 @@ mod tests {
             .unwrap()
     }
 
+    #[cfg(feature = "bls12-381")]
     fn make_share(t: usize, n: usize) -> Multikey {
         Builder::new(Codec::Bls12381G1PrivShare)
             .with_threshold(t)
@@ -314,7 +351,7 @@ mod tests {
         );
         assert_eq!(
             ThresholdDisclosure::try_from(2u8).unwrap(),
-            ThresholdDisclosure::FullConfidentialial
+            ThresholdDisclosure::FullConfidential
         );
         assert!(ThresholdDisclosure::try_from(3u8).is_err());
     }
@@ -324,7 +361,7 @@ mod tests {
         for mode in [
             ThresholdDisclosure::Full,
             ThresholdDisclosure::Partial,
-            ThresholdDisclosure::FullConfidentialial,
+            ThresholdDisclosure::FullConfidential,
         ] {
             let encoded = mode.encode_into();
             let (decoded, rest) = ThresholdDisclosure::try_decode_from(&encoded).unwrap();
@@ -341,6 +378,7 @@ mod tests {
         assert_eq!(meta, decoded);
     }
 
+    #[cfg(feature = "chacha20")]
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         let key = generate_meta_key();
@@ -350,6 +388,7 @@ mod tests {
         assert_eq!(meta, decrypted);
     }
 
+    #[cfg(feature = "chacha20")]
     #[test]
     fn test_encrypt_decrypt_wrong_key() {
         let key1 = generate_meta_key();
@@ -359,6 +398,7 @@ mod tests {
         assert!(decrypt_threshold_meta(&ct, &info, &key2).is_err());
     }
 
+    #[cfg(feature = "chacha20")]
     #[test]
     fn test_encrypt_decrypt_tampered() {
         let key = generate_meta_key();
@@ -368,6 +408,7 @@ mod tests {
         assert!(decrypt_threshold_meta(&ct, &info, &key).is_err());
     }
 
+    #[cfg(feature = "bls12-381")]
     #[test]
     fn test_read_full_mode() {
         let share = make_share(3, 5);
@@ -376,6 +417,7 @@ mod tests {
         assert_eq!(n, 5);
     }
 
+    #[cfg(all(feature = "bls12-381", feature = "chacha20"))]
     #[test]
     fn test_convert_full_to_partial_and_back() {
         let share = make_share(3, 5);
@@ -424,21 +466,18 @@ mod tests {
         assert_eq!(n, 5);
     }
 
+    #[cfg(all(feature = "bls12-381", feature = "chacha20"))]
     #[test]
-    fn test_convert_full_to_full_confidentialial_and_back() {
+    fn test_convert_full_to_full_confidential_and_back() {
         let share = make_share(3, 5);
         let meta_key = make_meta_key();
 
-        // convert to FullConfidentialial
+        // convert to FullConfidential
         let encrypted = ViewBuilder::new(&share)
             .disclosure()
             .build()
             .unwrap()
-            .to_disclosure(
-                ThresholdDisclosure::FullConfidentialial,
-                Some(&meta_key),
-                None,
-            )
+            .to_disclosure(ThresholdDisclosure::FullConfidential, Some(&meta_key), None)
             .unwrap();
         assert_eq!(
             ViewBuilder::new(&encrypted)
@@ -447,7 +486,7 @@ mod tests {
                 .unwrap()
                 .disclosure_mode()
                 .unwrap(),
-            ThresholdDisclosure::FullConfidentialial
+            ThresholdDisclosure::FullConfidential
         );
 
         // read t/n
@@ -467,6 +506,7 @@ mod tests {
         assert_eq!(n, 5);
     }
 
+    #[cfg(all(feature = "bls12-381", feature = "chacha20"))]
     #[test]
     fn test_read_encrypted_without_meta_key() {
         let share = make_share(3, 5);
@@ -475,15 +515,12 @@ mod tests {
             .disclosure()
             .build()
             .unwrap()
-            .to_disclosure(
-                ThresholdDisclosure::FullConfidentialial,
-                Some(&meta_key),
-                None,
-            )
+            .to_disclosure(ThresholdDisclosure::FullConfidential, Some(&meta_key), None)
             .unwrap();
         assert!(read_threshold_params(&encrypted, None).is_err());
     }
 
+    #[cfg(feature = "bls12-381")]
     #[test]
     fn test_convert_to_partial_without_meta_key() {
         let share = make_share(3, 5);
@@ -495,6 +532,49 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// without `chacha20` the encrypted modes fail and leave the threshold
+    /// out of the attributes rather than writing it in plaintext
+    #[cfg(not(feature = "chacha20"))]
+    #[test]
+    fn test_encrypted_disclosure_needs_chacha20() {
+        let meta_mk = Builder::new(Codec::Chacha20Poly1305)
+            .with_key_bytes(&[7u8; 32])
+            .try_build()
+            .unwrap();
+        fn unavailable<T>(r: &Result<T, Error>) -> bool {
+            matches!(r, Err(Error::Threshold(ThresholdError::MetaEncryption(_))))
+        }
+        for mode in [
+            ThresholdDisclosure::Partial,
+            ThresholdDisclosure::FullConfidential,
+        ] {
+            let mut attrs = Attributes::new();
+            let stamped = stamp_disclosure_attrs(&mut attrs, mode, 2, 3, Some(&meta_mk));
+            assert!(unavailable(&stamped));
+            assert!(!attrs.contains_key(&AttrId::Threshold));
+            assert!(!attrs.contains_key(&AttrId::EncryptedThresholdMeta));
+        }
+        // reading an encrypted share fails the same way
+        let mut attrs = Attributes::new();
+        attrs.insert(
+            AttrId::ThresholdDisclosure,
+            Zeroizing::new(ThresholdDisclosure::Partial.encode_into()),
+        );
+        attrs.insert(AttrId::Limit, Zeroizing::new(Varuint(3usize).into()));
+        attrs.insert(AttrId::EncryptedThresholdMeta, Zeroizing::new(vec![0u8; 8]));
+        attrs.insert(
+            AttrId::ThresholdMetaCipher,
+            ThresholdMetaCipher::new(Codec::Chacha20Poly1305, vec![0u8; 12])
+                .to_cbor_bytes()
+                .unwrap()
+                .into(),
+        );
+        let mut share = meta_mk.clone();
+        share.attributes = attrs;
+        assert!(unavailable(&read_threshold_params(&share, Some(&meta_mk))));
+    }
+
+    #[cfg(feature = "chacha20")]
     #[test]
     fn test_generate_meta_key_is_32_bytes() {
         let key = generate_meta_key();

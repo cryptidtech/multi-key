@@ -254,6 +254,7 @@ pub enum CipherError {
 #[non_exhaustive]
 pub enum KdfError {
     /// Bcrypt PBKDF error
+    #[cfg(feature = "bcrypt")]
     #[error(transparent)]
     Bcrypt(#[from] bcrypt_pbkdf::Error),
     /// Error with the KDF codec
@@ -355,6 +356,7 @@ pub enum SignError {
 #[non_exhaustive]
 pub enum ThresholdError {
     /// Bls error
+    #[cfg(feature = "bls12-381")]
     #[error(transparent)]
     Bls(#[from] blsful::BlsError),
     /// Invalid threshold and limit

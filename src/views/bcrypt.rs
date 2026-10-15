@@ -5,8 +5,7 @@ use multi_codec::Codec;
 use multi_util::Varuint;
 use zeroize::Zeroizing;
 
-/// constants for Bcrypt
-pub const SALT_LENGTH: usize = 32;
+use crate::kdf::SALT_LENGTH;
 
 pub(crate) struct View<'a> {
     mk: &'a Multikey,
@@ -64,7 +63,7 @@ impl<'a> KdfView for View<'a> {
         res.attributes.insert(AttrId::KeyData, key.clone());
         let _ = res.attributes.remove(&AttrId::KeyIsEncrypted);
         res.attributes.insert(AttrId::KdfCodec, kdf_codec.into());
-        res.attributes.insert(AttrId::KdfSalt, salt.clone());
+        res.attributes.insert(AttrId::KdfSalt, salt);
         res.attributes.insert(AttrId::KdfRounds, rounds.into());
         Ok(res)
     }

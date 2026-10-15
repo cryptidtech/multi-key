@@ -168,16 +168,6 @@ fn combine_shared_secrets(
     out
 }
 
-/// Encode sealed message: [ephemeral_x25519_pub Varbytes][mlkem_ct Varbytes][nonce Varbytes][ct+tag Varbytes]
-fn encode_sealed(ephemeral_pub: &[u8], mlkem_ct: &[u8], nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(ephemeral_pub.to_vec()).into());
-    out.append(&mut Varbytes::new(mlkem_ct.to_vec()).into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
 /// Decode sealed message
 fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
     let (ephemeral_pub, ptr) = Varbytes::try_decode_from(data)
@@ -255,7 +245,7 @@ impl<'a> SealView for View<'a> {
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
         Ok((
-            encode_sealed(
+            aead::encode_hybrid_sealed(
                 ephemeral_pub.as_bytes(),
                 mlkem_ct.as_slice(),
                 &nonce,

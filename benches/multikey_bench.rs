@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Performance benchmarks for multi-key
-#![allow(clippy::semicolon_if_nothing_returned)]
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use multi_codec::Codec;
@@ -40,7 +39,7 @@ fn bench_encoding(c: &mut Criterion) {
 
     c.bench_function("multikey_to_bytes", |b| {
         b.iter(|| {
-            let _bytes: Vec<u8> = black_box(mk.clone()).into();
+            let _bytes = Vec::<u8>::from(black_box(&mk));
         })
     });
 }

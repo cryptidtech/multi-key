@@ -5,7 +5,7 @@
 //! Secret layout: ed25519_seed (32) || fn_dsa_signing_key (sign_key_size).
 //! Public encoding is classical-first: ed25519_pub (32) || fn_dsa_verifying_key.
 
-use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
+use crate::views::dispatch::{dispatch_attr_view, dispatch_data_view, public_form};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
@@ -205,13 +205,7 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;

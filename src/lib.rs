@@ -22,6 +22,7 @@
 //! ### Generating a Key Pair
 //!
 //! ```rust
+//! # #[cfg(feature = "curve25519")] {
 //! use multi_key::Builder;
 //! use multi_codec::Codec;
 //!
@@ -30,11 +31,13 @@
 //!     .unwrap()
 //!     .try_build()
 //!     .unwrap();
+//! # }
 //! ```
 //!
 //! ### Encoding and Decoding
 //!
 //! ```rust
+//! # #[cfg(feature = "curve25519")] {
 //! use multi_key::{Builder, Multikey};
 //! use multi_codec::Codec;
 //!
@@ -45,11 +48,12 @@
 //!     .unwrap();
 //!
 //! // Encode to bytes
-//! let bytes: Vec<u8> = mk1.clone().into();
+//! let bytes = Vec::<u8>::from(&mk1);
 //!
 //! // Decode from bytes
 //! let mk2 = Multikey::try_from(bytes.as_ref()).unwrap();
 //! assert_eq!(mk1, mk2);
+//! # }
 //! ```
 //!
 //! ### Creating Views
@@ -64,6 +68,7 @@
 //! `ViewBuilder::new(&mk).cipher(&cipher_key).build()`.
 //!
 //! ```rust
+//! # #[cfg(feature = "curve25519")] {
 //! use multi_key::{Builder, ViewBuilder};
 //! use multi_codec::Codec;
 //!
@@ -78,9 +83,20 @@
 //!
 //! let verifier = ViewBuilder::new(&mk).verify().build().unwrap();
 //! verifier.verify(&sig, Some(b"message")).unwrap();
+//! # }
 //! ```
 //!
 //! ## Features
+//!
+//! Each algorithm and curve is its own feature: `bcrypt`, `bls12-381`,
+//! `chacha20`, `curve25519` (Ed25519, X25519, XEdDSA), `fn-dsa`, `frodokem`,
+//! `lamport`, `mayo`, `ml-dsa`, `ml-kem`, `p256`, `p384`, `p521`, `rsa`,
+//! `secp256k1`, `slh-dsa`, `sntrup`, and `xmss`, all enabled by default.
+//! `threshold` (default) adds key splitting and the threshold marker
+//! attributes. A hybrid key type compiles when every feature it combines is
+//! enabled, e.g. Ed25519-ML-DSA-65 needs `curve25519` and `ml-dsa`. With
+//! `default-features = false` the crate provides only the [`Multikey`] data
+//! type, its attributes, the view traits, and the [`ViewBuilder`].
 //!
 //! - **`serde`** (default): Enables serde serialization
 //! - **`wasm`**: Enables WebAssembly support with getrandom/js
@@ -95,18 +111,29 @@
 //! ## Deprecations
 //!
 //! Classic McEliece (the `Mceliece348864Pub`/`Priv` codecs and the
-//! `X25519-McEliece-348864` hybrid) is deprecated. Key-recovery attacks now
-//! solve the TII McEliece challenges; see
-//! <https://github.com/mjosaarinen/tii-solved> for the recovered keys. The
-//! McEliece views compile only with the `deprecated` feature. Stored
+//! `X25519-McEliece-348864` hybrid) is deprecated; use ML-KEM, FrodoKEM, or
+//! their X25519 hybrids instead. During 2026 structural attacks on binary
+//! Goppa codes cut the estimated key-recovery cost from over 2^3000 to as low
+//! as a claimed 2^99 to 2^102 operations:
+//!
+//! - Hemmert and Wiemers (BSI), higher-order-vanishing distinguisher
+//!   (CRYPTO 2026), and Hemmert's key recovery,
+//!   <https://eprint.iacr.org/2026/1339>
+//! - Ghoshal, Ishai, Jain, and Sun, quasi-polynomial distinguisher,
+//!   <https://eprint.iacr.org/2026/1630>
+//! - Weis, improved key recovery, <https://eprint.iacr.org/2026/1984>
+//! - Saarinen, recovered TII McEliece challenge keys,
+//!   <https://eprint.iacr.org/2026/1778>, <https://eprint.iacr.org/2026/1986>,
+//!   <https://github.com/mjosaarinen/tii-solved>
+//!
+//! On 29 September 2026 Germany's BSI advised against Classic McEliece in new
+//! developments: <https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Crypto/Notes_Classic_McEliece.pdf>.
+//! Most of these results are still preprints, and BSI reports no practical
+//! attack yet on the parameter sets it recommends.
+//!
+//! The McEliece views compile only with the `deprecated` feature. Stored
 //! McEliece multikeys still decode in default builds, but key generation
 //! fails with `UnsupportedCodec`.
-//!
-//! The `Views` extension trait (and its impl for `Multikey`) is deprecated
-//! since 2.1.0. It stays as a source-compatible delegating shim that calls
-//! the same dispatch core [`ViewBuilder`] uses; construct views with
-//! [`ViewBuilder`] instead. Note that `multi_sig::Views` is a different,
-//! unrelated trait.
 //!
 //! ## Security
 //!
@@ -117,50 +144,6 @@
 //! ## Supported Key Types
 //!
 //! See [`KEY_CODECS`] for the complete list of supported key algorithms.
-
-#![warn(missing_docs)]
-#![deny(
-    unsafe_code,
-    trivial_casts,
-    trivial_numeric_casts,
-    unused_import_braces,
-    unused_qualifications
-)]
-// Pedantic/nursery lints are enabled at the workspace level via
-// `[lints.clippy]` in Cargo.toml. The following allows suppress stylistic
-// lints that would require large-scale churn for minimal security benefit.
-#![allow(
-    clippy::doc_markdown,
-    clippy::elidable_lifetime_names,
-    clippy::use_self,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::must_use_candidate,
-    clippy::return_self_not_must_use,
-    clippy::semicolon_if_nothing_returned,
-    clippy::or_fun_call,
-    clippy::missing_const_for_fn,
-    clippy::multiple_crate_versions,
-    clippy::too_many_lines,
-    clippy::option_if_let_else,
-    clippy::single_match_else,
-    clippy::uninlined_format_args,
-    clippy::cast_possible_truncation,
-    clippy::redundant_pub_crate,
-    clippy::redundant_clone,
-    clippy::items_after_statements,
-    clippy::if_not_else,
-    clippy::explicit_iter_loop,
-    clippy::enum_glob_use,
-    clippy::branches_sharing_code,
-    clippy::too_long_first_doc_paragraph,
-    clippy::useless_let_if_seq,
-    clippy::large_stack_frames,
-    clippy::match_same_arms,
-    clippy::similar_names,
-    clippy::single_char_pattern,
-    clippy::needless_pass_by_value
-)]
 
 /// Errors produced by this library
 pub mod error;
@@ -178,21 +161,23 @@ pub mod kdf;
 
 /// Key views
 pub mod views;
-#[allow(deprecated)]
-pub use views::Views;
 pub use views::builder::{
     AttrKind, CipherAttrKind, CipherKind, ConvKind, DataKind, DisclosureKind, FingerprintKind,
     KdfAttrKind, KdfKind, MerkleStateKind, OpenKind, SealKind, SignKind, ThresholdAttrKind,
     ThresholdKeyKind, ThresholdKind, Unselected, VerifyKind, ViewBuilder, ViewKind,
 };
+#[cfg(feature = "threshold")]
 pub use views::threshold_marker::{
     self, MarkerView, ThresholdParticipant, ThresholdScheme, group_public_key, participants,
     set_group_public_key, set_participants, threshold_kind, threshold_params,
 };
 pub use views::threshold_meta::{
     self, DisclosureView, ThresholdDisclosure, ThresholdMetaCipher, ThresholdMetadata,
-    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key, read_threshold_params,
-    stamp_disclosure_attrs,
+    read_threshold_params, stamp_disclosure_attrs,
+};
+#[cfg(feature = "chacha20")]
+pub use views::threshold_meta::{
+    decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key,
 };
 pub use views::{
     AttrView, CipherAttrView, CipherView, ConvView, DataView, FingerprintView, KdfAttrView,
@@ -201,6 +186,7 @@ pub use views::{
 };
 
 /// Key splitting / recombination (verifiable threshold shares)
+#[cfg(feature = "threshold")]
 pub mod keysplit;
 
 /// Multikey type and functions
@@ -231,6 +217,7 @@ pub mod serde;
 /// Commonly used items
 ///
 /// ```
+/// # #[cfg(feature = "curve25519")] {
 /// use multi_key::prelude::*;
 ///
 /// let mut rng = rand::rng();
@@ -238,6 +225,7 @@ pub mod serde;
 ///     .unwrap()
 ///     .try_build()
 ///     .unwrap();
+/// # }
 /// ```
 pub mod prelude {
     pub use super::*;

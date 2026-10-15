@@ -5,7 +5,7 @@
 
 # Multi-Key
 
-A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and [nonce specification][NONCE]. The published crate is **`multi-key`**. Depend on it as `multi-key = "2"` in `Cargo.toml`. Import it as `multi_key` in Rust, for example `use multi_key::Builder;`.
+A Rust implementation of the [multiformats][MULTIFORMATS] [multikey specification][MULTIKEY] and [nonce specification][NONCE]. The published crate is **`multi-key`**. Depend on it as `multi-key = "3"` in `Cargo.toml`. Import it as `multi_key` in Rust, for example `use multi_key::Builder;`.
 
 ## Current Status
 
@@ -22,6 +22,8 @@ This implementation of the multikey specification supports an extensive set of p
 - **Secret-key / symmetric** — ChaCha20-Poly1305 keys.
 
 See the [Supported Key Formats](#supported-key-formats) section below for the exhaustive list of codecs.
+
+Each algorithm and curve sits behind its own [Cargo feature](#cargo-features), all on by default except the deprecated Classic McEliece (`deprecated`). With `default-features = false` the crate pulls in no algorithm crate and provides only the `Multikey` type, its attributes, the view traits, and `ViewBuilder`.
 
 This implementation supports encrypting and decrypting keys at rest with ChaCha20-Poly1305 AEAD. The keys are derived via the bcrypt PBKDF from a preimage. A legacy bare-ChaCha20 fallback is honored on decrypt so older keystores continue to work. Re-encrypting upgrades them to the authenticated AEAD format.
 
@@ -76,7 +78,18 @@ identifiers come from the [multicodec][MULTICODEC] registry and are surfaced as
 
 ### Deprecated Algorithms
 
-Classic McEliece (the `Mceliece348864Pub`/`Priv` codecs) and the X25519-McEliece-348864 hybrid are **deprecated**. Key-recovery attacks now solve the TII McEliece challenges; see [tii-solved](https://github.com/mjosaarinen/tii-solved) for the recovered keys. The McEliece views compile only with the `deprecated` cargo feature and are excluded from the default build. Stored McEliece multikeys still decode in default builds, but `Builder::new_from_random_bytes` fails for McEliece codecs with `UnsupportedCodec`.
+Classic McEliece (the `Mceliece348864Pub`/`Priv` codecs) and the X25519-McEliece-348864 hybrid are **deprecated**. Do not use them in new designs; use ML-KEM (`ml-kem`), FrodoKEM (`frodokem`), or the X25519-ML-KEM-768 and X25519-FrodoKEM-640 hybrids instead.
+
+**Why.** Classic McEliece rests on the assumption that, given only the public key (a random basis of a secret binary Goppa code), no one can correct errors efficiently. Until recently the best key-recovery attack was brute force with support splitting, at over 2^3000 even for the smallest parameter set. During 2026 a series of structural attacks changed that:
+
+- Hemmert and Wiemers of Germany's Federal Office for Information Security (BSI) gave a higher-order-vanishing distinguisher for Goppa codes (CRYPTO 2026), and Hemmert turned it into a key-recovery attack ([ePrint 2026/1339](https://eprint.iacr.org/2026/1339)).
+- Ghoshal, Ishai, Jain, and Sun gave a distinguisher with claimed quasi-polynomial complexity, estimated at 2^120 to 2^124 operations for the parameter sets BSI recommends, and a heuristic key recovery at 2^140 to 2^148 ([ePrint 2026/1630](https://eprint.iacr.org/2026/1630)).
+- Weis claims an improved key recovery at 2^99 to 2^102 operations for those sets ([ePrint 2026/1984](https://eprint.iacr.org/2026/1984)).
+- Saarinen recovered the keys of previously unsolved TII McEliece challenges, including TII-252 and TII-254 ([ePrint 2026/1778](https://eprint.iacr.org/2026/1778), [ePrint 2026/1986](https://eprint.iacr.org/2026/1986); recovered keys in [tii-solved](https://github.com/mjosaarinen/tii-solved)).
+
+On 29 September 2026 BSI advised that Classic McEliece should no longer be used in new developments or when planning new cryptographic applications, and pointed to FrodoKEM, ML-KEM, and (once standardized) HQC instead ([BSI note](https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Crypto/Notes_Classic_McEliece.pdf)). BSI also notes that most of these results are preprints still under review, that none yet gives a practical attack on the parameter sets it recommends, and that a hybrid with a classical scheme still keeps at least the classical scheme's security. It expects to revise its guidance in early 2027. The 348864 set this crate implements is the smallest Classic McEliece parameter set.
+
+The McEliece views compile only with the `deprecated` cargo feature and are excluded from the default build. Stored McEliece multikeys still decode in default builds, but `Builder::new_from_random_bytes` fails for McEliece codecs with `UnsupportedCodec`.
 
 ### KEMs / Key Agreement
 
@@ -186,11 +199,6 @@ let encrypted = encrypter.encrypt()?;
 let kdf = ViewBuilder::new(&mk).kdf(&kdf_key).build()?;
 let derived = kdf.derive_key(b"passphrase")?;
 ```
-
-The original `multi_key::Views` extension trait is deprecated since 2.1.0
-in favor of `ViewBuilder`. It stays as a source-compatible delegating shim
-with the same `*_view()` methods, marked as deprecated at compile time.
-Note that `multi_sig::Views` is a different, unrelated trait.
 
 ### Custom Protocol Keys
 
@@ -320,7 +328,7 @@ By default, threshold `t` and share count `n` are stored as **plaintext** attrib
 |---|---|---|---|---|
 | `Full` (default, 0) | plaintext attribute | plaintext attribute | everyone | everyone |
 | `Partial` (1) | encrypted (AEAD) | plaintext attribute | key-holder only | everyone (auditable) |
-| `FullConfidentialial` (2) | encrypted (AEAD) | encrypted (AEAD) | key-holder only | key-holder only |
+| `FullConfidential` (2) | encrypted (AEAD) | encrypted (AEAD) | key-holder only | key-holder only |
 
 The encrypted values are sealed with **ChaCha20-Poly1305 AEAD**. They are stored as a CBOR-encoded `ThresholdMetadata` blob in `AttrId::EncryptedThresholdMeta`. The cipher parameters (codec and nonce) are recorded in `AttrId::ThresholdMetaCipher` so the blob is self-describing for decryption. A separate **meta key** (a 32-byte symmetric `Multikey` with `Codec::Chacha20Poly1305`) is required to encrypt and decrypt the metadata.
 
@@ -330,11 +338,11 @@ The encrypted values are sealed with **ChaCha20-Poly1305 AEAD**. They are stored
 
 - **`Partial`** — Use when the total number of participants `n` should be auditable (for example, for governance transparency) but the threshold `t` should be hidden from share holders and observers. Hiding `t` means an adversary who compromises some shares does not know how many more they need to reconstruct the key. The `meta_key` is required to read `t`. The value `n` is freely readable.
 
-- **`FullConfidentialial`** — Use when both `t` and `n` must be kept secret. An observer who sees a share cannot determine the group size or how many shares are needed. This is the strongest confidentiality mode. The `meta_key` is required to read both `t` and `n`.
+- **`FullConfidential`** — Use when both `t` and `n` must be kept secret. An observer who sees a share cannot determine the group size or how many shares are needed. This is the strongest confidentiality mode. The `meta_key` is required to read both `t` and `n`.
 
 ### Trade-offs
 
-| Consideration | Full | Partial | FullConfidentialial |
+| Consideration | Full | Partial | FullConfidential |
 |---|---|---|---|
 | Backward compatible | yes | yes (attribute defaults to Full if absent) | yes |
 | Observer learns `t` | yes | no | no |
@@ -344,7 +352,7 @@ The encrypted values are sealed with **ChaCha20-Poly1305 AEAD**. They are stored
 | Risk if `meta_key` lost | n/a | `t` irrecoverable | `t` and `n` irrecoverable |
 | Performance overhead | none | negligible (AEAD on ~10 bytes) | negligible |
 
-**Key management risk.** Losing the `meta_key` makes `t` (Partial) or both `t` and `n` (FullConfidentialial) irrecoverable. This prevents key combination. The `meta_key` should be stored or backed up with the existing at-rest encryption mechanisms. You can always convert back to `Full` mode (with the `meta_key`) before you lose it.
+**Key management risk.** Losing the `meta_key` makes `t` (Partial) or both `t` and `n` (FullConfidential) irrecoverable. This prevents key combination. The `meta_key` should be stored or backed up with the existing at-rest encryption mechanisms. You can always convert back to `Full` mode (with the `meta_key`) before you lose it.
 
 **DKG note.** DKG threshold values (`t` and `n`) are inherently known to all participants because they are agreed during the DKG ceremony. The confidentiality modes do not apply to DKG shares. A `to_disclosure()` call on a DKG share returns an error. Future work could add "hidden threshold DKG" where participants do not know `t`. That requires protocol-level changes (FROST-style), not just encoding changes.
 
@@ -362,10 +370,10 @@ let meta_mk = Builder::new(Codec::Chacha20Poly1305)
     .with_key_bytes(&meta_key.as_slice())
     .try_build()?;
 
-// BLS Shamir split with FullConfidentialial disclosure
+// BLS Shamir split with FullConfidential disclosure
 let shares = ViewBuilder::new(&mk).threshold().build()?
     .split_with_disclosure(3, 5,
-        ThresholdDisclosure::FullConfidentialial, Some(&meta_mk))?;
+        ThresholdDisclosure::FullConfidential, Some(&meta_mk))?;
 ```
 
 **2. Builder construction:**
@@ -382,7 +390,7 @@ let share = Builder::new(Codec::Bls12381G2PrivShare)
 
 ```rust
 let encrypted = ViewBuilder::new(&share).disclosure().build()?
-    .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), None)?;
+    .to_disclosure(ThresholdDisclosure::FullConfidential, Some(&meta_mk), None)?;
 ```
 
 ### Reading Threshold Parameters from Encrypted Shares
@@ -420,11 +428,11 @@ The `to_disclosure()` method converts between any pair of modes. It reads the cu
 let partial = ViewBuilder::new(&full).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::Partial, Some(&meta_mk), None)?;
 
-// Partial → FullConfidentialial
+// Partial → FullConfidential
 let confidential = ViewBuilder::new(&partial).disclosure().build()?
-    .to_disclosure(ThresholdDisclosure::FullConfidentialial, Some(&meta_mk), Some(&meta_mk))?;
+    .to_disclosure(ThresholdDisclosure::FullConfidential, Some(&meta_mk), Some(&meta_mk))?;
 
-// FullConfidentialial → Full
+// FullConfidential → Full
 let full_again = ViewBuilder::new(&confidential).disclosure().build()?
     .to_disclosure(ThresholdDisclosure::Full, None, Some(&meta_mk))?;
 ```
@@ -450,10 +458,52 @@ Individual KEM views may restrict the allowed AEAD codec. For example, X25519-ML
 
 ## Cargo Features
 
+Each algorithm and curve is its own feature, so you compile in only the key types you use. With `default-features = false` the crate provides only the `Multikey` data type, its attributes, the view traits, and the `ViewBuilder`; supply your own view implementations with `ViewBuilder::with_local_codec`. A hybrid key type compiles when every feature it combines is enabled. For example, Ed25519-ML-DSA-65 needs both `curve25519` and `ml-dsa`, and X25519-ML-KEM-768 needs both `curve25519` and `ml-kem`.
+
 | Feature | Default | Description |
 |---|---|---|
+| `aead` | yes | Shared AEAD layer (AES-GCM, ChaCha20-Poly1305, HKDF) for sealing key types; enabled by the features that need it |
+| `bcrypt` | yes | bcrypt-pbkdf key derivation |
+| `bls12-381` | yes | BLS12-381 G1/G2 keys and threshold shares |
+| `chacha20` | yes | ChaCha20-Poly1305 symmetric cipher keys, and the encrypted threshold disclosure modes (`encrypt_threshold_meta`, `decrypt_threshold_meta`, `generate_meta_key`) |
+| `curve25519` | yes | Ed25519, X25519, and XEdDSA (`curve25519-dalek`, `ed25519-dalek`, `x25519-dalek`) |
+| `deprecated` | no | Classic McEliece (see Deprecations) |
+| `fn-dsa` | yes | FN-DSA (Falcon) |
+| `frodokem` | yes | FrodoKEM |
+| `lamport` | yes | Lamport and merkle-tree Lamport one-time signatures |
+| `legacy_chacha20_fallback` | no | Bare-ChaCha20 fallback for keys encrypted before AEAD was added |
+| `mayo` | yes | MAYO |
+| `ml-dsa` | yes | ML-DSA (FIPS 204) |
+| `ml-kem` | yes | ML-KEM (FIPS 203) |
+| `p256` | yes | NIST P-256 |
+| `p384` | yes | NIST P-384 |
+| `p521` | yes | NIST P-521 |
+| `rsa` | yes | RSA |
+| `secp256k1` | yes | secp256k1 |
 | `serde` | yes | Serde serialization for `Multikey`, `KeyShare`, `SharePayload`, `ThresholdParticipant` |
-| `wasm` | no | WebAssembly support via `getrandom/wasm_js`; switches `blsful` to the `rust` backend and `ssh-key` to `ecdsa`/`ed25519`/`p256`/`p384`/`p521` features on `wasm32` |
+| `slh-dsa` | yes | SLH-DSA (FIPS 205) |
+| `slow-tests` | no | Runs the tests that take over 60 seconds in debug builds (SLH-DSA, Classic McEliece, XMSS) |
+| `sntrup` | yes | Streamlined NTRU Prime |
+| `threshold` | yes | Key splitting (`keysplit`) and the threshold marker attributes (`elliptic-curve`, `vsss-rs`, CBOR via `serde_cbor_2`) |
+| `wasm` | no | WebAssembly randomness via `getrandom/wasm_js`; on `wasm32` targets `blsful` always uses its `rust` backend |
+| `xmss` | yes | XMSS |
+
+## Upgrading from 2.x
+
+3.0 replaces the always-on crypto dependencies with one feature per algorithm or curve. The default build has every feature except `deprecated`, `legacy_chacha20_fallback`, `slow-tests`, and `wasm`, so `multi-key = "3"` has the same key types as 2.x.
+
+- If you used `default-features = false` only to drop serde, add back the algorithms you use, e.g. `features = ["curve25519", "ml-dsa"]`, plus `threshold`, `lamport`, or `xmss` if you used those. A hybrid needs every feature it combines.
+- Creating, converting, or viewing a key whose feature is off returns an `UnsupportedCodec` error (`UnsupportedAlgorithm` for SSH conversion, `SealError::NotEncryptionKey` for the seal and open views).
+- `KdfError::Bcrypt` exists only with `bcrypt`, and `ThresholdError::Bls` only with `bls12-381`. Both enums are `#[non_exhaustive]`, so wildcard matches still compile.
+- Key splitting (`keysplit`) and the threshold marker need the `threshold` feature.
+- The `Partial` and `FullConfidential` disclosure modes and `encrypt_threshold_meta`, `decrypt_threshold_meta`, and `generate_meta_key` need the `chacha20` feature.
+- `ThresholdDisclosure::FullConfidentialial` is now `FullConfidential` (multi-sig 2.0). The wire value is unchanged.
+- Encode by reference with `Vec::<u8>::from(&mk)` to avoid cloning the key, including its secret bytes. The owned `From<Multikey>` still works.
+- `FingerprintView` hashes through multi-hash 3.0, which compiles in only the hash families you enable. Add the families you fingerprint with to your own `multi-hash` dependency, e.g. `multi-hash = { version = "3.0", features = ["sha3"] }`; a disabled family returns `UnsupportedHash`.
+- `AttrId` parses from its name with `FromStr`, e.g. `"key-data".parse::<AttrId>()`.
+- The deprecated `Views` trait is gone. Replace `mk.sign_view()` with `ViewBuilder::new(&mk).sign().build()`, and likewise for the other view kinds; `cipher` and `kdf` take the second key, e.g. `.cipher(&key)`.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Security
 
