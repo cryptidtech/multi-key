@@ -11,7 +11,7 @@
 //!
 //! - **[`ThresholdDisclosure::Full`]** — t and n are plaintext attributes (default).
 //! - **[`ThresholdDisclosure::Partial`]** — n is plaintext, t is encrypted.
-//! - **[`ThresholdDisclosure::FullConfidentialial`]** — both t and n are encrypted.
+//! - **[`ThresholdDisclosure::FullConfidential`]** — both t and n are encrypted.
 
 // Re-export the pure crypto types/functions owned by `multi_sig` so that the
 // historical `multi_key::ThresholdDisclosure` / `multi_key::encrypt_threshold_meta`
@@ -62,9 +62,9 @@ pub fn disclosure_mode(mk: &Multikey) -> Result<ThresholdDisclosure, Error> {
 ///
 /// In Full mode, reads plaintext `Threshold`/`Limit` attributes.
 /// In Partial mode, reads `Limit` from plaintext and decrypts `Threshold`.
-/// In FullConfidentialial mode, decrypts both from `EncryptedThresholdMeta`.
+/// In FullConfidential mode, decrypts both from `EncryptedThresholdMeta`.
 ///
-/// `meta_key` is required for Partial/FullConfidentialial modes.
+/// `meta_key` is required for Partial/FullConfidential modes.
 pub fn read_threshold_params(
     mk: &Multikey,
     meta_key: Option<&Multikey>,
@@ -108,7 +108,7 @@ pub fn read_threshold_params(
             ))? as usize;
             Ok((t, n))
         }
-        ThresholdDisclosure::FullConfidentialial => {
+        ThresholdDisclosure::FullConfidential => {
             let encrypted = mk.attributes.get(&AttrId::EncryptedThresholdMeta).ok_or(
                 ThresholdError::MetaEncryption("missing EncryptedThresholdMeta".to_string()),
             )?;
@@ -185,7 +185,7 @@ pub fn stamp_disclosure_attrs(
                 Zeroizing::new(mode.encode_into()),
             );
         }
-        ThresholdDisclosure::FullConfidentialial => {
+        ThresholdDisclosure::FullConfidential => {
             let meta_key = meta_key.ok_or(ThresholdError::MissingMetaKey)?;
             let key = extract_meta_key(meta_key)?;
 
@@ -314,7 +314,7 @@ mod tests {
         );
         assert_eq!(
             ThresholdDisclosure::try_from(2u8).unwrap(),
-            ThresholdDisclosure::FullConfidentialial
+            ThresholdDisclosure::FullConfidential
         );
         assert!(ThresholdDisclosure::try_from(3u8).is_err());
     }
@@ -324,7 +324,7 @@ mod tests {
         for mode in [
             ThresholdDisclosure::Full,
             ThresholdDisclosure::Partial,
-            ThresholdDisclosure::FullConfidentialial,
+            ThresholdDisclosure::FullConfidential,
         ] {
             let encoded = mode.encode_into();
             let (decoded, rest) = ThresholdDisclosure::try_decode_from(&encoded).unwrap();
@@ -429,13 +429,13 @@ mod tests {
         let share = make_share(3, 5);
         let meta_key = make_meta_key();
 
-        // convert to FullConfidentialial
+        // convert to FullConfidential
         let encrypted = ViewBuilder::new(&share)
             .disclosure()
             .build()
             .unwrap()
             .to_disclosure(
-                ThresholdDisclosure::FullConfidentialial,
+                ThresholdDisclosure::FullConfidential,
                 Some(&meta_key),
                 None,
             )
@@ -447,7 +447,7 @@ mod tests {
                 .unwrap()
                 .disclosure_mode()
                 .unwrap(),
-            ThresholdDisclosure::FullConfidentialial
+            ThresholdDisclosure::FullConfidential
         );
 
         // read t/n
@@ -476,7 +476,7 @@ mod tests {
             .build()
             .unwrap()
             .to_disclosure(
-                ThresholdDisclosure::FullConfidentialial,
+                ThresholdDisclosure::FullConfidential,
                 Some(&meta_key),
                 None,
             )
