@@ -206,16 +206,16 @@ x25519-dalek = { version = "3.0", features = ["static_secrets", "getrandom"], op
 zeroize = { version = "1", features = ["derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-blsful = { version = "4.1.0", default-features = false, features = ["rust"], optional = true }
+blsful = { version = "4.2.0", default-features = false, features = ["rust"], optional = true }
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-blsful = { version = "4.1.0", default-features = false, features = ["blst"], optional = true }
+blsful = { version = "4.2.0", default-features = false, features = ["blst"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 # the hash families the tests fingerprint keys with
-multi-hash = { version = "3.0", default-features = false, features = ["blake2", "sha3"] }
+multi-hash = { version = "4", default-features = false, features = ["blake2", "sha3"] }
 proptest = "1.11"
 serde_cbor_2 = "0.13.0"
 serde_json = "1.0"
