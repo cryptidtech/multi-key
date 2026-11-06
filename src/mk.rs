@@ -1,39 +1,59 @@
 // SPDX-License-Identifier: Apache-2.0
-#[allow(deprecated)]
-use crate::views::Views;
+#[cfg(feature = "lamport")]
+use crate::error::ThresholdError;
+#[cfg(feature = "bls12-381")]
+use crate::views::bls12381;
+#[cfg(feature = "fn-dsa")]
+use crate::views::fn_dsa;
+#[cfg(feature = "frodokem")]
+use crate::views::frodokem;
 #[cfg(feature = "lamport")]
 use crate::views::lamport;
 #[cfg(feature = "lamport")]
 use crate::views::lamport_merkle;
+#[cfg(feature = "ml-dsa")]
+use crate::views::ml_dsa;
+#[cfg(feature = "rsa")]
+use crate::views::rsa;
+#[cfg(feature = "secp256k1")]
+use crate::views::secp256k1;
+#[cfg(feature = "slh-dsa")]
+use crate::views::slh_dsa;
+#[cfg(all(feature = "curve25519", feature = "frodokem"))]
+use crate::views::x25519_frodokem640;
 #[cfg(feature = "xmss")]
 use crate::views::xmss;
-use crate::{
-    AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
-    KdfAttrView, KdfView, MerkleStateView, OpenView, SealView, SignView, ThresholdAttrView,
-    ThresholdDisclosureView, ThresholdKeyView, ThresholdView, VerifyView,
-    error::{ConversionsError, ThresholdError},
-    views::{
-        bls12381, fn_dsa, frodokem, ml_dsa, rsa, secp256k1, slh_dsa, threshold_meta,
-        x25519_frodokem640,
-    },
-};
+use crate::{AttrId, Error, error::ConversionsError, views::threshold_meta};
 
+#[cfg(feature = "fn-dsa")]
 use ::fn_dsa::{
     FN_DSA_LOGN_512, FN_DSA_LOGN_1024, KeyPairGenerator, KeyPairGeneratorStandard, sign_key_size,
     vrfy_key_size,
 };
+#[cfg(feature = "secp256k1")]
 use elliptic_curve::Generate;
+#[cfg(feature = "p521")]
 use elliptic_curve::sec1::ToSec1Point;
 use multi_base::Base;
 use multi_codec::Codec;
-use multi_trait::{EncodeInto, Null, TryDecodeFrom};
+use multi_trait::{EncodeInto, EncodeIntoBuffer, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
 use rand_core::CryptoRng;
-use ssh_key::{
-    EcdsaCurve, PrivateKey, PublicKey,
-    private::{EcdsaKeypair, KeypairData},
-    public::{EcdsaPublicKey, KeyData},
-};
+#[cfg(any(feature = "p256", feature = "p384", feature = "p521"))]
+use ssh_key::{EcdsaCurve, private::EcdsaKeypair, public::EcdsaPublicKey};
+use ssh_key::{PrivateKey, PublicKey};
+#[cfg(any(
+    feature = "bls12-381",
+    feature = "curve25519",
+    feature = "fn-dsa",
+    feature = "ml-dsa",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "secp256k1",
+    feature = "slh-dsa"
+))]
+use ssh_key::{private::KeypairData, public::KeyData};
 use std::{collections::BTreeMap, fmt};
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
@@ -96,13 +116,14 @@ pub const SNTRUP_KEY_CODECS: [Codec; 5] = [
 
 /// the list of Classic McEliece key codecs supported for key generation
 ///
-/// This constant is deprecated. Key-recovery attacks now solve the TII
-/// McEliece challenges; see <https://github.com/mjosaarinen/tii-solved>.
-/// The McEliece views compile only with the `deprecated` feature.
+/// This constant is deprecated: 2026 structural key-recovery attacks on
+/// binary Goppa codes led Germany's BSI to advise against Classic McEliece in
+/// new developments. See the crate-level Deprecations section. The McEliece
+/// views compile only with the `deprecated` feature.
 #[cfg(feature = "deprecated")]
 #[deprecated(
     since = "2.0.0",
-    note = "Classic McEliece key recovery attacks: see https://github.com/mjosaarinen/tii-solved"
+    note = "Classic McEliece is weakened by 2026 key-recovery attacks and BSI advises against new use; use ML-KEM or FrodoKEM"
 )]
 #[allow(deprecated)]
 pub const MCELIECE_KEY_CODECS: [Codec; 1] = [Codec::Mceliece348864Priv];
@@ -282,30 +303,48 @@ impl EncodingInfo for Multikey {
 impl ConstantTimeEq for Multikey {
     fn ct_eq(&self, other: &Self) -> subtle::Choice {
         // Compare the canonical wire encoding byte-for-byte in constant time.
-        let a: Vec<u8> = self.clone().into();
-        let b: Vec<u8> = other.clone().into();
+        // the encodings carry secret key bytes, so wipe them when done
+        let a = Zeroizing::new(Vec::<u8>::from(self));
+        let b = Zeroizing::new(Vec::<u8>::from(other));
         a.ct_eq(&b)
     }
 }
 
 impl From<Multikey> for Vec<u8> {
     fn from(mk: Multikey) -> Self {
-        let mut v = Vec::default();
+        Self::from(&mk)
+    }
+}
+
+/// Encode a borrowed multikey without cloning its comment or attributes
+impl From<&Multikey> for Vec<u8> {
+    fn from(mk: &Multikey) -> Self {
+        // the payloads plus a generous allowance for the varint prefixes
+        let payload: usize = mk.attributes.values().map(|a| a.len() + 12).sum();
+        let mut v = Self::with_capacity(32 + mk.comment.len() + payload);
+        // varints are written straight into `v`, with no per-field allocation
         // add in the sigil
-        v.append(&mut SIGIL.into());
+        u64::from(SIGIL).encode_into_buffer(&mut v);
         // add in the key codec
-        v.append(&mut mk.codec.into());
+        u64::from(mk.codec).encode_into_buffer(&mut v);
         // add in the comment
-        v.append(&mut Varbytes::new(mk.comment.as_bytes().to_vec()).into());
+        encode_varbytes_into(&mut v, mk.comment.as_bytes());
         // add in the number of codec-specific attributes
-        v.append(&mut Varuint(mk.attributes.len()).into());
+        mk.attributes.len().encode_into_buffer(&mut v);
         // add in the codec-specific attributes
-        mk.attributes.iter().for_each(|(id, attr)| {
-            v.append(&mut (*id).into());
-            v.append(&mut Varbytes::new(attr.to_vec()).into());
-        });
+        for (id, attr) in &mk.attributes {
+            u8::from(*id).encode_into_buffer(&mut v);
+            encode_varbytes_into(&mut v, attr);
+        }
         v
     }
+}
+
+/// Append `data` in the `Varbytes` wire form (varint length, then the
+/// bytes) without first copying it into a `Varbytes`
+pub(crate) fn encode_varbytes_into(out: &mut Vec<u8>, data: &[u8]) {
+    data.len().encode_into_buffer(out);
+    out.extend_from_slice(data);
 }
 
 impl<'a> TryFrom<&'a [u8]> for Multikey {
@@ -353,7 +392,7 @@ impl<'a> TryDecodeFrom<'a> for Multikey {
                     // Per-attribute size is already capped by Varbytes'
                     // MAX_DECODED_SIZE (16 MiB). The total decoded-size cap
                     // below provides a second layer of protection.
-                    if attributes.insert(id, (*attr).clone().into()).is_some() {
+                    if attributes.insert(id, attr.to_inner().into()).is_some() {
                         return Err(Error::DuplicateAttribute(id.code()));
                     }
                     // Enforce total decoded size cap
@@ -405,94 +444,6 @@ impl fmt::Debug for Multikey {
     }
 }
 
-#[allow(deprecated)]
-impl Views for Multikey {
-    /// Provide a read-only view of the basic attributes in the viewed Multikey
-    fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error> {
-        crate::views::dispatch::dispatch_attr_view(self)
-    }
-
-    /// Provide a read-only view of the cipher attributes in the viewed Multikey
-    fn cipher_attr_view<'a>(&'a self) -> Result<Box<dyn CipherAttrView + 'a>, Error> {
-        crate::views::dispatch::dispatch_cipher_attr_view(self)
-    }
-
-    /// Provide a read-only view to key data in the viewed Multikey
-    fn data_view<'a>(&'a self) -> Result<Box<dyn DataView + 'a>, Error> {
-        crate::views::dispatch::dispatch_data_view(self)
-    }
-
-    /// Provide a read-only view of the kdf attributes in the viewed Multikey
-    fn kdf_attr_view<'a>(&'a self) -> Result<Box<dyn KdfAttrView + 'a>, Error> {
-        crate::views::dispatch::dispatch_kdf_attr_view(self)
-    }
-
-    /// Provide a read-only view of the threshold attributes in the viewed Multikey
-    fn threshold_attr_view<'a>(&'a self) -> Result<Box<dyn ThresholdAttrView + 'a>, Error> {
-        crate::views::dispatch::dispatch_threshold_attr_view(self)
-    }
-
-    /// Provide a read-only view of higher-level threshold key metadata in the viewed Multikey
-    fn threshold_key_view<'a>(&'a self) -> Result<Box<dyn ThresholdKeyView + 'a>, Error> {
-        crate::views::dispatch::dispatch_threshold_key_view(self)
-    }
-
-    /// Provide an interface to do encryption/decryption of the viewed Multikey
-    fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error> {
-        crate::views::dispatch::dispatch_cipher_view(self, cipher)
-    }
-
-    /// Provide an interface to do key conversions from the viewe Multikey
-    fn conv_view<'a>(&'a self) -> Result<Box<dyn ConvView + 'a>, Error> {
-        crate::views::dispatch::dispatch_conv_view(self)
-    }
-
-    /// Provide an interface to do key conversions from the viewe Multikey
-    fn fingerprint_view<'a>(&'a self) -> Result<Box<dyn FingerprintView + 'a>, Error> {
-        crate::views::dispatch::dispatch_fingerprint_view(self)
-    }
-
-    /// Provide an interface to do kdf operations from the viewed Multikey
-    fn kdf_view<'a>(&'a self, kdf: &'a Multikey) -> Result<Box<dyn KdfView + 'a>, Error> {
-        crate::views::dispatch::dispatch_kdf_view(self, kdf)
-    }
-
-    /// Provide an interface to seal (encrypt) plaintext
-    fn seal_view<'a>(&'a self) -> Result<Box<dyn SealView + 'a>, Error> {
-        crate::views::dispatch::dispatch_seal_view(self)
-    }
-
-    /// Provide an interface to open (decrypt) sealed data
-    fn open_view<'a>(&'a self) -> Result<Box<dyn OpenView + 'a>, Error> {
-        crate::views::dispatch::dispatch_open_view(self)
-    }
-
-    /// Provide an interface to sign a message and return a Multisig
-    fn sign_view<'a>(&'a self) -> Result<Box<dyn SignView + 'a>, Error> {
-        crate::views::dispatch::dispatch_sign_view(self)
-    }
-
-    /// Provide an interface to do threshold operations on the Multikey
-    fn threshold_view<'a>(&'a self) -> Result<Box<dyn ThresholdView + 'a>, Error> {
-        crate::views::dispatch::dispatch_threshold_view(self)
-    }
-
-    /// Provide an interface to verify a Multisig and optional message
-    fn verify_view<'a>(&'a self) -> Result<Box<dyn VerifyView + 'a>, Error> {
-        crate::views::dispatch::dispatch_verify_view(self)
-    }
-
-    /// Provide an interface for threshold disclosure mode operations
-    fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error> {
-        Ok(crate::views::dispatch::dispatch_disclosure_view(self))
-    }
-
-    /// Provide an interface for merkle-tree state introspection
-    fn merkle_state_view<'a>(&'a self) -> Result<Box<dyn MerkleStateView + 'a>, Error> {
-        crate::views::dispatch::dispatch_merkle_state_view(self)
-    }
-}
-
 /// Multikey builder constructs private keys only. If you need a public key you
 /// must first generate a priate key and then get the public key from that.
 #[derive(Clone, Default)]
@@ -515,30 +466,42 @@ impl Builder {
 
     /// new builder from random bytes source
     pub fn new_from_random_bytes(codec: Codec, rng: &mut impl CryptoRng) -> Result<Self, Error> {
-        let key_bytes = match codec {
-            Codec::Ed25519Priv => ed25519_dalek::SigningKey::generate(rng).to_bytes().to_vec(),
-            Codec::P256Priv => EcdsaKeypair::random(rng, EcdsaCurve::NistP256)
+        // the tuple carries the parameters into the arms, so a build whose features
+        // gate every arm out still uses them
+        let key_bytes: Vec<u8> = match (codec, rng) {
+            #[cfg(feature = "curve25519")]
+            (Codec::Ed25519Priv, rng) => {
+                ed25519_dalek::SigningKey::generate(rng).to_bytes().to_vec()
+            }
+            #[cfg(feature = "p256")]
+            (Codec::P256Priv, rng) => EcdsaKeypair::random(rng, EcdsaCurve::NistP256)
                 .map_err(|e| ConversionsError::Ssh(e.into()))?
                 .private_key_bytes()
                 .to_vec(),
-            Codec::P384Priv => EcdsaKeypair::random(rng, EcdsaCurve::NistP384)
+            #[cfg(feature = "p384")]
+            (Codec::P384Priv, rng) => EcdsaKeypair::random(rng, EcdsaCurve::NistP384)
                 .map_err(|e| ConversionsError::Ssh(e.into()))?
                 .private_key_bytes()
                 .to_vec(),
-            Codec::P521Priv => EcdsaKeypair::random(rng, EcdsaCurve::NistP521)
+            #[cfg(feature = "p521")]
+            (Codec::P521Priv, rng) => EcdsaKeypair::random(rng, EcdsaCurve::NistP521)
                 .map_err(|e| ConversionsError::Ssh(e.into()))?
                 .private_key_bytes()
                 .to_vec(),
-            Codec::Secp256K1Priv => k256::SecretKey::generate_from_rng(rng).to_bytes().to_vec(),
-            Codec::Bls12381G1Priv => blsful::Bls12381G1::new_secret_key()
-                .to_be_bytes()
-                .as_slice()
-                .to_vec(),
-            Codec::Bls12381G2Priv => blsful::Bls12381G2::new_secret_key()
-                .to_be_bytes()
-                .as_slice()
-                .to_vec(),
-            Codec::FnDsa512Priv => {
+            #[cfg(feature = "secp256k1")]
+            (Codec::Secp256K1Priv, rng) => {
+                k256::SecretKey::generate_from_rng(rng).to_bytes().to_vec()
+            }
+            #[cfg(feature = "bls12-381")]
+            (Codec::Bls12381G1Priv, _) => {
+                blsful::Bls12381G1::new_secret_key().to_be_bytes().to_vec()
+            }
+            #[cfg(feature = "bls12-381")]
+            (Codec::Bls12381G2Priv, _) => {
+                blsful::Bls12381G2::new_secret_key().to_be_bytes().to_vec()
+            }
+            #[cfg(feature = "fn-dsa")]
+            (Codec::FnDsa512Priv, _) => {
                 let mut kg = KeyPairGeneratorStandard::default();
                 let mut sign_key = vec![0u8; sign_key_size(FN_DSA_LOGN_512)];
                 let mut vrfy_key = vec![0u8; vrfy_key_size(FN_DSA_LOGN_512)];
@@ -550,7 +513,8 @@ impl Builder {
                 );
                 sign_key
             }
-            Codec::FnDsa1024Priv => {
+            #[cfg(feature = "fn-dsa")]
+            (Codec::FnDsa1024Priv, _) => {
                 let mut kg = KeyPairGeneratorStandard::default();
                 let mut sign_key = vec![0u8; sign_key_size(FN_DSA_LOGN_1024)];
                 let mut vrfy_key = vec![0u8; vrfy_key_size(FN_DSA_LOGN_1024)];
@@ -562,96 +526,116 @@ impl Builder {
                 );
                 sign_key
             }
-            Codec::MlDsa65Priv | Codec::MlDsa87Priv => {
+            #[cfg(feature = "ml-dsa")]
+            (Codec::MlDsa65Priv | Codec::MlDsa87Priv, rng) => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Mayo1Priv | Codec::Mayo2Priv => {
+            #[cfg(feature = "mayo")]
+            (Codec::Mayo1Priv | Codec::Mayo2Priv, rng) => {
                 let mut seed = [0u8; 24];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Mayo3Priv => {
+            #[cfg(feature = "mayo")]
+            (Codec::Mayo3Priv, rng) => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Mayo5Priv => {
+            #[cfg(feature = "mayo")]
+            (Codec::Mayo5Priv, rng) => {
                 let mut seed = [0u8; 40];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Mlkem768Priv | Codec::Mlkem1024Priv => {
+            #[cfg(feature = "ml-kem")]
+            (Codec::Mlkem768Priv | Codec::Mlkem1024Priv, rng) => {
                 // 64-byte seed: d (32) || z (32)
                 let mut seed = [0u8; 64];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Sntrup761Priv
-            | Codec::Sntrup857Priv
-            | Codec::Sntrup953Priv
-            | Codec::Sntrup1013Priv
-            | Codec::Sntrup1277Priv => {
+            #[cfg(feature = "sntrup")]
+            (
+                Codec::Sntrup761Priv
+                | Codec::Sntrup857Priv
+                | Codec::Sntrup953Priv
+                | Codec::Sntrup1013Priv
+                | Codec::Sntrup1277Priv,
+                rng,
+            ) => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
             #[cfg(feature = "deprecated")]
             #[allow(deprecated)]
-            Codec::Mceliece348864Priv => {
+            (Codec::Mceliece348864Priv, rng) => {
                 let mut seed = [0u8; 32];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::FrodoKem640AesPriv
-            | Codec::FrodoKem976AesPriv
-            | Codec::FrodoKem1344AesPriv
-            | Codec::FrodoKem640ShakePriv
-            | Codec::FrodoKem976ShakePriv
-            | Codec::FrodoKem1344ShakePriv => frodokem::generate_private_key(codec)?.to_vec(),
-            Codec::X25519Priv => {
+            #[cfg(feature = "frodokem")]
+            (
+                Codec::FrodoKem640AesPriv
+                | Codec::FrodoKem976AesPriv
+                | Codec::FrodoKem1344AesPriv
+                | Codec::FrodoKem640ShakePriv
+                | Codec::FrodoKem976ShakePriv
+                | Codec::FrodoKem1344ShakePriv,
+                _,
+            ) => frodokem::generate_private_key(codec)?.to_vec(),
+            #[cfg(feature = "curve25519")]
+            (Codec::X25519Priv, rng) => {
                 let mut secret = [0u8; 32];
                 rng.fill_bytes(&mut secret);
                 secret.to_vec()
             }
-            Codec::X25519Sntrup761Priv => {
+            #[cfg(all(feature = "curve25519", feature = "sntrup"))]
+            (Codec::X25519Sntrup761Priv, rng) => {
                 // x25519_seed (32) || sntrup761_seed (32) = 64 bytes
                 let mut seed = [0u8; 64];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            #[cfg(feature = "deprecated")]
+            #[cfg(all(feature = "curve25519", feature = "deprecated"))]
             #[allow(deprecated)]
-            Codec::X25519Mceliece348864Priv => {
+            (Codec::X25519Mceliece348864Priv, rng) => {
                 // x25519_seed (32) || mceliece_seed (32) = 64 bytes
                 let mut seed = [0u8; 64];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::X25519Frodokem640AesPriv | Codec::X25519Frodokem640ShakePriv => {
+            #[cfg(all(feature = "curve25519", feature = "frodokem"))]
+            (Codec::X25519Frodokem640AesPriv | Codec::X25519Frodokem640ShakePriv, _) => {
                 // x25519_seed (32) || frodokem full secret key
                 x25519_frodokem640::generate_private_key(codec)
             }
-            Codec::X25519Mlkem768Priv => {
+            #[cfg(all(feature = "curve25519", feature = "ml-kem"))]
+            (Codec::X25519Mlkem768Priv, rng) => {
                 // x25519_seed (32) || ml_kem_d (32) || ml_kem_z (32) = 96 bytes
                 let mut seed = [0u8; 96];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Ed25519Mayo2Priv => {
+            #[cfg(all(feature = "curve25519", feature = "mayo"))]
+            (Codec::Ed25519Mayo2Priv, rng) => {
                 // ed25519_seed (32) || mayo2_seed (24) = 56 bytes
                 let mut seed = [0u8; 56];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Ed25519Mldsa65Priv => {
+            #[cfg(all(feature = "curve25519", feature = "ml-dsa"))]
+            (Codec::Ed25519Mldsa65Priv, rng) => {
                 // ed25519_seed (32) || ml_dsa_seed (32) = 64 bytes
                 let mut seed = [0u8; 64];
                 rng.fill_bytes(&mut seed);
                 seed.to_vec()
             }
-            Codec::Bls12381G1Mldsa65Priv => {
+            #[cfg(all(feature = "bls12-381", feature = "ml-dsa"))]
+            (Codec::Bls12381G1Mldsa65Priv, rng) => {
                 // bls_g1_secret (32) || ml_dsa_65_seed (32) = 64 bytes
                 let mut out = Vec::with_capacity(64);
                 out.extend_from_slice(&blsful::Bls12381G1::new_secret_key().to_be_bytes());
@@ -660,7 +644,8 @@ impl Builder {
                 out.extend_from_slice(&mldsa_seed);
                 out
             }
-            Codec::Bls12381G1Fndsa512Priv => {
+            #[cfg(all(feature = "bls12-381", feature = "fn-dsa"))]
+            (Codec::Bls12381G1Fndsa512Priv, _) => {
                 // bls_g1_secret (32) || fn_dsa_512_signing_key
                 let mut out = Vec::new();
                 out.extend_from_slice(&blsful::Bls12381G1::new_secret_key().to_be_bytes());
@@ -676,7 +661,8 @@ impl Builder {
                 out.extend_from_slice(&sign_key);
                 out
             }
-            Codec::Bls12381G1Mayo1Priv | Codec::Bls12381G1Mayo2Priv => {
+            #[cfg(all(feature = "bls12-381", feature = "mayo"))]
+            (Codec::Bls12381G1Mayo1Priv | Codec::Bls12381G1Mayo2Priv, rng) => {
                 // bls_g1_secret (32) || mayo_seed (24) = 56 bytes
                 let mut out = Vec::with_capacity(56);
                 out.extend_from_slice(&blsful::Bls12381G1::new_secret_key().to_be_bytes());
@@ -685,7 +671,8 @@ impl Builder {
                 out.extend_from_slice(&mayo_seed);
                 out
             }
-            Codec::Ed25519Fndsa512Priv => {
+            #[cfg(all(feature = "curve25519", feature = "fn-dsa"))]
+            (Codec::Ed25519Fndsa512Priv, rng) => {
                 // ed25519_seed (32) || fn_dsa_512_signing_key
                 let mut ed_seed = [0u8; 32];
                 rng.fill_bytes(&mut ed_seed);
@@ -703,7 +690,8 @@ impl Builder {
                 out.extend_from_slice(&sign_key);
                 out
             }
-            Codec::Rsa2048Priv => {
+            #[cfg(feature = "rsa")]
+            (Codec::Rsa2048Priv, _) => {
                 // Probe the OS RNG up front so an entropy failure surfaces as an
                 // error instead of a panic inside UnwrapErr during keygen.
                 rsa::OsRng::check_entropy()
@@ -716,7 +704,8 @@ impl Builder {
                     .as_bytes()
                     .to_vec()
             }
-            Codec::Rsa3072Priv => {
+            #[cfg(feature = "rsa")]
+            (Codec::Rsa3072Priv, _) => {
                 rsa::OsRng::check_entropy()
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 let key =
@@ -727,7 +716,8 @@ impl Builder {
                     .as_bytes()
                     .to_vec()
             }
-            Codec::Rsa4096Priv => {
+            #[cfg(feature = "rsa")]
+            (Codec::Rsa4096Priv, _) => {
                 rsa::OsRng::check_entropy()
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 let key =
@@ -738,49 +728,68 @@ impl Builder {
                     .as_bytes()
                     .to_vec()
             }
-            Codec::SlhDsaSha2128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128f>(),
-            Codec::SlhDsaSha2128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128s>(),
-            Codec::SlhDsaSha2192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192f>(),
-            Codec::SlhDsaSha2192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192s>(),
-            Codec::SlhDsaSha2256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256f>(),
-            Codec::SlhDsaSha2256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256s>(),
-            Codec::SlhDsaShake128FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128f>(),
-            Codec::SlhDsaShake128SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128s>(),
-            Codec::SlhDsaShake192FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192f>(),
-            Codec::SlhDsaShake192SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192s>(),
-            Codec::SlhDsaShake256FPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256f>(),
-            Codec::SlhDsaShake256SPriv => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2128FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2128SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_128s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2192FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2192SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_192s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2256FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaSha2256SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Sha2_256s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake128FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake128SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake128s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake192FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake192SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake192s>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake256FPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256f>(),
+            #[cfg(feature = "slh-dsa")]
+            (Codec::SlhDsaShake256SPriv, _) => slh_dsa::gen_slh_dsa_key::<::slh_dsa::Shake256s>(),
             #[cfg(feature = "lamport")]
-            Codec::LamportSha3256Priv
-            | Codec::LamportSha3384Priv
-            | Codec::LamportSha3512Priv
-            | Codec::LamportSha2256Priv
-            | Codec::LamportSha2384Priv
-            | Codec::LamportSha2512Priv
-            | Codec::LamportBlake2B512Priv
-            | Codec::LamportBlake2S256Priv
-            | Codec::LamportBlake3256Priv
-            | Codec::LamportShake128Priv
-            | Codec::LamportShake256Priv => lamport::generate_private_key(codec)?.to_vec(),
+            (
+                Codec::LamportSha3256Priv
+                | Codec::LamportSha3384Priv
+                | Codec::LamportSha3512Priv
+                | Codec::LamportSha2256Priv
+                | Codec::LamportSha2384Priv
+                | Codec::LamportSha2512Priv
+                | Codec::LamportBlake2B512Priv
+                | Codec::LamportBlake2S256Priv
+                | Codec::LamportBlake3256Priv
+                | Codec::LamportShake128Priv
+                | Codec::LamportShake256Priv,
+                _,
+            ) => lamport::generate_private_key(codec)?.to_vec(),
             #[cfg(feature = "lamport")]
-            Codec::LamportMerkleSha3256Priv
-            | Codec::LamportMerkleSha3384Priv
-            | Codec::LamportMerkleSha3512Priv
-            | Codec::LamportMerkleSha2256Priv
-            | Codec::LamportMerkleSha2384Priv
-            | Codec::LamportMerkleSha2512Priv
-            | Codec::LamportMerkleBlake2B512Priv
-            | Codec::LamportMerkleBlake2S256Priv
-            | Codec::LamportMerkleBlake3256Priv
-            | Codec::LamportMerkleShake128Priv
-            | Codec::LamportMerkleShake256Priv => {
-                lamport_merkle::generate_private_key_with_depth(codec, 1)?.to_vec()
-            }
+            (
+                Codec::LamportMerkleSha3256Priv
+                | Codec::LamportMerkleSha3384Priv
+                | Codec::LamportMerkleSha3512Priv
+                | Codec::LamportMerkleSha2256Priv
+                | Codec::LamportMerkleSha2384Priv
+                | Codec::LamportMerkleSha2512Priv
+                | Codec::LamportMerkleBlake2B512Priv
+                | Codec::LamportMerkleBlake2S256Priv
+                | Codec::LamportMerkleBlake3256Priv
+                | Codec::LamportMerkleShake128Priv
+                | Codec::LamportMerkleShake256Priv,
+                _,
+            ) => lamport_merkle::generate_private_key_with_depth(codec, 1)?.to_vec(),
             #[cfg(feature = "xmss")]
-            Codec::XmssSha210256Priv | Codec::XmssSha216256Priv | Codec::XmssSha220256Priv => {
+            (Codec::XmssSha210256Priv | Codec::XmssSha216256Priv | Codec::XmssSha220256Priv, _) => {
                 xmss::generate_private_key(codec)?.to_vec()
             }
-            _ => return Err(ConversionsError::UnsupportedCodec(codec).into()),
+            // `Err(..)?` rather than `return Err(..)`: when no key feature is
+            // enabled this is the only arm, and a diverging `return` would
+            // make everything after the match unreachable
+            _ => Err(ConversionsError::UnsupportedCodec(codec))?,
         };
         let mut attributes = Attributes::new();
         attributes.insert(AttrId::KeyData, key_bytes.into());
@@ -860,10 +869,12 @@ impl Builder {
     pub fn new_from_ssh_public_key(sshkey: &PublicKey) -> Result<Self, Error> {
         use ssh_key::Algorithm::*;
         match sshkey.algorithm() {
+            #[cfg(any(feature = "p256", feature = "p384", feature = "p521"))]
             Ecdsa { curve } => {
                 use EcdsaCurve::*;
                 // SSH stores uncompressed SEC1 points; we store compressed internally
                 let (key_bytes, codec) = match curve {
+                    #[cfg(feature = "p256")]
                     NistP256 => {
                         if let KeyData::Ecdsa(EcdsaPublicKey::NistP256(point)) = sshkey.key_data() {
                             let vk = p256::ecdsa::VerifyingKey::from_sec1_bytes(point.as_bytes())
@@ -878,6 +889,7 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(feature = "p384")]
                     NistP384 => {
                         if let KeyData::Ecdsa(EcdsaPublicKey::NistP384(point)) = sshkey.key_data() {
                             let vk = p384::ecdsa::VerifyingKey::from_sec1_bytes(point.as_bytes())
@@ -892,6 +904,7 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(feature = "p521")]
                     NistP521 => {
                         if let KeyData::Ecdsa(EcdsaPublicKey::NistP521(point)) = sshkey.key_data() {
                             let vk = p521::ecdsa::VerifyingKey::from_sec1_bytes(point.as_bytes())
@@ -907,6 +920,13 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(not(all(feature = "p256", feature = "p384", feature = "p521")))]
+                    _ => {
+                        return Err(ConversionsError::UnsupportedAlgorithm(
+                            sshkey.algorithm().to_string(),
+                        )
+                        .into());
+                    }
                 };
                 let mut attributes = Attributes::new();
                 attributes.insert(AttrId::KeyData, key_bytes.into());
@@ -918,6 +938,7 @@ impl Builder {
                 })
             }
             Other(name) => match name.as_str() {
+                #[cfg(feature = "secp256k1")]
                 secp256k1::ALGORITHM_NAME => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -937,6 +958,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G1 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -956,6 +978,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G1_SHARE => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -982,6 +1005,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G2 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1001,6 +1025,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G2_SHARE => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1028,6 +1053,7 @@ impl Builder {
                     })
                 }
                 // ML-DSA public keys
+                #[cfg(feature = "ml-dsa")]
                 ml_dsa::ALGORITHM_NAME_65 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1047,6 +1073,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "ml-dsa")]
                 ml_dsa::ALGORITHM_NAME_87 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1067,6 +1094,7 @@ impl Builder {
                     })
                 }
                 // FN-DSA public keys
+                #[cfg(feature = "fn-dsa")]
                 fn_dsa::ALGORITHM_NAME_512 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1086,6 +1114,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "fn-dsa")]
                 fn_dsa::ALGORITHM_NAME_1024 => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1106,6 +1135,7 @@ impl Builder {
                     })
                 }
                 // SLH-DSA public keys
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_128F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1125,6 +1155,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_128S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1144,6 +1175,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_192F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1163,6 +1195,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_192S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1182,6 +1215,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_256F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1201,6 +1235,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_256S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1220,6 +1255,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_128F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1239,6 +1275,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_128S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1258,6 +1295,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_192F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1277,6 +1315,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_192S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1296,6 +1335,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_256F => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1315,6 +1355,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_256S => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -1336,6 +1377,7 @@ impl Builder {
                 }
                 s => Err(ConversionsError::UnsupportedAlgorithm(s.to_string()).into()),
             },
+            #[cfg(feature = "curve25519")]
             Ed25519 => {
                 let key_bytes = match sshkey.key_data() {
                     KeyData::Ed25519(e) => e.0.to_vec(),
@@ -1363,9 +1405,11 @@ impl Builder {
     pub fn new_from_ssh_private_key(sshkey: &PrivateKey) -> Result<Self, Error> {
         use ssh_key::Algorithm::*;
         match sshkey.algorithm() {
+            #[cfg(any(feature = "p256", feature = "p384", feature = "p521"))]
             Ecdsa { curve } => {
                 use EcdsaCurve::*;
                 let (key_bytes, codec) = match curve {
+                    #[cfg(feature = "p256")]
                     NistP256 => {
                         if let KeypairData::Ecdsa(EcdsaKeypair::NistP256 { private, .. }) =
                             sshkey.key_data()
@@ -1378,6 +1422,7 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(feature = "p384")]
                     NistP384 => {
                         if let KeypairData::Ecdsa(EcdsaKeypair::NistP384 { private, .. }) =
                             sshkey.key_data()
@@ -1390,6 +1435,7 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(feature = "p521")]
                     NistP521 => {
                         if let KeypairData::Ecdsa(EcdsaKeypair::NistP521 { private, .. }) =
                             sshkey.key_data()
@@ -1402,6 +1448,13 @@ impl Builder {
                             .into());
                         }
                     }
+                    #[cfg(not(all(feature = "p256", feature = "p384", feature = "p521")))]
+                    _ => {
+                        return Err(ConversionsError::UnsupportedAlgorithm(
+                            sshkey.algorithm().to_string(),
+                        )
+                        .into());
+                    }
                 };
                 let mut attributes = Attributes::new();
                 attributes.insert(AttrId::KeyData, key_bytes.into());
@@ -1413,6 +1466,7 @@ impl Builder {
                 })
             }
             Other(name) => match name.as_str() {
+                #[cfg(feature = "secp256k1")]
                 secp256k1::ALGORITHM_NAME => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1432,6 +1486,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G1 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1451,6 +1506,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G1_SHARE => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1477,6 +1533,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G2 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1496,6 +1553,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "bls12-381")]
                 bls12381::ALGORITHM_NAME_G2_SHARE => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1523,6 +1581,7 @@ impl Builder {
                     })
                 }
                 // ML-DSA private keys
+                #[cfg(feature = "ml-dsa")]
                 ml_dsa::ALGORITHM_NAME_65 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1542,6 +1601,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "ml-dsa")]
                 ml_dsa::ALGORITHM_NAME_87 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1562,6 +1622,7 @@ impl Builder {
                     })
                 }
                 // FN-DSA private keys
+                #[cfg(feature = "fn-dsa")]
                 fn_dsa::ALGORITHM_NAME_512 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1581,6 +1642,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "fn-dsa")]
                 fn_dsa::ALGORITHM_NAME_1024 => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1601,6 +1663,7 @@ impl Builder {
                     })
                 }
                 // SLH-DSA private keys
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_128F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1620,6 +1683,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_128S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1639,6 +1703,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_192F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1658,6 +1723,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_192S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1677,6 +1743,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_256F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1696,6 +1763,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHA2_256S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1715,6 +1783,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_128F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1734,6 +1803,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_128S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1753,6 +1823,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_192F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1772,6 +1843,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_192S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1791,6 +1863,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_256F => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1810,6 +1883,7 @@ impl Builder {
                         ..Default::default()
                     })
                 }
+                #[cfg(feature = "slh-dsa")]
                 slh_dsa::ALGORITHM_NAME_SHAKE_256S => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -1831,6 +1905,7 @@ impl Builder {
                 }
                 s => Err(ConversionsError::UnsupportedAlgorithm(s.to_string()).into()),
             },
+            #[cfg(feature = "curve25519")]
             Ed25519 => {
                 let key_bytes = match sshkey.key_data() {
                     KeypairData::Ed25519(e) => e.private.to_bytes().to_vec(),
@@ -1858,8 +1933,11 @@ impl Builder {
     ///
     /// Currently only supports [Codec::Ed25519Priv] seeds.
     pub fn new_from_seed(codec: Codec, seed: &[u8]) -> Result<Self, Error> {
-        match codec {
-            Codec::Ed25519Priv => {
+        // the tuple carries the parameters into the arms, so a build whose features
+        // gate every arm out still uses them
+        match (codec, seed) {
+            #[cfg(feature = "curve25519")]
+            (Codec::Ed25519Priv, seed) => {
                 let keypair =
                     ssh_key::private::Ed25519Keypair::from_seed(seed.try_into().map_err(|_| {
                         ConversionsError::UnsupportedAlgorithm(
@@ -1870,7 +1948,7 @@ impl Builder {
                     .map_err(|e| ConversionsError::Ssh(e.into()))?;
                 Self::new_from_ssh_private_key(&private_key)
             }
-            _ => Err(ConversionsError::UnsupportedCodec(codec).into()),
+            (codec, _) => Err(ConversionsError::UnsupportedCodec(codec).into()),
         }
     }
 
@@ -1886,16 +1964,16 @@ impl Builder {
         self
     }
 
-    fn with_attribute(mut self, attr: AttrId, data: &Vec<u8>) -> Self {
+    fn with_attribute(mut self, attr: AttrId, data: Vec<u8>) -> Self {
         let mut attributes = self.attributes.unwrap_or_default();
-        attributes.insert(attr, data.to_owned().into());
+        attributes.insert(attr, data.into());
         self.attributes = Some(attributes);
         self
     }
 
     /// add in the key bytes directly
     pub fn with_key_bytes(self, bytes: &(impl AsRef<[u8]> + ?Sized)) -> Self {
-        self.with_attribute(AttrId::KeyData, &bytes.as_ref().to_vec())
+        self.with_attribute(AttrId::KeyData, bytes.as_ref().to_vec())
     }
 
     /// Set the algorithm name attribute of a custom protocol key.
@@ -1910,7 +1988,7 @@ impl Builder {
     /// The name is stored as given and the empty string is accepted:
     /// validation of custom-key semantics is future spec work.
     pub fn with_algorithm_name(self, name: &str) -> Self {
-        self.with_attribute(AttrId::AlgorithmName, &name.as_bytes().to_vec())
+        self.with_attribute(AttrId::AlgorithmName, name.as_bytes().to_vec())
     }
 
     /// Set the key type attribute of a custom protocol key.
@@ -1922,32 +2000,32 @@ impl Builder {
     /// The byte is stored unvalidated: validation of custom-key semantics is
     /// future spec work.
     pub fn with_key_type(self, key_type: u8) -> Self {
-        self.with_attribute(AttrId::KeyType, &vec![key_type])
+        self.with_attribute(AttrId::KeyType, vec![key_type])
     }
 
     /// add in the merkle-tree depth value (one raw byte, 1..=3)
     pub fn with_depth(self, depth: u8) -> Self {
-        self.with_attribute(AttrId::Depth, &vec![depth])
+        self.with_attribute(AttrId::Depth, vec![depth])
     }
 
     /// add in the threshold value
     pub fn with_threshold(self, threshold: usize) -> Self {
-        self.with_attribute(AttrId::Threshold, &Varuint(threshold).into())
+        self.with_attribute(AttrId::Threshold, Varuint(threshold).into())
     }
 
     /// add in the limit value
     pub fn with_limit(self, limit: usize) -> Self {
-        self.with_attribute(AttrId::Limit, &Varuint(limit).into())
+        self.with_attribute(AttrId::Limit, Varuint(limit).into())
     }
 
     /// add in the share identifier value
     pub fn with_identifier(self, identifier: &impl AsRef<[u8]>) -> Self {
-        self.with_attribute(AttrId::ShareIdentifier, &identifier.as_ref().to_vec())
+        self.with_attribute(AttrId::ShareIdentifier, identifier.as_ref().to_vec())
     }
 
     /// add in the threshold data
     pub fn with_threshold_data(self, tdata: &impl AsRef<[u8]>) -> Self {
-        self.with_attribute(AttrId::ThresholdData, &tdata.as_ref().to_vec())
+        self.with_attribute(AttrId::ThresholdData, tdata.as_ref().to_vec())
     }
 
     /// Set the disclosure mode for a threshold share being built.
@@ -1955,9 +2033,9 @@ impl Builder {
     /// In `ThresholdDisclosure::Full` mode, t and n are stored as plaintext
     /// attributes (same as `with_threshold()`/`with_limit()`).
     /// In `ThresholdDisclosure::Partial` mode, t is encrypted and n is plaintext.
-    /// In `ThresholdDisclosure::FullConfidentialial` mode, both t and n are encrypted.
+    /// In `ThresholdDisclosure::FullConfidential` mode, both t and n are encrypted.
     ///
-    /// `meta_key` is required for Partial/FullConfidentialial modes.
+    /// `meta_key` is required for Partial/FullConfidential modes.
     pub fn with_disclosure(
         self,
         mode: threshold_meta::ThresholdDisclosure,
@@ -2059,289 +2137,48 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::{bcrypt, chacha20};
-    use crate::{ViewBuilder, cipher, kdf};
+
+    /// the allocation-free encoder produces exactly the bytes of the
+    /// field-by-field `Vec` encoding, including multi-byte varint lengths
+    #[test]
+    fn test_encode_matches_reference_layout() {
+        let comment = "c".repeat(200);
+        let mk = Builder::new(Codec::Identity)
+            .with_comment(&comment)
+            .with_key_bytes(&[7u8; 300])
+            .with_algorithm_name("reference-layout")
+            .try_build()
+            .unwrap();
+        let mut want: Vec<u8> = SIGIL.into();
+        want.extend(Vec::<u8>::from(mk.codec));
+        want.extend(Vec::<u8>::from(Varbytes::new(comment.into_bytes())));
+        want.extend(Vec::<u8>::from(Varuint(mk.attributes.len())));
+        for (id, attr) in &mk.attributes {
+            want.extend(Vec::<u8>::from(*id));
+            want.extend(Vec::<u8>::from(Varbytes::new(attr.to_vec())));
+        }
+        assert_eq!(Vec::<u8>::from(&mk), want);
+        assert_eq!(Multikey::try_from(want.as_slice()).unwrap(), mk);
+    }
+    #[cfg(any(
+        feature = "bls12-381",
+        feature = "curve25519",
+        feature = "fn-dsa",
+        feature = "ml-dsa",
+        all(feature = "slh-dsa", feature = "slow-tests")
+    ))]
+    use crate::ViewBuilder;
+    #[cfg(any(
+        feature = "bls12-381",
+        feature = "fn-dsa",
+        feature = "ml-dsa",
+        all(feature = "slh-dsa", feature = "slow-tests")
+    ))]
     use multi_sig::EncodedMultisig;
+    #[cfg(feature = "curve25519")]
     use ssh_key::private::Ed25519Keypair;
 
-    #[test]
-    fn test_random() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-            let (vpk, epk) = {
-                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
-                let pk = conv.to_public_key().unwrap();
-                (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
-            };
-            println!("encoded pubkey: {}: {}", codec, epk);
-            println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
-            println!(
-                "encoded privkey: {}: {}",
-                codec,
-                EncodedMultikey::from(mk.clone())
-            );
-            println!(
-                "encoded privkey v: {}: {}",
-                codec,
-                hex::encode(Into::<Vec<u8>>::into(mk.clone()))
-            );
-            let _v: Vec<u8> = mk.into();
-        }
-    }
-
-    #[test]
-    fn test_encoded_random() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_base_encoding(Base::Base32Lower)
-                .with_comment("test key")
-                .try_build_encoded()
-                .unwrap();
-            let s = mk.to_string();
-            //println!("encoded privkey: {}: {}", codec, s);
-            assert_eq!(mk, EncodedMultikey::try_from(s.as_str()).unwrap());
-        }
-    }
-
-    #[test]
-    fn test_random_public_ssh_key_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
-            let pk = conv.to_public_key().unwrap();
-            let ssh_key = conv.to_ssh_public_key().unwrap();
-            let mk2 = Builder::new_from_ssh_public_key(&ssh_key)
-                .unwrap()
-                .try_build()
-                .unwrap();
-            assert_eq!(pk, mk2);
-        }
-    }
-
-    #[test]
-    fn test_random_private_ssh_key_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
-            let ssh_key = conv.to_ssh_private_key().unwrap();
-            let mk2 = Builder::new_from_ssh_private_key(&ssh_key)
-                .unwrap()
-                .try_build()
-                .unwrap();
-            assert_eq!(mk, mk2);
-        }
-    }
-
-    #[test]
-    fn test_ssh_key_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let sk1 = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-            let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
-            let public_key = cv.to_ssh_public_key().unwrap();
-            let private_key = cv.to_ssh_private_key().unwrap();
-
-            let pk1 = cv.to_public_key().unwrap();
-            let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
-            assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
-
-            let sk2 = Builder::new_from_ssh_private_key(&private_key)
-                .unwrap()
-                .try_build()
-                .unwrap();
-            assert_eq!(sk1, sk2);
-            let pk2 = Builder::new_from_ssh_public_key(&public_key)
-                .unwrap()
-                .try_build()
-                .unwrap();
-            assert_eq!(pk1, pk2);
-        }
-    }
-
-    #[test]
-    fn test_encryption_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk1 = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-
-            let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
-            assert!(!attr.is_encrypted());
-            assert!(!attr.is_public_key());
-            assert!(attr.is_secret_key());
-            let kd = ViewBuilder::new(&mk1).data().build().unwrap();
-            assert!(kd.key_bytes().is_ok());
-            assert!(kd.secret_bytes().is_ok());
-
-            let mk2 = {
-                let kdfmk = kdf::Builder::new(Codec::BcryptPbkdf)
-                    .with_random_salt(bcrypt::SALT_LENGTH, &mut rng)
-                    .with_rounds(10)
-                    .try_build()
-                    .unwrap();
-                let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
-                    .with_random_nonce(chacha20::nonce_length(), &mut rng)
-                    .try_build()
-                    .unwrap();
-                // get the kdf view on the cipher multikey so we can generate a
-                // new cipher multikey with the same parameters and the generated key
-                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
-                // derive a key from the passphrase and add it to the cipher multikey
-                let ciphermk = kdf
-                    .derive_key(b"for great justice, move every zig!")
-                    .unwrap();
-                // get the cipher view on the unencrypted ed25519 secret key so
-                // that we can create a new ed25519 secret key with an encrypted
-                // key and the kdf and cipher attributes and data
-                let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
-                // encrypt the multikey using the cipher
-
-                cipher.encrypt().unwrap()
-            };
-
-            let attr = ViewBuilder::new(&mk2).attr().build().unwrap();
-            assert!(attr.is_encrypted());
-            assert!(!attr.is_public_key());
-            assert!(attr.is_secret_key());
-            let kd = ViewBuilder::new(&mk2).data().build().unwrap();
-            assert!(kd.key_bytes().is_ok());
-            assert!(kd.secret_bytes().is_err()); // encrypted key
-
-            let mk3 = {
-                let kdfmk = kdf::Builder::default()
-                    .try_from_multikey(&mk2)
-                    .unwrap()
-                    .try_build()
-                    .unwrap();
-                let ciphermk = cipher::Builder::default()
-                    .try_from_multikey(&mk2)
-                    .unwrap()
-                    .try_build()
-                    .unwrap();
-                // get the kdf view
-                let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
-                // derive a key from the passphrase and add it to the cipher multikey
-                let ciphermk = kdf
-                    .derive_key(b"for great justice, move every zig!")
-                    .unwrap();
-                // get the cipher view
-                let cipher = ViewBuilder::new(&mk2).cipher(&ciphermk).build().unwrap();
-                // decrypt the multikey using the cipher
-
-                cipher.decrypt().unwrap()
-            };
-
-            let attr = ViewBuilder::new(&mk3).attr().build().unwrap();
-            assert!(!attr.is_encrypted());
-            assert!(!attr.is_public_key());
-            assert!(attr.is_secret_key());
-            let kd = ViewBuilder::new(&mk3).data().build().unwrap();
-            assert!(kd.key_bytes().is_ok());
-            assert!(kd.secret_bytes().is_ok());
-
-            // ensure the round trip worked
-            assert_eq!(mk1, mk3);
-        }
-    }
-
-    #[test]
-    fn test_signing_detached_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-
-            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
-            assert!(!attr.is_encrypted());
-            assert!(!attr.is_public_key());
-            assert!(attr.is_secret_key());
-            let kd = ViewBuilder::new(&mk).data().build().unwrap();
-            assert!(kd.key_bytes().is_ok());
-            assert!(kd.secret_bytes().is_ok());
-            let conv = ViewBuilder::new(&mk).conv().build().unwrap();
-            let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
-            println!("{} pubkey: {}", codec, pk);
-
-            let msg = b"for great justice, move every zig!";
-
-            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
-            let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
-                signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap()
-            } else {
-                signmk.sign(msg.as_slice(), false, None).unwrap()
-            };
-            let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
-            println!("signaure: {}", sig);
-
-            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
-            assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
-        }
-    }
-
-    #[test]
-    fn test_signing_merged_roundtrip() {
-        for codec in KEY_CODECS {
-            let mut rng = rand::rng();
-            let mk = Builder::new_from_random_bytes(codec, &mut rng)
-                .unwrap()
-                .with_comment("test key")
-                .try_build()
-                .unwrap();
-
-            let attr = ViewBuilder::new(&mk).attr().build().unwrap();
-            assert!(!attr.is_encrypted());
-            assert!(!attr.is_public_key());
-            assert!(attr.is_secret_key());
-            let kd = ViewBuilder::new(&mk).data().build().unwrap();
-            assert!(kd.key_bytes().is_ok());
-            assert!(kd.secret_bytes().is_ok());
-
-            let msg =
-                hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
-                    .unwrap();
-
-            let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
-            let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv {
-                signmk.sign(&msg, true, Some(2_u8)).unwrap()
-            } else {
-                signmk.sign(&msg, true, None).unwrap()
-            };
-
-            // make sure the message is stored correctly in the signature
-            assert_eq!(signature.message, msg);
-
-            let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
-            assert!(verifymk.verify(&signature, None).is_ok());
-        }
-    }
-
+    #[cfg(feature = "fn-dsa")]
     #[test]
     fn test_fn_dsa_random() {
         for codec in FN_DSA_KEY_CODECS {
@@ -2354,24 +2191,20 @@ mod tests {
             let (vpk, epk) = {
                 let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
-                (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
+                (Vec::<u8>::from(&pk), EncodedMultikey::from(pk))
             };
             println!("encoded pubkey: {}: {}", codec, epk);
             println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
             println!(
-                "encoded privkey: {}: {}",
-                codec,
-                EncodedMultikey::from(mk.clone())
-            );
-            println!(
                 "encoded privkey v: {}: {}",
                 codec,
-                hex::encode(Into::<Vec<u8>>::into(mk.clone()))
+                hex::encode(Vec::<u8>::from(&mk))
             );
-            let _v: Vec<u8> = mk.into();
+            println!("encoded privkey: {}: {}", codec, EncodedMultikey::from(mk));
         }
     }
 
+    #[cfg(feature = "fn-dsa")]
     #[test]
     fn test_fn_dsa_encoded_random() {
         for codec in FN_DSA_KEY_CODECS {
@@ -2387,6 +2220,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "fn-dsa")]
     #[test]
     fn test_fn_dsa_signing_detached_roundtrip() {
         for codec in FN_DSA_KEY_CODECS {
@@ -2411,7 +2245,7 @@ mod tests {
             let msg = b"for great justice, move every zig!";
 
             let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
-            let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
+            let signature = signmk.sign(msg, false, None).unwrap();
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
             println!("signature: {}", sig);
 
@@ -2420,6 +2254,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "fn-dsa")]
     #[test]
     fn test_fn_dsa_signing_merged_roundtrip() {
         for codec in FN_DSA_KEY_CODECS {
@@ -2453,6 +2288,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "ml-dsa")]
     #[test]
     fn test_ml_dsa_random() {
         for codec in ML_DSA_KEY_CODECS {
@@ -2465,24 +2301,20 @@ mod tests {
             let (vpk, epk) = {
                 let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
-                (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
+                (Vec::<u8>::from(&pk), EncodedMultikey::from(pk))
             };
             println!("encoded pubkey: {}: {}", codec, epk);
             println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
             println!(
-                "encoded privkey: {}: {}",
-                codec,
-                EncodedMultikey::from(mk.clone())
-            );
-            println!(
                 "encoded privkey v: {}: {}",
                 codec,
-                hex::encode(Into::<Vec<u8>>::into(mk.clone()))
+                hex::encode(Vec::<u8>::from(&mk))
             );
-            let _v: Vec<u8> = mk.into();
+            println!("encoded privkey: {}: {}", codec, EncodedMultikey::from(mk));
         }
     }
 
+    #[cfg(feature = "ml-dsa")]
     #[test]
     fn test_ml_dsa_encoded_random() {
         for codec in ML_DSA_KEY_CODECS {
@@ -2498,6 +2330,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "ml-dsa")]
     #[test]
     fn test_ml_dsa_signing_detached_roundtrip() {
         // ML-DSA signing allocates large key/signature buffers on the stack;
@@ -2528,7 +2361,7 @@ mod tests {
                     let msg = b"for great justice, move every zig!";
 
                     let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
-                    let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
+                    let signature = signmk.sign(msg, false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
@@ -2541,6 +2374,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "ml-dsa")]
     #[test]
     fn test_ml_dsa_signing_merged_roundtrip() {
         // ML-DSA signing allocates large key/signature buffers on the stack;
@@ -2585,7 +2419,7 @@ mod tests {
             .unwrap();
     }
 
-    #[cfg(feature = "slow-tests")]
+    #[cfg(all(feature = "slh-dsa", feature = "slow-tests"))]
     #[test]
     fn test_slh_dsa_random() {
         for codec in SLH_DSA_KEY_CODECS {
@@ -2598,25 +2432,20 @@ mod tests {
             let (vpk, epk) = {
                 let conv = ViewBuilder::new(&mk).conv().build().unwrap();
                 let pk = conv.to_public_key().unwrap();
-                (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
+                (Vec::<u8>::from(&pk), EncodedMultikey::from(pk))
             };
             println!("encoded pubkey: {}: {}", codec, epk);
             println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
             println!(
-                "encoded privkey: {}: {}",
-                codec,
-                EncodedMultikey::from(mk.clone())
-            );
-            println!(
                 "encoded privkey v: {}: {}",
                 codec,
-                hex::encode(Into::<Vec<u8>>::into(mk.clone()))
+                hex::encode(Vec::<u8>::from(&mk))
             );
-            let _v: Vec<u8> = mk.into();
+            println!("encoded privkey: {}: {}", codec, EncodedMultikey::from(mk));
         }
     }
 
-    #[cfg(feature = "slow-tests")]
+    #[cfg(all(feature = "slh-dsa", feature = "slow-tests"))]
     #[test]
     fn test_slh_dsa_encoded_random() {
         for codec in SLH_DSA_KEY_CODECS {
@@ -2632,7 +2461,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "slow-tests")]
+    #[cfg(all(feature = "slh-dsa", feature = "slow-tests"))]
     #[test]
     fn test_slh_dsa_signing_detached_roundtrip() {
         // SLH-DSA signing uses large stack buffers internally (Merkle trees, WOTS+).
@@ -2662,7 +2491,7 @@ mod tests {
                     let msg = b"for great justice, move every zig!";
 
                     let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
-                    let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
+                    let signature = signmk.sign(msg, false, None).unwrap();
                     let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
                     println!("signature: {}", sig);
 
@@ -2675,7 +2504,7 @@ mod tests {
             .unwrap();
     }
 
-    #[cfg(feature = "slow-tests")]
+    #[cfg(all(feature = "slh-dsa", feature = "slow-tests"))]
     #[test]
     fn test_slh_dsa_signing_merged_roundtrip() {
         // SLH-DSA signing uses large stack buffers internally (Merkle trees, WOTS+).
@@ -2719,6 +2548,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "bls12-381")]
     #[test]
     fn test_bls_key_combine() {
         let mut rng = rand::rng();
@@ -2740,7 +2570,7 @@ mod tests {
             .unwrap();
 
         let signmk = ViewBuilder::new(&shares[0]).sign().build().unwrap();
-        let signature = signmk.sign(msg.as_slice(), false, Some(2_u8)).unwrap();
+        let signature = signmk.sign(&msg, false, Some(2_u8)).unwrap();
         let ms: EncodedMultisig = BaseEncoded::new(Base::Base32Z, signature);
         let s = ms.to_string();
         println!("Bls Sig Share: {}", s);
@@ -2763,6 +2593,7 @@ mod tests {
         assert_eq!(mk1, mk3);
     }
 
+    #[cfg(feature = "bls12-381")]
     #[test]
     fn test_bls_share_ssh_key_roundtrip() {
         let mut rng = rand::rng();
@@ -2795,6 +2626,7 @@ mod tests {
         assert_eq!(pk1, pk2);
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_from_ssh_pubkey() {
         let mut rng = rand::rng();
@@ -2818,6 +2650,7 @@ mod tests {
         assert!(kd.secret_bytes().is_err()); // public key
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_from_ssh_privkey() {
         let mut rng = rand::rng();
@@ -2840,6 +2673,7 @@ mod tests {
         assert!(kd.secret_bytes().is_ok());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_pub_from_string() {
         let s = "fba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2".to_string();
@@ -2856,6 +2690,7 @@ mod tests {
         assert!(kd.secret_bytes().is_err()); // public key
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_priv_from_string() {
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04".to_string();
@@ -2872,6 +2707,7 @@ mod tests {
         assert!(kd.secret_bytes().is_ok());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_pub_from_vec() {
         let b = hex::decode("ba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2").unwrap();
@@ -2887,6 +2723,7 @@ mod tests {
         assert!(kd.secret_bytes().is_err()); // public key
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_priv_from_vec() {
         let b = hex::decode("ba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04").unwrap();
@@ -2911,6 +2748,7 @@ mod tests {
         assert!(mk2.is_null());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_from_seed() {
         let seed = hex::decode("f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2")
@@ -2931,6 +2769,7 @@ mod tests {
         assert!(kd.secret_bytes().is_ok());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_too_many_attributes_rejected() {
         use multi_trait::EncodeInto;
@@ -2955,6 +2794,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_valid_roundtrip_with_caps() {
         // Sanity: a well-formed multikey still round-trips with the caps.
@@ -2962,8 +2802,292 @@ mod tests {
             .with_key_bytes(&[0u8; 32])
             .try_build()
             .unwrap();
-        let v: Vec<u8> = mk.clone().into();
+        let v = Vec::<u8>::from(&mk);
         let mk2 = Multikey::try_from(v.as_slice()).unwrap();
         assert_eq!(mk, mk2);
+    }
+
+    /// tests that walk every key codec in [`KEY_CODECS`]
+    #[cfg(all(
+        feature = "bls12-381",
+        feature = "curve25519",
+        feature = "p256",
+        feature = "p384",
+        feature = "p521",
+        feature = "secp256k1"
+    ))]
+    mod key_codecs {
+        use super::*;
+        #[cfg(all(feature = "bcrypt", feature = "chacha20"))]
+        use crate::{cipher, kdf};
+
+        #[cfg(all(feature = "bcrypt", feature = "chacha20"))]
+        #[test]
+        fn test_encryption_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk1 = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+
+                let attr = ViewBuilder::new(&mk1).attr().build().unwrap();
+                assert!(!attr.is_encrypted());
+                assert!(!attr.is_public_key());
+                assert!(attr.is_secret_key());
+                let kd = ViewBuilder::new(&mk1).data().build().unwrap();
+                assert!(kd.key_bytes().is_ok());
+                assert!(kd.secret_bytes().is_ok());
+
+                let mk2 = {
+                    let kdfmk = kdf::Builder::new(Codec::BcryptPbkdf)
+                        .with_random_salt(kdf::SALT_LENGTH, &mut rng)
+                        .with_rounds(10)
+                        .try_build()
+                        .unwrap();
+                    let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
+                        .with_random_nonce(::chacha20::Nonce::default().len(), &mut rng)
+                        .try_build()
+                        .unwrap();
+                    // get the kdf view on the cipher multikey so we can generate a
+                    // new cipher multikey with the same parameters and the generated key
+                    let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
+                    // derive a key from the passphrase and add it to the cipher multikey
+                    let ciphermk = kdf
+                        .derive_key(b"for great justice, move every zig!")
+                        .unwrap();
+                    // get the cipher view on the unencrypted ed25519 secret key so
+                    // that we can create a new ed25519 secret key with an encrypted
+                    // key and the kdf and cipher attributes and data
+                    let cipher = ViewBuilder::new(&mk1).cipher(&ciphermk).build().unwrap();
+                    // encrypt the multikey using the cipher
+
+                    cipher.encrypt().unwrap()
+                };
+
+                let attr = ViewBuilder::new(&mk2).attr().build().unwrap();
+                assert!(attr.is_encrypted());
+                assert!(!attr.is_public_key());
+                assert!(attr.is_secret_key());
+                let kd = ViewBuilder::new(&mk2).data().build().unwrap();
+                assert!(kd.key_bytes().is_ok());
+                assert!(kd.secret_bytes().is_err()); // encrypted key
+
+                let mk3 = {
+                    let kdfmk = kdf::Builder::default()
+                        .try_from_multikey(&mk2)
+                        .unwrap()
+                        .try_build()
+                        .unwrap();
+                    let ciphermk = cipher::Builder::default()
+                        .try_from_multikey(&mk2)
+                        .unwrap()
+                        .try_build()
+                        .unwrap();
+                    // get the kdf view
+                    let kdf = ViewBuilder::new(&ciphermk).kdf(&kdfmk).build().unwrap();
+                    // derive a key from the passphrase and add it to the cipher multikey
+                    let ciphermk = kdf
+                        .derive_key(b"for great justice, move every zig!")
+                        .unwrap();
+                    // get the cipher view
+                    let cipher = ViewBuilder::new(&mk2).cipher(&ciphermk).build().unwrap();
+                    // decrypt the multikey using the cipher
+
+                    cipher.decrypt().unwrap()
+                };
+
+                let attr = ViewBuilder::new(&mk3).attr().build().unwrap();
+                assert!(!attr.is_encrypted());
+                assert!(!attr.is_public_key());
+                assert!(attr.is_secret_key());
+                let kd = ViewBuilder::new(&mk3).data().build().unwrap();
+                assert!(kd.key_bytes().is_ok());
+                assert!(kd.secret_bytes().is_ok());
+
+                // ensure the round trip worked
+                assert_eq!(mk1, mk3);
+            }
+        }
+
+        #[test]
+        fn test_random() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+                let (vpk, epk) = {
+                    let conv = ViewBuilder::new(&mk).conv().build().unwrap();
+                    let pk = conv.to_public_key().unwrap();
+                    (Vec::<u8>::from(&pk), EncodedMultikey::from(pk))
+                };
+                println!("encoded pubkey: {}: {}", codec, epk);
+                println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
+                println!(
+                    "encoded privkey v: {}: {}",
+                    codec,
+                    hex::encode(Vec::<u8>::from(&mk))
+                );
+                println!("encoded privkey: {}: {}", codec, EncodedMultikey::from(mk));
+            }
+        }
+        #[test]
+        fn test_encoded_random() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_base_encoding(Base::Base32Lower)
+                    .with_comment("test key")
+                    .try_build_encoded()
+                    .unwrap();
+                let s = mk.to_string();
+                assert_eq!(mk, EncodedMultikey::try_from(s.as_str()).unwrap());
+            }
+        }
+        #[test]
+        fn test_random_public_ssh_key_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
+                let pk = conv.to_public_key().unwrap();
+                let ssh_key = conv.to_ssh_public_key().unwrap();
+                let mk2 = Builder::new_from_ssh_public_key(&ssh_key)
+                    .unwrap()
+                    .try_build()
+                    .unwrap();
+                assert_eq!(pk, mk2);
+            }
+        }
+        #[test]
+        fn test_random_private_ssh_key_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
+                let ssh_key = conv.to_ssh_private_key().unwrap();
+                let mk2 = Builder::new_from_ssh_private_key(&ssh_key)
+                    .unwrap()
+                    .try_build()
+                    .unwrap();
+                assert_eq!(mk, mk2);
+            }
+        }
+        #[test]
+        fn test_ssh_key_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let sk1 = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+                let cv = ViewBuilder::new(&sk1).conv().build().unwrap();
+                let public_key = cv.to_ssh_public_key().unwrap();
+                let private_key = cv.to_ssh_private_key().unwrap();
+
+                let pk1 = cv.to_public_key().unwrap();
+                let cv = ViewBuilder::new(&pk1).conv().build().unwrap();
+                assert_eq!(public_key, cv.to_ssh_public_key().unwrap());
+
+                let sk2 = Builder::new_from_ssh_private_key(&private_key)
+                    .unwrap()
+                    .try_build()
+                    .unwrap();
+                assert_eq!(sk1, sk2);
+                let pk2 = Builder::new_from_ssh_public_key(&public_key)
+                    .unwrap()
+                    .try_build()
+                    .unwrap();
+                assert_eq!(pk1, pk2);
+            }
+        }
+        #[test]
+        fn test_signing_detached_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+
+                let attr = ViewBuilder::new(&mk).attr().build().unwrap();
+                assert!(!attr.is_encrypted());
+                assert!(!attr.is_public_key());
+                assert!(attr.is_secret_key());
+                let kd = ViewBuilder::new(&mk).data().build().unwrap();
+                assert!(kd.key_bytes().is_ok());
+                assert!(kd.secret_bytes().is_ok());
+                let conv = ViewBuilder::new(&mk).conv().build().unwrap();
+                let pk = EncodedMultikey::new(Base::Base16Lower, conv.to_public_key().unwrap());
+                println!("{} pubkey: {}", codec, pk);
+
+                let msg = b"for great justice, move every zig!";
+
+                let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
+                let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv
+                {
+                    signmk.sign(msg, false, Some(2_u8)).unwrap()
+                } else {
+                    signmk.sign(msg, false, None).unwrap()
+                };
+                let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
+                println!("signature: {}", sig);
+
+                let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
+                assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
+            }
+        }
+        #[test]
+        fn test_signing_merged_roundtrip() {
+            for codec in KEY_CODECS {
+                let mut rng = rand::rng();
+                let mk = Builder::new_from_random_bytes(codec, &mut rng)
+                    .unwrap()
+                    .with_comment("test key")
+                    .try_build()
+                    .unwrap();
+
+                let attr = ViewBuilder::new(&mk).attr().build().unwrap();
+                assert!(!attr.is_encrypted());
+                assert!(!attr.is_public_key());
+                assert!(attr.is_secret_key());
+                let kd = ViewBuilder::new(&mk).data().build().unwrap();
+                assert!(kd.key_bytes().is_ok());
+                assert!(kd.secret_bytes().is_ok());
+
+                let msg =
+                    hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
+                        .unwrap();
+
+                let signmk = ViewBuilder::new(&mk).sign().build().unwrap();
+                let signature = if codec == Codec::Bls12381G1Priv || codec == Codec::Bls12381G2Priv
+                {
+                    signmk.sign(&msg, true, Some(2_u8)).unwrap()
+                } else {
+                    signmk.sign(&msg, true, None).unwrap()
+                };
+
+                // make sure the message is stored correctly in the signature
+                assert_eq!(signature.message, msg);
+
+                let verifymk = ViewBuilder::new(&mk).verify().build().unwrap();
+                assert!(verifymk.verify(&signature, None).is_ok());
+            }
+        }
     }
 }

@@ -7,7 +7,7 @@
 //! single use; the provenance-log / keystore layer must reject a second
 //! signature by the same Lamport public key.
 
-use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
+use crate::views::dispatch::{dispatch_attr_view, dispatch_data_view, public_form};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     ThresholdView, VerifyView,
@@ -596,12 +596,7 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            dispatch_conv_view(self.mk)?.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;
             kd.key_bytes()?

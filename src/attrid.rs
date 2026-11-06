@@ -69,11 +69,11 @@ pub enum AttrId {
     /// ‖ limit), produced by the controller's signing key. Lets a verifier reject
     /// a tampered marker before trusting it (defeats TSIG-1 marker forgery).
     ThresholdMarkerSig,
-    /// Threshold disclosure mode (varuint u8): 0=Full, 1=Partial, 2=FullConfidentialial.
+    /// Threshold disclosure mode (varuint u8): 0=Full, 1=Partial, 2=FullConfidential.
     /// Absent means Full (legacy backward-compatible).
     ThresholdDisclosure,
     /// AEAD-encrypted `ThresholdMetadata` CBOR blob. Present in Partial and
-    /// FullConfidentialial modes.
+    /// FullConfidential modes.
     EncryptedThresholdMeta,
     /// CBOR-encoded `ThresholdMetaCipher` (cipher codec + nonce) for decrypting
     /// `EncryptedThresholdMeta`.
@@ -202,10 +202,10 @@ impl<'a> TryDecodeFrom<'a> for AttrId {
     }
 }
 
-impl TryFrom<&str> for AttrId {
-    type Error = Error;
+impl std::str::FromStr for AttrId {
+    type Err = Error;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "key-is-encrypted" => Ok(AttrId::KeyIsEncrypted),
             "key-data" => Ok(AttrId::KeyData),
@@ -242,8 +242,46 @@ impl TryFrom<&str> for AttrId {
     }
 }
 
+impl TryFrom<&str> for AttrId {
+    type Error = Error;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
 impl fmt::Display for AttrId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// every attribute name parses back to its id through `FromStr` and the
+    /// delegating `TryFrom<&str>`, case-insensitively
+    #[test]
+    fn test_from_str_round_trip() {
+        let ids: Vec<AttrId> = (0..=u8::MAX)
+            .filter_map(|code| AttrId::try_from(code).ok())
+            .collect();
+        assert!(!ids.is_empty());
+        for id in ids {
+            assert!(id.as_str().parse::<AttrId>().unwrap() == id, "{id}");
+            assert!(AttrId::try_from(id.as_str()).unwrap() == id, "{id}");
+            let upper = id.as_str().to_ascii_uppercase();
+            assert!(upper.parse::<AttrId>().unwrap() == id, "{id}");
+        }
+    }
+
+    /// an unknown attribute name is rejected
+    #[test]
+    fn test_from_str_unknown() {
+        assert!(matches!(
+            "no-such-attribute".parse::<AttrId>(),
+            Err(Error::Attributes(AttributesError::InvalidAttributeName(_)))
+        ));
     }
 }

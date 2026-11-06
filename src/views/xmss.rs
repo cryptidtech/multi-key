@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! XMSS-SHA2_10/16/20_256 stateful hash-based signature multikey view; RFC 8391.
-#![allow(dead_code)]
 //!
 //! XMSS is stateful: every signature consumes a one-time leaf `index` that must
 //! never be reused. [`SignView::sign`] embeds the consumed index in the returned
-//! [`Multisig`] as [`multi_sig::AttrId::SigIndex`], so the index travels with
+//! [`Multisig`](multi_sig::Multisig) as [`multi_sig::AttrId::SigIndex`], so the index travels with
 //! the signature (e.g. into a provenance log, where monotonicity is enforced).
 //!
 //! NOTE: this view signs at whatever index the stored secret key currently holds;
@@ -13,7 +12,7 @@
 //! [`SignView::sign_advance`] to obtain both the signature and the advanced
 //! secret key in one step.
 
-use crate::views::dispatch::{dispatch_attr_view, dispatch_conv_view, dispatch_data_view};
+use crate::views::dispatch::{dispatch_attr_view, dispatch_data_view, public_form};
 use crate::{
     AttrId, AttrView, Builder, ConvView, DataView, Error, FingerprintView, Multikey, SignView,
     VerifyView,
@@ -28,7 +27,7 @@ use zeroize::Zeroizing;
 
 mod xmss_wrapper {
     use super::Zeroizing;
-    use xmss::{
+    use pq_xmss::{
         DetachedSignature, KeyPair, SigningKey, VerifyingKey, XmssParameter, XmssSha2_10_256,
         XmssSha2_16_256, XmssSha2_20_256,
     };
@@ -380,13 +379,7 @@ impl<'a> VerifyView for View<'a> {
             return Err(VerifyError::MissingMessage.into());
         };
 
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;

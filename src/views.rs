@@ -2,7 +2,7 @@
 //! View traits and their per-algorithm implementations.
 //!
 //! A "view" is an abstract, algorithm-specific interface over the attributes
-//! and key material of a [`Multikey`](crate::Multikey). The traits here
+//! and key material of a [`Multikey`]. The traits here
 //! cover general, cipher, kdf, and threshold attribute inspection
 //! ([`AttrView`], [`CipherAttrView`], [`KdfAttrView`], [`ThresholdAttrView`],
 //! [`ThresholdKeyView`]), key data and conversion ([`DataView`],
@@ -11,12 +11,10 @@
 //! [`ThresholdView`]), and introspection ([`ThresholdDisclosureView`],
 //! [`MerkleStateView`]).
 //!
-//! Construct views with
-//! [`ViewBuilder`](crate::views::builder::ViewBuilder): a fluent
-//! kind selector plus optional local-codec factories for custom protocol
-//! keys. The deprecated [`Views`] trait delegates to the same internal
-//! dispatch core the builder uses. The marker and threshold metadata
-//! helpers are also public: [`threshold_marker`] and [`threshold_meta`].
+//! Construct views with [`ViewBuilder`](crate::views::builder::ViewBuilder):
+//! a fluent kind selector plus optional local-codec factories for custom
+//! protocol keys. The marker and threshold metadata helpers are also public:
+//! `threshold_marker` (with the `threshold` feature) and [`threshold_meta`].
 use crate::{Error, Multikey};
 use multi_codec::Codec;
 use multi_hash::Multihash;
@@ -24,54 +22,87 @@ use multi_sig::Multisig;
 use zeroize::Zeroizing;
 
 // algorithms implement different sets of view
+#[cfg(feature = "bcrypt")]
 pub(crate) mod bcrypt;
+#[cfg(feature = "bls12-381")]
 pub(crate) mod bls12381;
+#[cfg(all(feature = "bls12-381", feature = "fn-dsa"))]
 pub(crate) mod bls12381_g1_fndsa512;
+#[cfg(all(feature = "bls12-381", feature = "mayo"))]
 pub(crate) mod bls12381_g1_mayo1;
+#[cfg(all(feature = "bls12-381", feature = "mayo"))]
 pub(crate) mod bls12381_g1_mayo2;
+#[cfg(all(feature = "bls12-381", feature = "ml-dsa"))]
 pub(crate) mod bls12381_g1_mldsa65;
+#[cfg(all(
+    feature = "bls12-381",
+    any(feature = "fn-dsa", feature = "mayo", feature = "ml-dsa")
+))]
 pub(crate) mod bls12381_hybrid;
+#[cfg(feature = "chacha20")]
 pub(crate) mod chacha20;
 #[cfg(feature = "deprecated")]
 #[allow(deprecated)]
 pub(crate) mod classic_mceliece;
 pub(crate) mod dkg_threshold;
+#[cfg(feature = "curve25519")]
 pub(crate) mod ed25519;
+#[cfg(all(feature = "curve25519", feature = "fn-dsa"))]
 pub(crate) mod ed25519_fndsa512;
+#[cfg(all(feature = "curve25519", feature = "mayo"))]
 pub(crate) mod ed25519_mayo2;
+#[cfg(all(feature = "curve25519", feature = "ml-dsa"))]
 pub(crate) mod ed25519_mldsa65;
+#[cfg(feature = "fn-dsa")]
 pub(crate) mod fn_dsa;
+#[cfg(feature = "frodokem")]
 pub(crate) mod frodokem;
+#[cfg(feature = "frodokem")]
 pub(crate) mod frodokem_helper;
 #[cfg(feature = "lamport")]
 pub(crate) mod lamport;
 #[cfg(feature = "lamport")]
 pub(crate) mod lamport_merkle;
+#[cfg(feature = "mayo")]
 pub(crate) mod mayo;
+#[cfg(feature = "ml-dsa")]
 pub(crate) mod ml_dsa;
+#[cfg(feature = "ml-kem")]
 pub(crate) mod ml_kem;
+#[cfg(any(feature = "p256", feature = "p384", feature = "p521"))]
 pub(crate) mod nist_p;
+#[cfg(feature = "rsa")]
 pub(crate) mod rsa;
+#[cfg(feature = "secp256k1")]
 pub(crate) mod secp256k1;
+#[cfg(feature = "slh-dsa")]
 pub(crate) mod slh_dsa;
+#[cfg(feature = "sntrup")]
 pub(crate) mod sntrup;
 /// Split (Shamir) threshold marker attributes and scheme classifier.
+#[cfg(feature = "threshold")]
 pub mod threshold_marker;
 /// Threshold disclosure modes and encrypted metadata helpers.
 pub mod threshold_meta;
 /// XEdDSA view: an Ed25519-form signature over an X25519 key (POP-only).
+#[cfg(feature = "curve25519")]
 pub(crate) mod xeddsa;
 pub use threshold_meta::{
     DisclosureView, ThresholdDisclosure, ThresholdDisclosureView, ThresholdMetaCipher,
-    ThresholdMetadata, decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key,
-    read_threshold_params, stamp_disclosure_attrs,
+    ThresholdMetadata, read_threshold_params, stamp_disclosure_attrs,
 };
+#[cfg(feature = "chacha20")]
+pub use threshold_meta::{decrypt_threshold_meta, encrypt_threshold_meta, generate_meta_key};
+#[cfg(feature = "curve25519")]
 pub(crate) mod x25519;
+#[cfg(all(feature = "curve25519", feature = "frodokem"))]
 pub(crate) mod x25519_frodokem640;
-#[cfg(feature = "deprecated")]
+#[cfg(all(feature = "curve25519", feature = "deprecated"))]
 #[allow(deprecated)]
 pub(crate) mod x25519_mceliece348864;
+#[cfg(all(feature = "curve25519", feature = "ml-kem"))]
 pub(crate) mod x25519_mlkem768;
+#[cfg(all(feature = "curve25519", feature = "sntrup"))]
 pub(crate) mod x25519_sntrup761;
 #[cfg(feature = "xmss")]
 pub(crate) mod xmss;
@@ -83,8 +114,21 @@ pub(crate) mod dispatch;
 // optional local-codec factories, and a `.build()` terminal
 pub mod builder;
 
-// shared AEAD helper used by ml_kem, sntrup, x25519, and hybrid KEM views
-// (plus the deprecated classic_mceliece views)
+// shared AEAD seal/open helpers for the KEM and ECDH views. Gated on the
+// features that call them rather than on `aead`, which alone would leave
+// them unused.
+#[cfg(any(
+    feature = "curve25519",
+    feature = "deprecated",
+    feature = "frodokem",
+    feature = "ml-kem",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "rsa",
+    feature = "secp256k1",
+    feature = "sntrup"
+))]
 pub(crate) mod aead;
 
 ///
@@ -321,55 +365,4 @@ pub trait MerkleStateView {
     fn next_index(&self) -> Result<usize, Error>;
     /// Number of unused leaves (secret keys only).
     fn remaining_signatures(&self) -> Result<usize, Error>;
-}
-
-/// trait for getting the other views
-///
-/// Deprecated: construct views with [`ViewBuilder`](builder::ViewBuilder)
-/// instead. The builder selects a view kind fluently, dispatches through
-/// the same internal dispatch core this trait delegates to, and adds
-/// local-codec factories for custom protocol keys. This trait and its impl
-/// for `Multikey` remain as a source-compatible delegating shim.
-///
-/// Note: `multi_sig::Views` is a different, unrelated trait over
-/// [`Multisig`]; this deprecation does not affect it.
-#[deprecated(
-    since = "2.1.0",
-    note = "use ViewBuilder instead; this shim trait and its impl for Multikey will be removed in the next major release. multi_sig::Views is a different, unrelated trait"
-)]
-pub trait Views {
-    /// Provide a read-only view of the basic attributes in the viewed Multikey
-    fn attr_view<'a>(&'a self) -> Result<Box<dyn AttrView + 'a>, Error>;
-    /// Provide a read-only view of the cipher attributes in the viewed Multikey
-    fn cipher_attr_view<'a>(&'a self) -> Result<Box<dyn CipherAttrView + 'a>, Error>;
-    /// Provide a read-only view to key data in the viewed Multikey
-    fn data_view<'a>(&'a self) -> Result<Box<dyn DataView + 'a>, Error>;
-    /// Provide a read-only view of the kdf attributes in the viewed Multikey
-    fn kdf_attr_view<'a>(&'a self) -> Result<Box<dyn KdfAttrView + 'a>, Error>;
-    /// Provide a read-only view of the threshold attributes in the viewed Multikey
-    fn threshold_attr_view<'a>(&'a self) -> Result<Box<dyn ThresholdAttrView + 'a>, Error>;
-    /// Provide a read-only view of higher-level threshold key metadata in the viewed Multikey
-    fn threshold_key_view<'a>(&'a self) -> Result<Box<dyn ThresholdKeyView + 'a>, Error>;
-    /// Provide an interface to do encryption/decryption of the viewed Multikey
-    fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error>;
-    /// Provide an interface to do key conversions from the viewe Multikey
-    fn conv_view<'a>(&'a self) -> Result<Box<dyn ConvView + 'a>, Error>;
-    /// Provide an interface to do key conversions from the viewe Multikey
-    fn fingerprint_view<'a>(&'a self) -> Result<Box<dyn FingerprintView + 'a>, Error>;
-    /// Provide an interface to do kdf operations from the viewed Multikey
-    fn kdf_view<'a>(&'a self, kdf: &'a Multikey) -> Result<Box<dyn KdfView + 'a>, Error>;
-    /// Provide an interface to seal (encrypt) plaintext
-    fn seal_view<'a>(&'a self) -> Result<Box<dyn SealView + 'a>, Error>;
-    /// Provide an interface to open (decrypt) sealed data
-    fn open_view<'a>(&'a self) -> Result<Box<dyn OpenView + 'a>, Error>;
-    /// Provide an interface to sign a message and return a Multisig
-    fn sign_view<'a>(&'a self) -> Result<Box<dyn SignView + 'a>, Error>;
-    /// Provide an interface to threshold operations on the Mutlikey
-    fn threshold_view<'a>(&'a self) -> Result<Box<dyn ThresholdView + 'a>, Error>;
-    /// Provide an interface to verify a Multisig and optional message
-    fn verify_view<'a>(&'a self) -> Result<Box<dyn VerifyView + 'a>, Error>;
-    /// Provide an interface for threshold disclosure mode operations
-    fn disclosure_view<'a>(&'a self) -> Result<Box<dyn ThresholdDisclosureView + 'a>, Error>;
-    /// Provide an interface for merkle-tree state introspection
-    fn merkle_state_view<'a>(&'a self) -> Result<Box<dyn MerkleStateView + 'a>, Error>;
 }

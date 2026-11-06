@@ -225,15 +225,6 @@ impl<'a> FingerprintView for View<'a> {
     }
 }
 
-fn encode_sealed(kem_ct: &[u8], aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(kem_ct.to_vec()).into());
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
 fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
     let (kem_ct, ptr) = Varbytes::try_decode_from(data)
         .map_err(|_| SealError::InvalidFormat("missing kem ciphertext".into()))?;
@@ -269,7 +260,10 @@ impl<'a> SealView for View<'a> {
         let key_len = aead::key_size(aead_codec)?;
         let aead_key = aead::derive_aead_key(&shared_secret, b"frodokem-seal", key_len)?;
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
-        Ok((encode_sealed(&kem_ct, aead_codec, &nonce, &ct_tag), None))
+        Ok((
+            aead::encode_kem_sealed(&kem_ct, aead_codec, &nonce, &ct_tag),
+            None,
+        ))
     }
 }
 

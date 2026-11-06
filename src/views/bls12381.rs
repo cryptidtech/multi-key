@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+use crate::mk::encode_varbytes_into;
 use crate::views::dispatch::{
-    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_disclosure_view,
-    dispatch_fingerprint_view, dispatch_threshold_attr_view,
+    dispatch_attr_view, dispatch_data_view, dispatch_disclosure_view, dispatch_fingerprint_view,
+    dispatch_threshold_attr_view, public_form,
 };
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
@@ -91,7 +92,7 @@ impl From<KeyShare> for Vec<u8> {
         // add in the limit
         v.append(&mut Varuint(val.2).into());
         // add in the key share data
-        v.append(&mut Varbytes::new(val.3.clone()).into());
+        encode_varbytes_into(&mut v, &val.3);
         v
     }
 }
@@ -139,9 +140,9 @@ impl From<ThresholdData> for Vec<u8> {
         // add in the number of key shares
         v.append(&mut Varuint(val.0.len()).into());
         // add in the key shares
-        val.0.iter().for_each(|(_, share)| {
-            v.append(&mut share.clone().into());
-        });
+        for share in val.0.into_values() {
+            v.append(&mut share.into());
+        }
         v
     }
 }
@@ -485,10 +486,7 @@ impl<'a> ConvView for View<'a> {
 
     /// try to convert a Multikey to an ssh_key::PublicKey
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
-        let mut pk = self.mk.clone();
-        if self.is_secret_key() {
-            pk = self.to_public_key()?;
-        }
+        let pk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pk)?;
@@ -553,7 +551,7 @@ impl<'a> ConvView for View<'a> {
                 ),
                 key: opaque_key_bytes,
             }),
-            pk.comment,
+            pk.comment.clone(),
         ))
     }
 
@@ -1188,14 +1186,7 @@ impl<'a> VerifyView for View<'a> {
     /// error rather than being misverified on the wrong curve. This avoids the
     /// downgrade heuristic described in the security audit (M1).
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         // get the secret key bytes
         let key_bytes = {
@@ -1469,10 +1460,10 @@ impl<'a> SealView for View<'a> {
                 let pub_key = PublicKey::<Bls12381G1Impl>::try_from(key_bytes.as_slice())
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let ct = pub_key
-                    .encrypt_time_lock(SignatureSchemes::ProofOfPossession, plaintext, &id)
+                    .encrypt_time_lock(SignatureSchemes::ProofOfPossession, plaintext, id)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let mut out = Vec::new();
-                out.append(&mut Varbytes::new(id.to_vec()).into());
+                encode_varbytes_into(&mut out, &id);
                 let ct_bytes: Vec<u8> = Vec::try_from(&ct)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 out.extend_from_slice(&ct_bytes);
@@ -1482,10 +1473,10 @@ impl<'a> SealView for View<'a> {
                 let pub_key = PublicKey::<Bls12381G2Impl>::try_from(key_bytes.as_slice())
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let ct = pub_key
-                    .encrypt_time_lock(SignatureSchemes::ProofOfPossession, plaintext, &id)
+                    .encrypt_time_lock(SignatureSchemes::ProofOfPossession, plaintext, id)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 let mut out = Vec::new();
-                out.append(&mut Varbytes::new(id.to_vec()).into());
+                encode_varbytes_into(&mut out, &id);
                 let ct_bytes: Vec<u8> = Vec::try_from(&ct)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
                 out.extend_from_slice(&ct_bytes);

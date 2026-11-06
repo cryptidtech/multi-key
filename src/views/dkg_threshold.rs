@@ -3,7 +3,7 @@
 //!
 //! Implements [`ThresholdAttrView`] for the four DKG private-share codecs
 //! introduced alongside the `bs-dkg` crate. The view reads its values out of
-//! the four new [`AttrId::Dkg*`] attributes:
+//! the four new `AttrId::Dkg*` attributes:
 //!
 //! - [`AttrId::DkgThreshold`]   → [`threshold`](ThresholdAttrView::threshold)
 //! - [`AttrId::DkgLimit`]       → [`limit`](ThresholdAttrView::limit)

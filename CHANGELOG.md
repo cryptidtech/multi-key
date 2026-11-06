@@ -5,6 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10-13
+
+### Added
+
+- One feature per algorithm or curve: `bcrypt`, `bls12-381`, `chacha20`, `curve25519` (Ed25519, X25519, and XEdDSA), `fn-dsa`, `frodokem`, `lamport`, `mayo`, `ml-dsa`, `ml-kem`, `p256`, `p384`, `p521`, `rsa`, `secp256k1`, `slh-dsa`, `sntrup`, and `xmss`. Each one pulls in only the crates its key types use. All of them are in the default feature set, so a default build has the same key types as 2.x.
+- The `threshold` feature (default). It gates the `keysplit` module and the threshold marker attributes and their re-exports, and pulls in `elliptic-curve`, `serde` (derives only), `serde_cbor_2`, and `vsss-rs`.
+- The `aead` feature, a dependency bundle (AES-GCM, ChaCha20-Poly1305, HKDF) that the sealing and ECDH features turn on themselves. Enabling it alone adds no key types.
+- Hybrid key types have no feature of their own. A hybrid compiles when every feature it combines is on, e.g. Ed25519-ML-DSA-65 needs `curve25519` and `ml-dsa`.
+- With `default-features = false` the crate depends on no algorithm crate. It provides the `Multikey` type, its attributes, the view traits, and `ViewBuilder`, so callers can supply their own implementations through `ViewBuilder::with_local_codec`.
+- `impl From<&Multikey> for Vec<u8>` and `impl From<&Nonce> for Vec<u8>` encode without cloning. The owned `From` impls delegate to them, and binary serde serialization uses them instead of cloning the value.
+- `FromStr` for `AttrId`. The existing `TryFrom<&str>` impl now delegates to it, so `"key-data".parse::<AttrId>()` works and the old calls are unchanged. This clears the `clippy::try_from_instead_of_from_str` error that failed `cargo clippy -- -D warnings`.
+
+### Changed
+
+- **Breaking:** a build with `default-features = false` loses every built-in key view, key generation, key splitting, and SSH conversion. In 2.x that setting only dropped `serde`, `lamport`, and `xmss`. Add the algorithm features you use.
+- **Breaking:** creating, converting, or viewing a key whose algorithm feature is off returns an `UnsupportedCodec` error. SSH conversion returns `UnsupportedAlgorithm`, and the seal and open views return `SealError::NotEncryptionKey`.
+- **Breaking:** `KdfError::Bcrypt` exists only with `bcrypt`, and `ThresholdError::Bls` only with `bls12-381`. Both enums are `#[non_exhaustive]`, so wildcard matches are unaffected.
+- **Breaking:** `encrypt_threshold_meta`, `decrypt_threshold_meta`, and `generate_meta_key` are re-exported only with `chacha20`. Without it, `stamp_disclosure_attrs` and `read_threshold_params` return `ThresholdError::MetaEncryption` for the `Partial` and `FullConfidential` modes, and the confidential threshold is never written in plaintext.
+- **Breaking:** the re-exported `ThresholdDisclosure::FullConfidentialial` is now `ThresholdDisclosure::FullConfidential`, following multi-sig 2.0. The encoded value (2) is unchanged, so existing shares decode as before; `Display` now prints `full-confidential`.
+- The Classic McEliece deprecation notes (README, crate docs, the McEliece views, `MCELIECE_KEY_CODECS`) now give the reason: the 2026 structural key-recovery attacks on binary Goppa codes (Hemmert–Wiemers and Hemmert at BSI, Ghoshal–Ishai–Jain–Sun, Weis, Saarinen) and BSI's 29 September 2026 advice against Classic McEliece in new developments.
+- `legacy_chacha20_fallback` now turns on `chacha20`.
+- `wasm` now turns on `getrandom/wasm_js` and the optional `getrandom_02` dependency itself.
+- The MAYO views import `signature` directly instead of through the `ml_dsa` re-export, so `mayo` builds without `ml-dsa`.
+- The crate-private `SALT_LENGTH` moved from the bcrypt view into `kdf`, so `chacha20` builds without `bcrypt`.
+- The benchmark declares `required-features = ["curve25519"]`.
+- Threshold marker and key-split CBOR encoding moved from `ciborium` to `serde_cbor_2`.
+- The XMSS views use `pq-xmss` instead of `xmss`.
+- Removed redundant copies on the encode and decode paths. Attribute bytes are written straight into the output instead of being cloned into a `Varbytes` first (about 40 view encoders and `Multikey` itself). Decoded attributes are moved instead of cloned. The `Builder` setters no longer copy each attribute twice, and `ct_eq` no longer deep-clones both keys. In paired benchmarks against 2.3.0 on an idle machine, `multikey_to_bytes` (which then cloned the key before encoding) is about 60% faster and decoding about 5% faster; key generation is unchanged. The benchmark now encodes by reference.
+- The `Multikey`, `Nonce`, and sealed-message encoders write each varint (sigil, codec, lengths, attribute IDs) straight into the output buffer instead of allocating a `Vec` per field, so an encode makes one allocation. Paired runs on an idle machine: `multikey_to_bytes` 46–47 ns → 21 ns; decoding unchanged.
+- The public-key paths (`verify` in 20 views and `to_ssh_public_key` in 9) no longer clone the secret key; they share one `public_form` helper that borrows a public key and derives one from a secret key. Only the comment string is copied.
+- `ct_eq` and binary serde serialization of `Multikey` zeroize the encoded bytes they build, and `From<ThresholdData>` moves the BLS shares instead of cloning each one.
+- `Builder::with_key_bytes` no longer leaves an unzeroized copy of the secret key bytes behind, and decoding moves attribute buffers into `Zeroizing` instead of copying them.
+- Binary serde deserialization of `Multikey` and `Nonce` decodes straight from the input bytes instead of copying them into an intermediate buffer, and zeroizes an owned input buffer after decoding. Human-readable deserialization moves attribute bytes into `Zeroizing` instead of cloning them, so secret attributes no longer leave an unzeroized copy behind.
+- Re-enabled `clippy::redundant_clone`, and fixed the pre-existing needless-borrow and `map_or` clippy errors.
+- Moved the crate-level lint settings from `lib.rs` into the `[lints]` table in `Cargo.toml`, so they now apply to tests and benches as well as the library. Fixed the one trivial cast in `tests/security_tests.rs` that this exposed.
+- Fixed a redundant intra-doc link and two broken private-item links, so `cargo doc` builds with `RUSTDOCFLAGS="-D warnings"` with and without `--document-private-items`.
+
+### Removed
+
+- **Breaking:** the `Views` trait and `impl Views for Multikey`, deprecated since 2.1.0. Use `ViewBuilder` instead: `mk.sign_view()` becomes `ViewBuilder::new(&mk).sign().build()`, `mk.cipher_view(&key)` becomes `ViewBuilder::new(&mk).cipher(&key).build()`, and likewise for the other view kinds.
+
+### Dependencies
+
+- `aes-gcm`, `bcrypt-pbkdf`, `blake3`, `blsful`, `chacha20`, `chacha20poly1305`, `curve25519-dalek`, `ed25519-dalek`, `elliptic-curve`, `fn-dsa`, `frodo-kem-rs`, `getrandom`, `hkdf`, `k256`, `ml-dsa`, `ml-kem`, `p256`, `p384`, `p521`, `pkcs1`, `poly1305`, `pq-mayo`, `rand_core` 0.6, `sad-rsa`, `sec1`, `sha2`, `signature`, `slh-dsa`, `sntrup`, `typenum`, `vsss-rs`, and `x25519-dalek` are now optional.
+- `ssh-key` is a required dependency with only `alloc`. Each algorithm feature turns on the `ssh-key` feature it needs; `p256`, `p384`, and `p521` also turn on `ssh-key/rand_core`, which `EcdsaKeypair::random` needs and which multi-sig 1.x had been enabling indirectly.
+- Requirement `multi-hash` raised 2.0 → 3.0 with `default-features = false`. multi-key never hashes with a fixed codec (fingerprints use the caller's codec), so it enables no hash family; enable the `multi-hash` features for the codecs you fingerprint with. `serde` turns on `multi-hash/serde`.
+- Requirement `multi-sig` raised 1.6 → 2.0 with `default-features = false`. The `bls12-381`, `chacha20`, `lamport`, `serde`, and `xmss` features turn on the matching multi-sig features, so multi-sig no longer pulls in BLS, AEAD, or Lamport crates that the enabled multi-key features do not need.
+- Replaced `ciborium` with `serde_cbor_2` and `xmss` with `pq-xmss`.
+- Replaced `mceliece348864` with `pq-mceliece` (348864 parameter set only) for the deprecated Classic McEliece views. Keys still derive from the stored 32-byte seed the same way, so existing McEliece keys and ciphertexts stay compatible in both directions. The `deprecated` feature no longer pulls in `rand_chacha` or `rand_core` 0.6.
+- Added `serde_cbor_2` as a dev-dependency.
+- `zeroize` now enables its `derive` feature. 2.x used `#[derive(Zeroize, ZeroizeOnDrop)]` but only compiled because another dependency turned that feature on.
+
 ## [2.3.0] - 2026-10-09
 
 ### Fixed

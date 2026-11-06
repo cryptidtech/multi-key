@@ -18,15 +18,9 @@ use multi_trait::TryDecodeFrom;
 use multi_util::Varuint;
 use zeroize::Zeroizing;
 
-use super::bcrypt::SALT_LENGTH;
+use crate::kdf::SALT_LENGTH;
 
 pub const KEY_SIZE: usize = poly1305::KEY_SIZE;
-
-/// Return the length of the [Nonce]
-#[cfg(test)]
-pub(crate) fn nonce_length() -> usize {
-    Nonce::default().len()
-}
 
 pub(crate) struct View<'a> {
     mk: &'a Multikey,
@@ -319,9 +313,9 @@ impl<'a> CipherView for View<'a> {
             .insert(AttrId::CipherCodec, cipher_codec.into());
         res.attributes
             .insert(AttrId::CipherKeyLen, key_length.into());
-        res.attributes.insert(AttrId::CipherNonce, nonce.clone());
+        res.attributes.insert(AttrId::CipherNonce, nonce);
         res.attributes.insert(AttrId::KdfCodec, kdf_codec.into());
-        res.attributes.insert(AttrId::KdfSalt, salt.clone());
+        res.attributes.insert(AttrId::KdfSalt, salt);
         res.attributes.insert(AttrId::KdfRounds, rounds.into());
         Ok(res)
     }

@@ -3,15 +3,18 @@
 //!
 //! # Deprecation
 //!
-//! This view is deprecated. Key-recovery attacks now solve the TII McEliece
-//! challenges; see <https://github.com/mjosaarinen/tii-solved> for the
-//! recovered keys. It compiles only with the `deprecated` feature.
+//! This view is deprecated: 2026 structural key-recovery attacks on binary
+//! Goppa codes led Germany's BSI to advise against Classic McEliece in new
+//! developments. See the crate-level Deprecations section for the papers and
+//! the BSI note. It compiles only with the `deprecated` feature.
 //!
 //! Note: mceliece460896 codec entries exist in the codec table for future
-//! interoperability, but only mceliece348864 is currently supported for key
-//! generation and operations. The upstream `classic-mceliece-rust` crate uses
-//! mutually exclusive feature flags per variant, preventing both from being
-//! compiled in a single dependency graph.
+//! interoperability, but only mceliece348864 is wired up for key generation
+//! and operations.
+//!
+//! The secret key is a 32-byte seed. The Classic McEliece key seed is the
+//! first 32 bytes of a ChaCha20 stream keyed by it, which reproduces the keys
+//! the earlier `mceliece348864` crate generated from the same seed.
 
 use crate::views::dispatch::dispatch_data_view;
 use crate::{
@@ -24,11 +27,27 @@ use multi_codec::Codec;
 use multi_hash::{Multihash, mh};
 use multi_trait::TryDecodeFrom;
 use multi_util::Varbytes;
-use rand_chacha::ChaCha20Rng;
-use rand_core_06::SeedableRng;
+use pq_mceliece::{Algorithm, DecapsulationKey, EncapsulationKey};
 use zeroize::Zeroizing;
 
 const MCELIECE_SEED_LENGTH: usize = 32;
+
+/// The Classic McEliece parameter set these views use.
+pub(crate) const ALGORITHM: Algorithm = Algorithm::McEliece348864;
+
+/// Rebuild the keypair from a stored 32-byte seed: the key seed is the first
+/// 32 bytes of the ChaCha20 stream the stored seed keys.
+pub(crate) fn keypair_from_seed(
+    seed: [u8; MCELIECE_SEED_LENGTH],
+) -> Result<(EncapsulationKey, DecapsulationKey), Error> {
+    use chacha20::ChaCha20Rng;
+    use rand_core::{Rng, SeedableRng};
+    let mut key_seed = Zeroizing::new([0u8; MCELIECE_SEED_LENGTH]);
+    ChaCha20Rng::from_seed(seed).fill_bytes(key_seed.as_mut());
+    ALGORITHM
+        .generate_keypair_from_seed(key_seed.as_ref())
+        .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()).into())
+}
 
 /// Decoded sealed message: (kem_ct, aead_codec, nonce, ciphertext+tag)
 type SealedParts = (Vec<u8>, Codec, Vec<u8>, Vec<u8>);
@@ -108,13 +127,11 @@ impl<'a> ConvView for View<'a> {
             .try_into()
             .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
 
-        let mut rng = ChaCha20Rng::from_seed(seed);
-        let (pk, _sk) = mceliece348864::keypair_boxed(&mut rng);
-        let pub_bytes: Vec<u8> = pk.as_ref().to_vec();
+        let (ek, _dk) = keypair_from_seed(seed)?;
 
         Builder::new(Codec::Mceliece348864Pub)
             .with_comment(&self.mk.comment)
-            .with_key_bytes(&pub_bytes)
+            .with_key_bytes(ek.value())
             .try_build()
     }
 
@@ -146,16 +163,6 @@ impl<'a> FingerprintView for View<'a> {
         b.output_len(32);
         Ok(b.try_build()?)
     }
-}
-
-/// Encode a sealed message: [kem_ct Varbytes][aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
-fn encode_sealed(kem_ct: &[u8], aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(kem_ct.to_vec()).into());
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
 }
 
 /// Decode a sealed message: [kem_ct Varbytes][aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
@@ -192,15 +199,14 @@ impl<'a> SealView for View<'a> {
 
         let pub_bytes = self.key_bytes()?;
 
-        let pk_array: Box<[u8; mceliece348864::CRYPTO_PUBLICKEYBYTES]> = pub_bytes
-            .to_vec()
-            .into_boxed_slice()
-            .try_into()
-            .map_err(|_| SealError::EncapsulationFailed("invalid public key size".into()))?;
-        let pk = mceliece348864::PublicKey::from(pk_array);
-        let (ct, ss) = mceliece348864::encapsulate_boxed(&pk, &mut rand_core_06::OsRng);
-        let kem_ct: &[u8] = ct.as_ref();
-        let shared_secret: &[u8] = ss.as_ref();
+        let ek = ALGORITHM
+            .encapsulation_key_from_bytes(&pub_bytes)
+            .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+        let (ct, ss) = ALGORITHM
+            .encapsulate(&ek, rand::rng())
+            .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
+        let kem_ct = ct.value();
+        let shared_secret = ss.value();
 
         // Derive AEAD key from shared secret via HKDF
         let key_len = aead::key_size(aead_codec)?;
@@ -209,7 +215,10 @@ impl<'a> SealView for View<'a> {
         // Encrypt plaintext
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
-        Ok((encode_sealed(kem_ct, aead_codec, &nonce, &ct_tag), None))
+        Ok((
+            aead::encode_kem_sealed(kem_ct, aead_codec, &nonce, &ct_tag),
+            None,
+        ))
     }
 }
 
@@ -243,15 +252,14 @@ impl<'a> OpenView for View<'a> {
             .try_into()
             .map_err(|_| ConversionsError::SecretKeyFailure("invalid seed".into()))?;
 
-        let mut rng = ChaCha20Rng::from_seed(seed);
-        let (_pk, sk) = mceliece348864::keypair_boxed(&mut rng);
-
-        let ct_array: [u8; mceliece348864::CRYPTO_CIPHERTEXTBYTES] = kem_ct
-            .try_into()
-            .map_err(|_| SealError::DecapsulationFailed("invalid ciphertext size".into()))?;
-        let ct = mceliece348864::Ciphertext::from(ct_array);
-        let ss = mceliece348864::decapsulate_boxed(&ct, &sk);
-        let shared_secret: &[u8] = ss.as_ref();
+        let (_ek, dk) = keypair_from_seed(seed)?;
+        let ct = ALGORITHM
+            .ciphertext_from_bytes(&kem_ct)
+            .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
+        let ss = ALGORITHM
+            .decapsulate(&dk, &ct)
+            .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
+        let shared_secret = ss.value();
 
         // Derive AEAD key from shared secret via HKDF
         let key_len = aead::key_size(aead_codec)?;
@@ -269,6 +277,30 @@ mod tests {
     use super::*;
     use crate::ViewBuilder;
     use crate::mk::MCELIECE_KEY_CODECS;
+
+    /// keys rebuilt from a stored seed match the ones the earlier
+    /// `mceliece348864` crate derived from it (golden bytes from that crate)
+    #[test]
+    fn test_seed_derivation_matches_previous_crate() {
+        for (seed, head, tail) in [
+            (
+                [7u8; 32],
+                "51065e02c66c81226bc150f59ae125df",
+                "cc84d13ac4a8ca24f7076a0e4f6b352b",
+            ),
+            (
+                [0x5au8; 32],
+                "d717a6a0c43bdbb9588eb545255da943",
+                "292a7ca6b221011d5543933a060d4d4e",
+            ),
+        ] {
+            let (ek, _dk) = keypair_from_seed(seed).unwrap();
+            let pk = ek.value();
+            assert_eq!(pk.len(), 261_120);
+            assert_eq!(hex::encode(&pk[..16]), head);
+            assert_eq!(hex::encode(&pk[pk.len() - 16..]), tail);
+        }
+    }
 
     #[test]
     fn test_mceliece_key_gen_roundtrip() {

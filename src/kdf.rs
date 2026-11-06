@@ -5,6 +5,11 @@ use multi_util::Varuint;
 use rand_core::CryptoRng;
 use zeroize::Zeroizing;
 
+/// KDF salt length in bytes, shared by the bcrypt view and the cipher views
+/// that carry KDF attributes.
+#[cfg(any(feature = "bcrypt", feature = "chacha20"))]
+pub(crate) const SALT_LENGTH: usize = 32;
+
 /// Multikey builder constructs kdf multikeys.
 #[derive(Clone, Debug, Default)]
 pub struct Builder {
@@ -87,7 +92,7 @@ impl Builder {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "bcrypt", feature = "chacha20"))]
 mod tests {
     use super::*;
     use crate::{ViewBuilder, cipher};

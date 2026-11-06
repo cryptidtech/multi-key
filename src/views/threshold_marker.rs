@@ -141,11 +141,12 @@ impl<'a> MarkerView<'a> {
             .attributes
             .get(&AttrId::ThresholdParticipants)
             .ok_or(AttributesError::MissingThresholdParticipants)?;
-        let map: BTreeMap<Vec<u8>, ThresholdParticipant> = ciborium::from_reader(v.as_slice())
+        let map: BTreeMap<Vec<u8>, ThresholdParticipant> = serde_cbor_2::from_slice(v)
             .map_err(|e| AttributesError::ThresholdMarkerCbor(e.to_string()))?;
         // CBOR-01: bound the registry size. A t-of-n threshold key has at most
         // `Limit` participants; reject an oversized map (decode amplification /
-        // attacker-influenced blob) well below ciborium's generic map cap.
+        // attacker-influenced blob). The CBOR decoder bounds only nesting depth,
+        // not map size, so this is the only size cap.
         const MAX_THRESHOLD_PARTICIPANTS: usize = 1024;
         if map.len() > MAX_THRESHOLD_PARTICIPANTS {
             return Err(AttributesError::ThresholdMarkerCbor(
@@ -203,8 +204,7 @@ pub fn set_participants(
     mk: &mut Multikey,
     participants: &BTreeMap<Vec<u8>, ThresholdParticipant>,
 ) -> Result<(), Error> {
-    let mut bytes = Vec::new();
-    ciborium::into_writer(participants, &mut bytes)
+    let bytes = serde_cbor_2::to_vec(participants)
         .map_err(|e| AttributesError::ThresholdMarkerCbor(e.to_string()))?;
     mk.attributes
         .insert(AttrId::ThresholdParticipants, bytes.into());
@@ -233,10 +233,8 @@ pub fn canonical_marker_bytes(mk: &Multikey) -> Result<Vec<u8>, Error> {
     let threshold = mv.threshold()?;
     let limit = mv.participant_count()?;
     let payload = (group, participants, threshold, limit);
-    let mut buf = Vec::new();
-    ciborium::into_writer(&payload, &mut buf)
-        .map_err(|e| Error::Attributes(AttributesError::ThresholdMarkerCbor(e.to_string())))?;
-    Ok(buf)
+    serde_cbor_2::to_vec(&payload)
+        .map_err(|e| Error::Attributes(AttributesError::ThresholdMarkerCbor(e.to_string())))
 }
 
 /// Authenticate the marker bundle: sign `canonical_marker_bytes(mk)` with
@@ -271,7 +269,7 @@ pub fn verify_marker(mk: &Multikey, verifier_pubkey: &Multikey) -> Result<(), Er
         .map_err(|_| AttributesError::ThresholdMarkerSigInvalid.into())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "bls12-381"))]
 mod tests {
     use super::*;
     use crate::{Builder, ViewBuilder};
@@ -333,6 +331,7 @@ mod tests {
         assert_eq!(threshold_params(&mk), Some((2, 3)));
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn classify_non_threshold_none() {
         // Ed25519 ordinary key

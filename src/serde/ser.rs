@@ -2,6 +2,7 @@
 use crate::{AttrId, Multikey, Nonce, mk, nonce};
 use multi_util::{EncodedVarbytes, EncodingInfo, Varbytes};
 use serde::ser::{self, SerializeStruct};
+use zeroize::Zeroizing;
 
 /// Serialize instance of [`crate::Nonce`]
 impl ser::Serialize for Nonce {
@@ -17,8 +18,8 @@ impl ser::Serialize for Nonce {
             )?;
             ss.end()
         } else {
-            let v: Vec<u8> = self.clone().into();
-            serializer.serialize_bytes(v.as_slice())
+            let v: Vec<u8> = self.into();
+            serializer.serialize_bytes(&v)
         }
     }
 }
@@ -61,8 +62,9 @@ impl ser::Serialize for Multikey {
             ss.serialize_field("attributes", &attributes)?;
             ss.end()
         } else {
-            let v: Vec<u8> = self.clone().into();
-            serializer.serialize_bytes(v.as_slice())
+            // the encoding carries secret key bytes, so wipe it when done
+            let v = Zeroizing::new(Vec::<u8>::from(self));
+            serializer.serialize_bytes(&v)
         }
     }
 }

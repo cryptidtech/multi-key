@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+use crate::mk::encode_varbytes_into;
 use crate::{Error, error::NonceError};
 use core::fmt;
 use multi_base::Base;
 use multi_codec::Codec;
-use multi_trait::{Null, TryDecodeFrom};
+use multi_trait::{EncodeIntoBuffer, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes};
 use rand_core::CryptoRng;
 
@@ -62,11 +63,18 @@ impl AsRef<[u8]> for Nonce {
 
 impl From<Nonce> for Vec<u8> {
     fn from(val: Nonce) -> Self {
-        let mut v = Vec::default();
+        Self::from(&val)
+    }
+}
+
+/// Encode a borrowed nonce without cloning it
+impl From<&Nonce> for Vec<u8> {
+    fn from(val: &Nonce) -> Self {
+        let mut v = Self::with_capacity(16 + val.nonce.len());
         // add the sigil
-        v.append(&mut SIGIL.into());
+        u64::from(SIGIL).encode_into_buffer(&mut v);
         // add the nonce bytes
-        v.append(&mut Varbytes::new(val.nonce.clone()).into());
+        encode_varbytes_into(&mut v, &val.nonce);
         v
     }
 }
@@ -168,6 +176,18 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// the allocation-free encoder matches the field-by-field encoding
+    #[test]
+    fn test_encode_matches_reference_layout() {
+        let n = Nonce {
+            nonce: vec![9u8; 200],
+        };
+        let mut want: Vec<u8> = SIGIL.into();
+        want.extend(Vec::<u8>::from(Varbytes::new(n.nonce.clone())));
+        assert_eq!(Vec::<u8>::from(&n), want);
+    }
+    #[cfg(feature = "curve25519")]
     use crate::{ViewBuilder, mk};
 
     #[test]
@@ -203,6 +223,7 @@ mod tests {
         assert_eq!(n, EncodedNonce::try_from(s.as_str()).unwrap());
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_nonce_multisig_roundtrip() {
         let mut rng = rand::rng();

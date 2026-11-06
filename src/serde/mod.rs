@@ -5,28 +5,46 @@ mod ser;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Builder, EncodedMultikey, Multikey, ViewBuilder, cipher, kdf, nonce};
+    #[cfg(feature = "curve25519")]
+    use crate::Builder;
+    #[cfg(any(
+        feature = "curve25519",
+        all(feature = "bcrypt", feature = "bls12-381", feature = "chacha20")
+    ))]
+    use crate::ViewBuilder;
+    use crate::{EncodedMultikey, Multikey, nonce};
+    #[cfg(all(
+        feature = "bcrypt",
+        feature = "chacha20",
+        any(feature = "bls12-381", feature = "curve25519")
+    ))]
+    use crate::{cipher, kdf};
+    #[cfg(feature = "curve25519")]
     use multi_base::Base;
+    #[cfg(any(
+        feature = "curve25519",
+        all(feature = "bcrypt", feature = "bls12-381", feature = "chacha20")
+    ))]
     use multi_codec::Codec;
+    #[cfg(feature = "curve25519")]
     use multi_hash::EncodedMultihash;
     use multi_trait::Null;
+    #[cfg(feature = "curve25519")]
     use multi_util::BaseEncoded;
+    #[cfg(feature = "curve25519")]
     use serde::{Deserialize, Serialize};
-    use serde_test::{Configure, Token, assert_tokens};
+    use serde_test::{Configure, Token, assert_de_tokens, assert_de_tokens_error, assert_tokens};
 
-    /// Serialize a value to CBOR bytes using `ciborium`.
-    fn cbor_to_vec<T: Serialize>(value: &T) -> Vec<u8> {
-        let mut buf = Vec::new();
-        ciborium::into_writer(value, &mut buf).expect("CBOR serialize");
-        buf
-    }
+    #[cfg(feature = "curve25519")]
     use std::collections::BTreeMap;
 
+    #[cfg(feature = "curve25519")]
     #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
     struct Wrapper {
         pub map: BTreeMap<EncodedMultihash, Multikey>,
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_serde_macros() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -53,14 +71,15 @@ mod tests {
         w1.map.insert(skh, sk);
         w1.map.insert(pkh, pk);
 
-        let b = cbor_to_vec(&w1);
-        let w2 = ciborium::from_reader(b.as_slice()).unwrap();
+        let b = serde_cbor_2::to_vec(&w1).unwrap();
+        let w2 = serde_cbor_2::from_slice(&b).unwrap();
         assert_eq!(w1, w2);
         let s = serde_json::to_string(&w1).unwrap();
         let w3 = serde_json::from_str(&s).unwrap();
         assert_eq!(w1, w3);
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_serde_compact() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -99,6 +118,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_serde_encoded_string() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -118,6 +138,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_serde_readable() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -157,6 +178,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "curve25519"))]
     #[test]
     fn test_serde_encrypted_secret_key_compact() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -228,6 +250,7 @@ mod tests {
         assert_eq!(mk2, mk3);
     }
 
+    #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "curve25519"))]
     #[test]
     fn test_serde_encrypted_secret_key_readable() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -287,6 +310,7 @@ mod tests {
         assert_eq!(mk2, mk3);
     }
 
+    #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "curve25519"))]
     #[test]
     fn test_serde_encrypted_secret_key_json() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -341,6 +365,7 @@ mod tests {
         assert_eq!(mk2, mk3);
     }
 
+    #[cfg(all(feature = "bcrypt", feature = "bls12-381", feature = "chacha20"))]
     #[test]
     fn test_serde_encrypted_bls_secret_key_share_json() {
         /*
@@ -404,6 +429,7 @@ mod tests {
         assert_eq!(mk2, mk3);
     }
 
+    #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "curve25519"))]
     #[test]
     fn test_chacha20_aead_roundtrip() {
         // A secret key encrypted with ChaCha20Poly1305 must decrypt back to the
@@ -481,6 +507,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_encoded_public_key() {
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
@@ -616,5 +643,57 @@ mod tests {
     fn test_encoded_null_nonce_serde_readable() {
         let n: nonce::EncodedNonce = nonce::Nonce::null().into();
         assert_tokens(&n.readable(), &[Token::Str("fbb2400")]);
+    }
+
+    /// the compact form decodes from borrowed, transient, and owned bytes
+    #[test]
+    fn test_compact_decode_all_byte_forms() {
+        const MK: &[u8] = &[0xba, 0x24, 0, 0, 0];
+        const NONCE: &[u8] = &[0xbb, 0x24, 0];
+        assert_eq!(Vec::<u8>::from(&Multikey::null()), MK);
+        assert_eq!(Vec::<u8>::from(&nonce::Nonce::null()), NONCE);
+        let mk = Multikey::null().compact();
+        assert_de_tokens(&mk, &[Token::BorrowedBytes(MK)]);
+        assert_de_tokens(&mk, &[Token::Bytes(MK)]);
+        assert_de_tokens(&mk, &[Token::ByteBuf(MK)]);
+        let n = nonce::Nonce::null().compact();
+        assert_de_tokens(&n, &[Token::BorrowedBytes(NONCE)]);
+        assert_de_tokens(&n, &[Token::Bytes(NONCE)]);
+        assert_de_tokens(&n, &[Token::ByteBuf(NONCE)]);
+    }
+
+    /// malformed compact bytes surface the crate error message
+    #[test]
+    fn test_compact_decode_error() {
+        let err = Multikey::try_from([0u8].as_slice())
+            .unwrap_err()
+            .to_string();
+        assert_de_tokens_error::<serde_test::Compact<Multikey>>(&[Token::Bytes(&[0])], &err);
+    }
+
+    /// `AttrId` deserializes from every string form (serde forwards borrowed
+    /// and owned strings to `visit_str`) and from its `u8` code
+    #[test]
+    fn test_attrid_deserialize_all_forms() {
+        use crate::AttrId;
+        use serde::{
+            Deserialize,
+            de::{
+                IntoDeserializer,
+                value::{BorrowedStrDeserializer, Error, StrDeserializer, StringDeserializer},
+            },
+        };
+        let from_str = AttrId::deserialize(StrDeserializer::<Error>::new("key-data"));
+        assert!(from_str.ok() == Some(AttrId::KeyData));
+        let from_borrowed = AttrId::deserialize(BorrowedStrDeserializer::<Error>::new("key-data"));
+        assert!(from_borrowed.ok() == Some(AttrId::KeyData));
+        let from_string =
+            AttrId::deserialize(StringDeserializer::<Error>::new("key-data".to_string()));
+        assert!(from_string.ok() == Some(AttrId::KeyData));
+        let code = u8::from(AttrId::KeyData);
+        let from_u8 = AttrId::deserialize(IntoDeserializer::<Error>::into_deserializer(code));
+        assert!(from_u8.ok() == Some(AttrId::KeyData));
+        let bogus = AttrId::deserialize(StrDeserializer::<Error>::new("bogus"));
+        assert!(bogus.is_err());
     }
 }

@@ -2,7 +2,7 @@
 //! NIST P-256, P-384, P-521 ECDSA multikey view.
 
 use crate::views::dispatch::{
-    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+    dispatch_attr_view, dispatch_data_view, dispatch_fingerprint_view, public_form,
 };
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
@@ -24,10 +24,13 @@ use multi_util::Varuint;
 use zeroize::Zeroizing;
 
 /// P-256: 32-byte secret
+#[cfg(feature = "p256")]
 const P256_SECRET_LEN: usize = 32;
 /// P-384: 48-byte secret
+#[cfg(feature = "p384")]
 const P384_SECRET_LEN: usize = 48;
 /// P-521: 66-byte secret
+#[cfg(feature = "p521")]
 const P521_SECRET_LEN: usize = 66;
 
 fn pub_codec(codec: Codec) -> Codec {
@@ -194,16 +197,19 @@ impl<'a> ConvView for View<'a> {
         };
 
         let pub_bytes = match self.mk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Priv => {
                 let sk = p256::ecdsa::SigningKey::from_slice(&secret_bytes[..P256_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 sk.verifying_key().to_sec1_bytes().to_vec()
             }
+            #[cfg(feature = "p384")]
             Codec::P384Priv => {
                 let sk = p384::ecdsa::SigningKey::from_slice(&secret_bytes[..P384_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
                 sk.verifying_key().to_sec1_bytes().to_vec()
             }
+            #[cfg(feature = "p521")]
             Codec::P521Priv => {
                 let sk = p521::ecdsa::SigningKey::from_slice(&secret_bytes[..P521_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
@@ -224,10 +230,7 @@ impl<'a> ConvView for View<'a> {
     }
 
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
-        let mut pk = self.mk.clone();
-        if self.is_secret_key() {
-            pk = self.to_public_key()?;
-        }
+        let pk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pk)?;
@@ -237,6 +240,7 @@ impl<'a> ConvView for View<'a> {
         // Build proper SSH ECDSA public key from compressed SEC1 point.
         // SSH ECDSA requires uncompressed points, so decompress via VerifyingKey.
         let key_data = match pub_codec(self.mk.codec) {
+            #[cfg(feature = "p256")]
             Codec::P256Pub => {
                 let vk = p256::ecdsa::VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
@@ -248,6 +252,7 @@ impl<'a> ConvView for View<'a> {
                     ssh_point,
                 ))
             }
+            #[cfg(feature = "p384")]
             Codec::P384Pub => {
                 let vk = p384::ecdsa::VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
@@ -259,6 +264,7 @@ impl<'a> ConvView for View<'a> {
                     ssh_point,
                 ))
             }
+            #[cfg(feature = "p521")]
             Codec::P521Pub => {
                 let vk = p521::ecdsa::VerifyingKey::from_sec1_bytes(&key_bytes)
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
@@ -273,7 +279,7 @@ impl<'a> ConvView for View<'a> {
             _ => return Err(ConversionsError::UnsupportedCodec(self.mk.codec).into()),
         };
 
-        Ok(ssh_key::PublicKey::new(key_data, pk.comment))
+        Ok(ssh_key::PublicKey::new(key_data, pk.comment.clone()))
     }
 
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
@@ -284,6 +290,7 @@ impl<'a> ConvView for View<'a> {
 
         // Build proper SSH ECDSA keypair
         let keypair_data = match self.mk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Priv => {
                 let secret_key = p256::SecretKey::from_slice(&secret_bytes[..P256_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
@@ -298,6 +305,7 @@ impl<'a> ConvView for View<'a> {
                     private: priv_key,
                 })
             }
+            #[cfg(feature = "p384")]
             Codec::P384Priv => {
                 let secret_key = p384::SecretKey::from_slice(&secret_bytes[..P384_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
@@ -312,6 +320,7 @@ impl<'a> ConvView for View<'a> {
                     private: priv_key,
                 })
             }
+            #[cfg(feature = "p521")]
             Codec::P521Priv => {
                 let secret_key = p521::SecretKey::from_slice(&secret_bytes[..P521_SECRET_LEN])
                     .map_err(|e| ConversionsError::SecretKeyFailure(e.to_string()))?;
@@ -349,6 +358,7 @@ impl<'a> SignView for View<'a> {
         };
 
         let sig_bytes = match self.mk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Priv => {
                 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P256_SECRET_LEN])
@@ -358,6 +368,7 @@ impl<'a> SignView for View<'a> {
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
                 signature.to_bytes().to_vec()
             }
+            #[cfg(feature = "p384")]
             Codec::P384Priv => {
                 use p384::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P384_SECRET_LEN])
@@ -367,6 +378,7 @@ impl<'a> SignView for View<'a> {
                     .map_err(|e| SignError::SigningFailed(e.to_string()))?;
                 signature.to_bytes().to_vec()
             }
+            #[cfg(feature = "p521")]
             Codec::P521Priv => {
                 use p521::ecdsa::{Signature, SigningKey, signature::Signer};
                 let sk = SigningKey::from_slice(&secret_bytes[..P521_SECRET_LEN])
@@ -390,13 +402,7 @@ impl<'a> SignView for View<'a> {
 
 impl<'a> VerifyView for View<'a> {
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pubmk)?;
@@ -415,6 +421,7 @@ impl<'a> VerifyView for View<'a> {
         };
 
         match pubmk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Pub => {
                 use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
@@ -424,6 +431,7 @@ impl<'a> VerifyView for View<'a> {
                 vk.verify(msg, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
             }
+            #[cfg(feature = "p384")]
             Codec::P384Pub => {
                 use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
@@ -433,6 +441,7 @@ impl<'a> VerifyView for View<'a> {
                 vk.verify(msg, &signature)
                     .map_err(|e| VerifyError::BadSignature(e.to_string()))?;
             }
+            #[cfg(feature = "p521")]
             Codec::P521Pub => {
                 use p521::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let vk = VerifyingKey::from_sec1_bytes(&key_bytes)
@@ -470,17 +479,7 @@ fn is_nistp_aead_allowed(codec: Codec) -> bool {
     )
 }
 
-/// Encode a sealed message: `[aead_codec Codec][nonce Varbytes][ct+tag Varbytes]`.
-/// The ephemeral public key is carried externally (as a Multikey), like X25519.
-fn encode_sealed(aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
-/// Decode a sealed message produced by [`encode_sealed`].
+/// Decode a sealed message produced by [`aead::encode_sealed`].
 fn decode_sealed(data: &[u8]) -> Result<(Codec, Vec<u8>, Vec<u8>), SealError> {
     let (aead_codec, ptr) = Codec::try_decode_from(data)
         .map_err(|_| SealError::InvalidFormat("missing aead codec".into()))?;
@@ -501,7 +500,7 @@ fn seal_from_shared(
     let key_len = aead::key_size(aead_codec)?;
     let aead_key = aead::derive_aead_key(shared, NISTP_SEAL_INFO, key_len)?;
     let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
-    Ok(encode_sealed(aead_codec, &nonce, &ct_tag))
+    Ok(aead::encode_sealed(aead_codec, &nonce, &ct_tag))
 }
 
 /// HKDF-expand the ECDH shared secret and AEAD-open the ciphertext.
@@ -534,6 +533,7 @@ impl<'a> SealView for View<'a> {
         let pub_bytes = self.key_bytes()?;
 
         let (sealed, eph_pub_bytes) = match self.mk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Pub => {
                 let recipient = p256::PublicKey::from_sec1_bytes(&pub_bytes)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
@@ -551,6 +551,7 @@ impl<'a> SealView for View<'a> {
                     eph_pub.as_affine().to_sec1_point(true).as_bytes().to_vec(),
                 )
             }
+            #[cfg(feature = "p384")]
             Codec::P384Pub => {
                 let recipient = p384::PublicKey::from_sec1_bytes(&pub_bytes)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
@@ -568,6 +569,7 @@ impl<'a> SealView for View<'a> {
                     eph_pub.as_affine().to_sec1_point(true).as_bytes().to_vec(),
                 )
             }
+            #[cfg(feature = "p521")]
             Codec::P521Pub => {
                 let recipient = p521::PublicKey::from_sec1_bytes(&pub_bytes)
                     .map_err(|e| SealError::EncapsulationFailed(e.to_string()))?;
@@ -623,6 +625,7 @@ impl<'a> OpenView for View<'a> {
         };
 
         let pt = match self.mk.codec {
+            #[cfg(feature = "p256")]
             Codec::P256Priv => {
                 let secret = p256::SecretKey::from_slice(&secret_bytes[..P256_SECRET_LEN])
                     .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
@@ -638,6 +641,7 @@ impl<'a> OpenView for View<'a> {
                     aad,
                 )?
             }
+            #[cfg(feature = "p384")]
             Codec::P384Priv => {
                 let secret = p384::SecretKey::from_slice(&secret_bytes[..P384_SECRET_LEN])
                     .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
@@ -653,6 +657,7 @@ impl<'a> OpenView for View<'a> {
                     aad,
                 )?
             }
+            #[cfg(feature = "p521")]
             Codec::P521Priv => {
                 let secret = p521::SecretKey::from_slice(&secret_bytes[..P521_SECRET_LEN])
                     .map_err(|e| SealError::DecapsulationFailed(e.to_string()))?;
@@ -717,21 +722,25 @@ mod ecies_tests {
         }
     }
 
+    #[cfg(feature = "p256")]
     #[test]
     fn test_p256_seal_open_roundtrip() {
         seal_open_roundtrip(Codec::P256Priv);
     }
 
+    #[cfg(feature = "p384")]
     #[test]
     fn test_p384_seal_open_roundtrip() {
         seal_open_roundtrip(Codec::P384Priv);
     }
 
+    #[cfg(feature = "p521")]
     #[test]
     fn test_p521_seal_open_roundtrip() {
         seal_open_roundtrip(Codec::P521Priv);
     }
 
+    #[cfg(feature = "p256")]
     #[test]
     fn test_p256_wrong_key_fails_to_open() {
         let mut rng = rand::rng();

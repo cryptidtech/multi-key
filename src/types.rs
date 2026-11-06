@@ -202,6 +202,7 @@ mod tests {
         assert!(!debug.contains("1"));
     }
 
+    #[cfg(feature = "curve25519")]
     #[test]
     fn test_key_scheme() {
         let scheme = KeyScheme::new(Codec::Ed25519Pub);

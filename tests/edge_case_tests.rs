@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Edge case tests for multi-key
-#![allow(clippy::explicit_iter_loop, clippy::uninlined_format_args)]
 
+#[cfg(feature = "curve25519")]
 use multi_codec::Codec;
-use multi_key::{Builder, KEY_CODECS, Multikey};
+#[cfg(all(
+    feature = "bls12-381",
+    feature = "curve25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "secp256k1"
+))]
+use multi_key::KEY_CODECS;
+use multi_key::{Builder, Multikey};
 use multi_trait::Null;
 
 /// Test null multikey
@@ -15,6 +24,14 @@ fn test_null_multikey() {
 }
 
 /// Test all supported key codecs
+#[cfg(all(
+    feature = "bls12-381",
+    feature = "curve25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "secp256k1"
+))]
 #[test]
 fn test_all_key_codecs() {
     let mut rng = rand::rng();
@@ -26,6 +43,7 @@ fn test_all_key_codecs() {
 }
 
 /// Test Clone trait
+#[cfg(feature = "curve25519")]
 #[test]
 fn test_clone() {
     let mut rng = rand::rng();

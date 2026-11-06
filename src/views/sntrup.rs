@@ -300,16 +300,6 @@ impl<'a> FingerprintView for View<'a> {
     }
 }
 
-/// Encode a sealed message: [kem_ct Varbytes][aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
-fn encode_sealed(kem_ct: &[u8], aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut Varbytes::new(kem_ct.to_vec()).into());
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
 /// Decode a sealed message: [kem_ct Varbytes][aead_codec Codec][nonce Varbytes][ct+tag Varbytes]
 fn decode_sealed(data: &[u8]) -> Result<SealedParts, SealError> {
     let (kem_ct, ptr) = Varbytes::try_decode_from(data)
@@ -354,7 +344,10 @@ impl<'a> SealView for View<'a> {
         // Encrypt plaintext
         let (nonce, ct_tag) = aead::aead_seal(aead_codec, &aead_key, plaintext, aad)?;
 
-        Ok((encode_sealed(&kem_ct, aead_codec, &nonce, &ct_tag), None))
+        Ok((
+            aead::encode_kem_sealed(&kem_ct, aead_codec, &nonce, &ct_tag),
+            None,
+        ))
     }
 }
 

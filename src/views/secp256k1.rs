@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::views::dispatch::{
-    dispatch_attr_view, dispatch_conv_view, dispatch_data_view, dispatch_fingerprint_view,
+    dispatch_attr_view, dispatch_data_view, dispatch_fingerprint_view, public_form,
 };
 use crate::{
     AttrId, AttrView, Builder, CipherAttrView, ConvView, DataView, Error, FingerprintView,
@@ -208,10 +208,7 @@ impl<'a> ConvView for View<'a> {
 
     /// try to convert a Multikey to an ssh_key::PublicKey
     fn to_ssh_public_key(&self) -> Result<ssh_key::PublicKey, Error> {
-        let mut pk = self.mk.clone();
-        if self.is_secret_key() {
-            pk = self.to_public_key()?;
-        }
+        let pk = public_form(self.mk)?;
 
         let key_bytes = {
             let kd = dispatch_data_view(&pk)?;
@@ -234,7 +231,7 @@ impl<'a> ConvView for View<'a> {
                 ),
                 key: opaque_key_bytes,
             }),
-            pk.comment,
+            pk.comment.clone(),
         ))
     }
 
@@ -330,14 +327,7 @@ impl<'a> SignView for View<'a> {
 impl<'a> VerifyView for View<'a> {
     /// try to verify a Multisig using the Multikey
     fn verify(&self, multisig: &Multisig, msg: Option<&[u8]>) -> Result<(), Error> {
-        let attr = dispatch_attr_view(self.mk)?;
-        let pubmk = if attr.is_secret_key() {
-            let kc = dispatch_conv_view(self.mk)?;
-
-            kc.to_public_key()?
-        } else {
-            self.mk.clone()
-        };
+        let pubmk = public_form(self.mk)?;
 
         // get the secret key bytes
         let key_bytes = {
@@ -403,16 +393,7 @@ fn is_secp_aead_allowed(codec: Codec) -> bool {
     )
 }
 
-/// Encode a sealed message: `[aead_codec Codec][nonce Varbytes][ct+tag Varbytes]`.
-fn encode_sealed(aead_codec: Codec, nonce: &[u8], ct_tag: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    out.append(&mut aead_codec.into());
-    out.append(&mut Varbytes::new(nonce.to_vec()).into());
-    out.append(&mut Varbytes::new(ct_tag.to_vec()).into());
-    out
-}
-
-/// Decode a sealed message produced by [`encode_sealed`].
+/// Decode a sealed message produced by [`aead::encode_sealed`].
 fn decode_sealed(data: &[u8]) -> Result<(Codec, Vec<u8>, Vec<u8>), SealError> {
     let (aead_codec, ptr) = Codec::try_decode_from(data)
         .map_err(|_| SealError::InvalidFormat("missing aead codec".into()))?;
@@ -459,7 +440,7 @@ impl<'a> SealView for View<'a> {
             .try_build()?;
 
         Ok((
-            encode_sealed(aead_codec, &nonce, &ct_tag),
+            aead::encode_sealed(aead_codec, &nonce, &ct_tag),
             Some(ephemeral_mk),
         ))
     }

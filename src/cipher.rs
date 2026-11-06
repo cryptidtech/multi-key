@@ -79,7 +79,7 @@ impl Builder {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "bcrypt", feature = "chacha20", feature = "curve25519"))]
 mod tests {
     use super::*;
     use crate::{ViewBuilder, kdf, mk};
