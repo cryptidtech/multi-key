@@ -18,9 +18,20 @@ jobs:
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check Code Format
+        run: cargo fmt --all -- --check
+
+      - name: Code Lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Build
         run: cargo build --release --all-features
+
+      - name: Run Tests
+        run: cargo test --verbose # don't run --all-features because it takes waaaay too long
 
   build_macos:
     strategy:
@@ -54,8 +65,29 @@ jobs:
       - name: Check
         run: cargo check --all-features
 
-      - name: Check default features (McEliece excluded)
-        run: cargo check
+  coverage:
+    name: Coverage
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
+
+      - name: Run coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_cl_if_error: false
 
   audit:
     name: Security Audit
