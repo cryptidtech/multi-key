@@ -10,9 +10,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release --all-features
+
+  build_macos:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+    runs-on: [self-hosted, macos, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --release --all-features
+
   msrv:
     name: Verify MSRV (1.99)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +59,7 @@ jobs:
 
   audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +68,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: command -v cargo-audit >/dev/null 2>&1 || cargo install cargo-audit
 
       - name: Run cargo audit
         run: cargo audit
