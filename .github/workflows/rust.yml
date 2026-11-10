@@ -10,7 +10,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_linux:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
     runs-on: [self-hosted, linux, x64]
 
     steps:
