@@ -10,35 +10,71 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_linux:
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
+  msrv:
+    name: Verify MSRV (1.99.1)
     runs-on: [self-hosted, linux, x64]
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust Toolchain (1.99.1)
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Check
+        run: cargo check --all-features
+
+  build_linux:
+    needs: msrv
+    name: Build Linux
+    strategy:
+      fail-fast: false # force all builds to run even if one fails
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            rust: stable
+            run-tests: true
+          - target: aarch64-unknown-linux-gnu
+            rust: nightly
+            run-tests: false
+          - target: riscv64gc-unknown-linux-gnu
+            rust: nightly
+            run-tests: false
+    runs-on: [self-hosted, linux, x64]
+
+    # The runner image ships cross std for the aarch64 and riscv64gc gnu
+    # targets with nightly only and points CARGO_TARGET_*_LINKER at the
+    # cross compilers in PATH, so cross builds run nightly with --target.
+    # Foreign-arch binaries cannot execute on the x64 runner, so fmt,
+    # clippy, and the test run stay on the host target.
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install Rust Toolchain
+        if: matrix.run-tests
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - name: Check Code Format
+        if: matrix.run-tests
         run: cargo fmt --all -- --check
 
       - name: Code Lint
+        if: matrix.run-tests
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo build --release --all-features
+        run: cargo +${{ matrix.rust }} build --verbose --all-features --target ${{ matrix.target }}
 
-      - name: Run Tests
-        run: cargo test --verbose # don't run --all-features because it takes waaaay too long
+      - name: Run tests
+        if: matrix.run-tests
+        run: cargo test --verbose --all-features
 
   build_macos:
+    needs: msrv
+    name: Build macOS
     strategy:
+      fail-fast: false # force all builds to run even if one fails
       matrix:
         include:
           - target: aarch64-apple-darwin
@@ -56,20 +92,8 @@ jobs:
       - name: Build
         run: cargo build --target ${{ matrix.target }} --release --all-features
 
-  msrv:
-    name: Verify MSRV (1.99)
-    runs-on: [self-hosted, linux, x64]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain (1.99)
-        uses: dtolnay/rust-toolchain@1.99.0
-
-      - name: Check
-        run: cargo check --all-features
-
   coverage:
+    needs: [build_linux, build_macos]
     name: Coverage
     runs-on: [self-hosted, linux, x64]
 
@@ -91,9 +115,10 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: lcov.info
-          fail_cl_if_error: false
+          fail_ci_if_error: false
 
   audit:
+    needs: [build_linux, build_macos]
     name: Security Audit
     runs-on: [self-hosted, linux, x64]
 
