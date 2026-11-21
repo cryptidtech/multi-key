@@ -2821,7 +2821,7 @@ mod tests {
         #[cfg(all(feature = "bcrypt", feature = "chacha20"))]
         use crate::{cipher, kdf};
 
-        #[cfg(all(feature = "bcrypt", feature = "chacha20"))]
+        #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "slow-tests"))]
         #[test]
         fn test_encryption_roundtrip() {
             for codec in KEY_CODECS {

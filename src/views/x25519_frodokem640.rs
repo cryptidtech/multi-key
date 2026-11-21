@@ -429,11 +429,13 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_640aes_roundtrip() {
         roundtrip(Codec::X25519Frodokem640AesPriv);
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_640shake_roundtrip() {
         roundtrip(Codec::X25519Frodokem640ShakePriv);

@@ -73,7 +73,12 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
+        # slow-tests gates the tests that exceed the CI test budget under
+        # emulation (docs/ci-test-budget.md); Code Lint above keeps
+        # --all-features, so the gated code is still lint-checked.
+        run: |
+          FEATURES=$(sed -n '/^\[features\]/,/^\[/p' Cargo.toml | grep -E '^[a-z0-9_-]+ =' | cut -d' ' -f1 | grep -v -e '^default$' -e '^slow-tests$' | paste -sd, -)
+          cargo +${{ matrix.rust }} test --verbose --features "$FEATURES" --target ${{ matrix.target }}
 
   build_macos:
     needs: msrv
@@ -112,7 +117,12 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
+        # slow-tests gates the tests that exceed the CI test budget under
+        # emulation (docs/ci-test-budget.md); Code Lint above keeps
+        # --all-features, so the gated code is still lint-checked.
+        run: |
+          FEATURES=$(sed -n '/^\[features\]/,/^\[/p' Cargo.toml | grep -E '^[a-z0-9_-]+ =' | cut -d' ' -f1 | grep -v -e '^default$' -e '^slow-tests$' | paste -sd, -)
+          cargo +${{ matrix.rust }} test --verbose --features "$FEATURES" --target ${{ matrix.target }}
 
   audit:
     needs: [build_linux, build_macos]

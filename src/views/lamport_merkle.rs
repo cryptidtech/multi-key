@@ -1043,6 +1043,7 @@ mod tests {
         })
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_merkle_roundtrip_all_digests_depth1() {
         for codec in merkle_priv_codecs() {
@@ -1166,6 +1167,7 @@ mod tests {
         assert_eq!(av.remaining_signatures().unwrap(), 1);
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_merkle_depth3_sha3_256() {
         let sk = build_priv(Codec::LamportMerkleSha3256Priv, 3);

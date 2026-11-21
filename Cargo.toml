@@ -130,9 +130,11 @@ secp256k1 = ["aead", "dep:elliptic-curve", "dep:k256"]
 serde = ["dep:serde", "multi-hash/serde", "multi-sig/serde"]
 # SLH-DSA (FIPS 205) signing keys.
 slh-dsa = ["dep:getrandom", "dep:slh-dsa"]
-# Tests that take over 60 seconds in debug builds (SLH-DSA, Classic McEliece,
-# XMSS). Excluded from the default `cargo test` run; enable with
-# `cargo test --features slow-tests` to run the full suite.
+# Tests that take over 60 seconds under emulated riscv64 debug builds, the
+# CI target of the org-runner self-hosted runners. These stay out of the
+# default `cargo test` run, and the CI test jobs enable every other feature.
+# Run the full suite with `cargo test --features slow-tests`.
+# Per-test budget measurements: docs/ci-test-budget.md.
 slow-tests = []
 # Streamlined NTRU Prime sealing keys.
 sntrup = ["aead", "dep:blake3", "dep:sntrup"]

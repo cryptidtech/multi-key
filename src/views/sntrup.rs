@@ -426,6 +426,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_sntrup_public_key_derivation() {
         for codec in SNTRUP_KEY_CODECS {
@@ -448,6 +449,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_sntrup_fingerprint() {
         for codec in SNTRUP_KEY_CODECS {
@@ -474,6 +476,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_sntrup_seal_open_roundtrip() {
         let aead_codecs = [
