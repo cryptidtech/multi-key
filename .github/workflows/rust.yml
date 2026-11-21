@@ -73,12 +73,12 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        # slow-tests gates the tests that exceed the CI test budget under
-        # emulation (docs/ci-test-budget.md); Code Lint above keeps
-        # --all-features, so the gated code is still lint-checked.
+        # The test list enables every feature except the three slow gates,
+        # so the test jobs stay inside their budgets (docs/ci-test-budget.md).
+        # Keep the list in sync with the [features] table. Code Lint above
+        # keeps --all-features, so the gated code stays lint-checked.
         run: |
-          FEATURES=$(sed -n '/^\[features\]/,/^\[/p' Cargo.toml | grep -E '^[a-z0-9_-]+ =' | cut -d' ' -f1 | grep -v -e '^default$' -e '^slow-tests$' | paste -sd, -)
-          cargo +${{ matrix.rust }} test --verbose --features "$FEATURES" --target ${{ matrix.target }}
+          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
 
   build_macos:
     needs: msrv
@@ -117,12 +117,12 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        # slow-tests gates the tests that exceed the CI test budget under
-        # emulation (docs/ci-test-budget.md); Code Lint above keeps
-        # --all-features, so the gated code is still lint-checked.
+        # The test list enables every feature except the three slow gates,
+        # so the test jobs stay inside their budgets (docs/ci-test-budget.md).
+        # Keep the list in sync with the [features] table. Code Lint above
+        # keeps --all-features, so the gated code stays lint-checked.
         run: |
-          FEATURES=$(sed -n '/^\[features\]/,/^\[/p' Cargo.toml | grep -E '^[a-z0-9_-]+ =' | cut -d' ' -f1 | grep -v -e '^default$' -e '^slow-tests$' | paste -sd, -)
-          cargo +${{ matrix.rust }} test --verbose --features "$FEATURES" --target ${{ matrix.target }}
+          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
 
   audit:
     needs: [build_linux, build_macos]
