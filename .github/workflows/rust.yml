@@ -53,6 +53,7 @@ jobs:
         if: matrix.run-tests
         uses: dtolnay/rust-toolchain@stable
         with:
+          targets: ${{ matrix.target }}
           components: rustfmt, clippy
 
       - name: Check Code Format
@@ -61,14 +62,14 @@ jobs:
 
       - name: Code Lint
         if: matrix.run-tests
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo +${{ matrix.rust }} clippy --all-targets --all-features --target ${{ matrix.target }} -- -D warnings
 
       - name: Build
         run: cargo +${{ matrix.rust }} build --verbose --all-features --target ${{ matrix.target }}
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo test --verbose --all-features
+        run: cargo +${{ matrix.rust }} test --verbose --all-feature --target ${{ matrix.target }}s
 
   build_macos:
     needs: msrv
@@ -87,34 +88,22 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Check Code Format
+        if: matrix.run-tests
+        run: cargo fmt --all -- --check
+
+      - name: Code Lint
+        if: matrix.run-tests
+        run: cargo +${{ matrix.rust }} clippy --all-targets --all-features --target ${{ matrix.target }} -- -D warnings
 
       - name: Build
-        run: cargo build --target ${{ matrix.target }} --release --all-features
+        run: cargo +${{ matrix.rust }} build --verbose --all-features --target ${{ matrix.target }}
 
-  coverage:
-    needs: [build_linux, build_macos]
-    name: Coverage
-    runs-on: [self-hosted, linux, x64]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-
-      - name: Install cargo-llvm-cov
-        run: command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
-
-      - name: Run coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
+      - name: Run tests
+        if: matrix.run-tests
+        run: cargo +${{ matrix.rust }} test --verbose --all-feature --target ${{ matrix.target }}s
 
   audit:
     needs: [build_linux, build_macos]
