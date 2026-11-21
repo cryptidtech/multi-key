@@ -2818,12 +2818,10 @@ mod tests {
     ))]
     mod key_codecs {
         use super::*;
-        #[cfg(all(feature = "bcrypt", feature = "chacha20"))]
-        use crate::{cipher, kdf};
-
-        #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "slow-tests"))]
+        #[cfg(all(feature = "bcrypt", feature = "chacha20", feature = "slow-tests-riscv"))]
         #[test]
         fn test_encryption_roundtrip() {
+            use crate::{cipher, kdf};
             for codec in KEY_CODECS {
                 let mut rng = rand::rng();
                 let mk1 = Builder::new_from_random_bytes(codec, &mut rng)

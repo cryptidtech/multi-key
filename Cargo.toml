@@ -124,18 +124,26 @@ p521 = [
     "ssh-key/rand_core",
 ]
 # RSA signing keys.
-rsa = ["aead", "dep:getrandom", "dep:pkcs1", "dep:sad-rsa", "dep:sha2"]
+rsa = ["aead", "dep:getrandom", "dep:sad-rsa", "dep:sha2"]
 # secp256k1 ECDSA signing and ECDH sealing keys.
 secp256k1 = ["aead", "dep:elliptic-curve", "dep:k256"]
 serde = ["dep:serde", "multi-hash/serde", "multi-sig/serde"]
 # SLH-DSA (FIPS 205) signing keys.
 slh-dsa = ["dep:getrandom", "dep:slh-dsa"]
-# Tests that take over 60 seconds under emulated riscv64 debug builds, the
-# CI target of the org-runner self-hosted runners. These stay out of the
-# default `cargo test` run, and the CI test jobs enable every other feature.
-# Run the full suite with `cargo test --features slow-tests`.
-# Per-test budget measurements: docs/ci-test-budget.md.
+# Tests that take over 60 seconds in a native debug build (SLH-DSA, Classic
+# McEliece, XMSS). Held out of the standard native test run; the CI test jobs
+# never enable this gate. Budget measurements: docs/ci-test-budget.md. Run the
+# full suite with `cargo test --features slow-tests`.
 slow-tests = []
+# Tests slower than 60 s under the emulated qemu-riscv64 debug build but fast
+# natively. Held out of the standard emulated riscv64gc run to keep it under
+# five minutes. Run the full emulated suite with `--features slow-tests-riscv`
+# and the riscv64gc target.
+slow-tests-riscv = []
+# The equivalent emulated aarch64 hold-out, keeping the standard emulated
+# aarch64 run under five minutes. Enable with `--features slow-tests-aarch64`
+# and the aarch64 target.
+slow-tests-aarch64 = []
 # Streamlined NTRU Prime sealing keys.
 sntrup = ["aead", "dep:blake3", "dep:sntrup"]
 # Key splitting into verifiable shares and the threshold marker attributes.
@@ -173,13 +181,11 @@ multi-util = "2"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
 p521 = { version = "0.14", features = ["ecdsa", "ecdh"], optional = true }
-# Compatibility pin. sad-rsa 0.2.3 (the newest release of its line) cannot
-# compile against pkcs1 0.8.0-rc.5, which changed `RsaPrivateKey` and
-# `RsaPublicKey` from lifetime parameters to generic parameters. sad-rsa
-# permits `pkcs1 ^0.8.0-rc.4`, so a fresh resolve picks rc.5 and fails. Pin
-# the exact rc.4 dependency to force it; remove this entry once sad-rsa
-# publishes a rc.5-compatible release.
-pkcs1 = { version = "=0.8.0-rc.4", optional = true }
+# sad-rsa 0.10.4 is the rc.5-compatible release the retired compatibility
+# pin below waited for; it also fixes RUSTSEC-2026-0583 (panic on crafted
+# RSA private keys). Direct dependency on pkcs1 dropped: sad-rsa re-exports
+# the pkcs1 traits it needs, so this workspace uses the version resolved
+# through sad-rsa.
 poly1305 = { version = "0.9", optional = true }
 pq-mayo = { version = "0.6.0", optional = true }
 pq-mceliece = { version = "0.3", default-features = false, features = ["decapsulate", "encapsulate", "keygen", "mceliece348864"], optional = true }
@@ -187,7 +193,7 @@ pq-xmss = { version = "0.2.0", optional = true }
 rand = "0.10"
 rand_core = "0.10"
 rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"], optional = true }
-sad-rsa = { version = "0.2.3", features = ["sha2"], optional = true }
+sad-rsa = { version = "0.10.4", features = ["sha2"], optional = true }
 sec1 = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
 serde_cbor_2 = { version = "0.13.0", optional = true }

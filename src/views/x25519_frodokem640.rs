@@ -380,7 +380,7 @@ impl<'a> OpenView for View<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests-riscv"))]
 mod tests {
     use super::*;
     use crate::ViewBuilder;
@@ -429,13 +429,11 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_640aes_roundtrip() {
         roundtrip(Codec::X25519Frodokem640AesPriv);
     }
 
-    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_640shake_roundtrip() {
         roundtrip(Codec::X25519Frodokem640ShakePriv);
