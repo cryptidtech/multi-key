@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- The `slow-tests-aarch64` and `slow-tests-riscv` features. Each one holds out the tests that push the matching emulated test run past its budget. `slow-tests-aarch64` currently holds out no test. `slow-tests-riscv` holds out 11 tests: the FrodoKEM, RSA, and bcrypt key encryption round trips and the Lamport-Merkle, MAYO5, sntrup Prime, and X25519-FrodoKEM640 round trips.
+
+### Changed
+
+- The CI test jobs run `cargo test` with `--features deprecated,legacy_chacha20_fallback,wasm` on top of the default features. The old feature list derivation kept the per-arch gates enabled in every job. The MSRV check, clippy, and the build steps keep `--all-features`, so the gated code stays compile-checked.
+- `slow-tests` now holds out only the tests the native test run needs off the run (SLH-DSA, Classic McEliece, XMSS). The emulated-budget tests moved to `slow-tests-riscv`.
+
 ## [3.1.0] - 2026-11-06
 
 ### Added

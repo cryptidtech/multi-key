@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    # Scan the workspace root; cargo sub-crates are reachable via
+    # [workspace] members and will be included in the Cargo.lock.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "cargo"
+    # Track all dependencies the project depends on, including
+    # indirect ones. The crate is pre-1.0 so we do not want to
+    # auto-merge; we want a PR per bump so reviewers can spot
+    # regressions.
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    groups:
+      patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+    commit-message:
+      prefix: "deps"
+      include: "scope"

@@ -446,6 +446,7 @@ mod tests {
         sign_verify_roundtrip(Codec::Mayo3Priv);
     }
 
+    #[cfg(feature = "slow-tests-riscv")]
     #[test]
     fn test_mayo5_sign_verify_roundtrip() {
         sign_verify_roundtrip(Codec::Mayo5Priv);

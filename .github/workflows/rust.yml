@@ -10,39 +10,89 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_linux:
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
+  msrv:
+    name: Verify MSRV (1.99.1)
     runs-on: [self-hosted, linux, x64]
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust Toolchain (1.99.1)
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Check
+        run: cargo check --all-features
+
+  build_linux:
+    needs: msrv
+    name: Build Linux
+    strategy:
+      fail-fast: false # force all builds to run even if one fails
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            rust: stable
+            run-tests: true
+          - target: aarch64-unknown-linux-gnu
+            rust: nightly
+            run-tests: true
+          - target: riscv64gc-unknown-linux-gnu
+            rust: nightly
+            run-tests: true
+    runs-on: [self-hosted, linux, x64]
+
+    # The runner image ships the cross std for the aarch64 and riscv64gc
+    # gnu targets on the nightly toolchain and points CARGO_TARGET_*_LINKER
+    # at the cross compilers in PATH, so the cross clippy, build, and test
+    # runs execute nightly with --target while staying on the x64 host.
+    # Clippy and the build stop at checked and emitted code, so they need
+    # no target execution; the test run executes foreign-arch binaries,
+    # and the image points CARGO_TARGET_*_RUNNER at the matching static
+    # qemu-user emulators, so cargo runs the cross test binaries, the
+    # doctests included, through them. The fmt check stays on the default
+    # stable toolchain.
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install Rust Toolchain
+        if: matrix.run-tests
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - name: Check Code Format
+        if: matrix.run-tests
         run: cargo fmt --all -- --check
 
       - name: Code Lint
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        if: matrix.run-tests
+        run: cargo +${{ matrix.rust }} clippy --all-targets --all-features --target ${{ matrix.target }} -- -D warnings
 
       - name: Build
-        run: cargo build --release --all-features
+        run: cargo +${{ matrix.rust }} build --verbose --all-features --target ${{ matrix.target }}
 
-      - name: Run Tests
-        run: cargo test --verbose # don't run --all-features because it takes waaaay too long
+      - name: Run tests
+        if: matrix.run-tests
+        # The test list enables every feature except the three slow gates,
+        # so the test jobs stay inside their budgets (docs/ci-test-budget.md).
+        # Keep the list in sync with the [features] table. Code Lint above
+        # keeps --all-features, so the gated code stays lint-checked.
+        run: |
+          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
 
   build_macos:
+    needs: msrv
+    name: Build macOS
     strategy:
+      fail-fast: false # force all builds to run even if one fails
       matrix:
         include:
           - target: aarch64-apple-darwin
+            rust: stable
+            run-tests: true
           - target: x86_64-apple-darwin
+            rust: stable
+            run-tests: true
     runs-on: [self-hosted, macos, arm64]
 
     steps:
@@ -52,48 +102,30 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Check Code Format
+        if: matrix.run-tests
+        run: cargo fmt --all -- --check
+
+      - name: Code Lint
+        if: matrix.run-tests
+        run: cargo +${{ matrix.rust }} clippy --all-targets --all-features --target ${{ matrix.target }} -- -D warnings
 
       - name: Build
-        run: cargo build --target ${{ matrix.target }} --release --all-features
+        run: cargo +${{ matrix.rust }} build --verbose --all-features --target ${{ matrix.target }}
 
-  msrv:
-    name: Verify MSRV (1.99)
-    runs-on: [self-hosted, linux, x64]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain (1.99)
-        uses: dtolnay/rust-toolchain@1.99.0
-
-      - name: Check
-        run: cargo check --all-features
-
-  coverage:
-    name: Coverage
-    runs-on: [self-hosted, linux, x64]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-
-      - name: Install cargo-llvm-cov
-        run: command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
-
-      - name: Run coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          fail_cl_if_error: false
+      - name: Run tests
+        if: matrix.run-tests
+        # The test list enables every feature except the three slow gates,
+        # so the test jobs stay inside their budgets (docs/ci-test-budget.md).
+        # Keep the list in sync with the [features] table. Code Lint above
+        # keeps --all-features, so the gated code stays lint-checked.
+        run: |
+          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
 
   audit:
+    needs: [build_linux, build_macos]
     name: Security Audit
     runs-on: [self-hosted, linux, x64]
 

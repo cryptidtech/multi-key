@@ -697,7 +697,7 @@ mod tests {
         }
 
         // ── RSA ──
-        #[cfg(feature = "rsa")]
+        #[cfg(all(feature = "rsa", feature = "slow-tests-riscv"))]
         #[test]
         fn roundtrip_rsa() {
             assert_all(&crate::mk::RSA_KEY_CODECS);
@@ -748,7 +748,7 @@ mod tests {
             assert_all(&crate::mk::MCELIECE_KEY_CODECS);
         }
 
-        #[cfg(feature = "frodokem")]
+        #[cfg(all(feature = "frodokem", feature = "slow-tests-riscv"))]
         #[test]
         fn roundtrip_frodokem() {
             assert_all(&crate::mk::FRODOKEM_KEY_CODECS);

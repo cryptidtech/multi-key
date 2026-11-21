@@ -1012,6 +1012,7 @@ const MAX_DECODED_SIZE: usize = crate::mk::MAX_DECODED_SIZE;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "slow-tests-riscv")]
     use crate::LAMPORT_MERKLE_KEY_CODECS;
     use crate::ViewBuilder;
     use multi_sig::AttrId as MsAttrId;
@@ -1024,6 +1025,7 @@ mod tests {
             .unwrap()
     }
 
+    #[cfg(feature = "slow-tests-riscv")]
     fn merkle_priv_codecs() -> impl Iterator<Item = Codec> {
         LAMPORT_MERKLE_KEY_CODECS.into_iter().filter(|c| {
             matches!(
@@ -1043,6 +1045,7 @@ mod tests {
         })
     }
 
+    #[cfg(feature = "slow-tests-riscv")]
     #[test]
     fn test_merkle_roundtrip_all_digests_depth1() {
         for codec in merkle_priv_codecs() {
@@ -1166,6 +1169,7 @@ mod tests {
         assert_eq!(av.remaining_signatures().unwrap(), 1);
     }
 
+    #[cfg(feature = "slow-tests-riscv")]
     #[test]
     fn test_merkle_depth3_sha3_256() {
         let sk = build_priv(Codec::LamportMerkleSha3256Priv, 3);

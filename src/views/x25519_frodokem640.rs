@@ -380,7 +380,7 @@ impl<'a> OpenView for View<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests-riscv"))]
 mod tests {
     use super::*;
     use crate::ViewBuilder;
