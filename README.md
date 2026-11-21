@@ -482,7 +482,9 @@ Each algorithm and curve is its own feature, so you compile in only the key type
 | `secp256k1` | yes | secp256k1 |
 | `serde` | yes | Serde serialization for `Multikey`, `KeyShare`, `SharePayload`, `ThresholdParticipant` |
 | `slh-dsa` | yes | SLH-DSA (FIPS 205) |
-| `slow-tests` | no | Runs the tests that take over 60 seconds in debug builds (SLH-DSA, Classic McEliece, XMSS) |
+| `slow-tests` | no | Runs the tests the native test run holds out to stay on budget (SLH-DSA, Classic McEliece, XMSS). Enable to run the full suite |
+| `slow-tests-aarch64` | no | Holds out aarch64 test-run tests if the emulated run reaches its budget. Currently empty because the aarch64 run fits its budget with no test held out |
+| `slow-tests-riscv` | no | Holds out the tests that exceed the riscv64 emulated-run budget (FrodoKEM, RSA, bcrypt key encryption, Lamport-Merkle, MAYO5, sntrup Prime, X25519-FrodoKEM640). Enable to run the full emulated suite |
 | `sntrup` | yes | Streamlined NTRU Prime |
 | `threshold` | yes | Key splitting (`keysplit`) and the threshold marker attributes (`elliptic-curve`, `vsss-rs`, CBOR via `serde_cbor_2`) |
 | `wasm` | no | WebAssembly randomness via `getrandom/wasm_js`; on `wasm32` targets `blsful` always uses its `rust` backend |
@@ -490,7 +492,7 @@ Each algorithm and curve is its own feature, so you compile in only the key type
 
 ## Upgrading from 2.x
 
-3.0 replaces the always-on crypto dependencies with one feature per algorithm or curve. The default build has every feature except `deprecated`, `legacy_chacha20_fallback`, `slow-tests`, and `wasm`, so `multi-key = "3"` has the same key types as 2.x.
+3.0 replaces the always-on crypto dependencies with one feature per algorithm or curve. The default build has every feature except `deprecated`, `legacy_chacha20_fallback`, `slow-tests`, `slow-tests-aarch64`, `slow-tests-riscv`, and `wasm`, so `multi-key = "3"` has the same key types as 2.x.
 
 - If you used `default-features = false` only to drop serde, add back the algorithms you use, e.g. `features = ["curve25519", "ml-dsa"]`, plus `threshold`, `lamport`, or `xmss` if you used those. A hybrid needs every feature it combines.
 - Creating, converting, or viewing a key whose feature is off returns an `UnsupportedCodec` error (`UnsupportedAlgorithm` for SSH conversion, `SealError::NotEncryptionKey` for the seal and open views).

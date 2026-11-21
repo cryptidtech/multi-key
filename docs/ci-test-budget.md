@@ -1,31 +1,47 @@
 # CI test budget
 
-The self-hosted `org-runner` Linux runners execute cross-target test jobs
-under `qemu-riscv64-static` user-mode emulation. A full `--all-features`
-test run of this crate does not fit in the default six-hour job timeout,
-so the slowest tests stay behind the `slow-tests` feature and the CI test
-jobs enable every other feature. The `Code Lint` step keeps
-`--all-features`, so the gated code stays lint-checked.
+The self-hosted Linux runners run the cross-target test jobs under
+`qemu-aarch64-static` and `qemu-riscv64-static` user-mode emulation. Two
+features hold out the tests that push an emulated test run past its test
+budget: `slow-tests-aarch64` on the aarch64 target and `slow-tests-riscv`
+on the riscv64gc target. A third feature, `slow-tests`, holds out the
+tests the native test run needs held out. The test jobs enable every
+other feature. The `Code Lint` step and the `Check` and `Build` steps
+keep `--all-features`, so the gated code stays compile-checked.
 
 ## Measurement
 
-Each test ran alone under `qemu-riscv64-static` (`RUST_TEST_THREADS=1`,
-nightly debug build, `--all-features`) on a 16-core x86_64 workstation.
-Serial time is the sum of the single-test times.
+Each test ran alone under the matching `qemu-*-static` emulator
+(`RUST_TEST_THREADS=1`, nightly debug build, `--all-features`) on a
+16-core x86_64 workstation. Serial time is the sum of the single-test
+times.
 
-- Total serial time of all 255 tests: 17,274 s (4 h 48 m)
-- Tests at or over 60 s: 26 tests, 16,368 s (94.8% of the serial time)
-- Remaining serial time when those 26 tests are gated: 906 s (15.1 min)
+- Total serial time of all 255 tests of the riscv64gc measurement:
+  17,274 s (4 h 48 m)
+- riscv64gc tests at or over 60 s: 26 tests, 16,368 s (94.8% of the serial
+  time)
+- The `slow-tests` gate holds 18 tests. The native test run needs them
+  held out to stay on budget.
+- The `slow-tests-riscv` gate holds 11 tests. Their emulated serial time
+  adds to 2,486 s (the table below).
+- Remaining riscv64gc serial time when the 26 tests are gated: 906 s
+  (15.1 min)
 - Doctests (measured the same way): 9 tests, 0.13 s
+- One full riscv64gc run with the CI feature list and `slow-tests-riscv`
+  enabled took 291.7 s and passed every test.
+- The aarch64 run needs no held-out test today. A full run with the CI
+  feature list measured 21.6 s and 20.3 s back to back. The slowest
+  single test measured 20.7 s. `slow-tests-aarch64` is the hold-out
+  point for a future slow aarch64 test.
+- The native test run with the same feature list measured 22.9 s.
 
 ## Slow tests (60 s or more under emulation)
 
-Already gated behind `slow-tests`: the five SLH-DSA tests, the two XMSS
-sign/index tests, and the Classic McEliece tests (the gate sits on the
-`tests` module), the x25519+mceliece348864 tests (same), and
-`keysplit::tests::roundtrip::roundtrip_slh_dsa`.
+Behind `slow-tests`: the SLH-DSA tests in `mk` and `keysplit`, the two
+XMSS sign and index tests, and the Classic McEliece tests and the
+x25519+mceliece348864 tests (the gate sits on their tests modules).
 
-Gated by this change (11 tests, 2,486 s under emulation):
+Behind `slow-tests-riscv` (11 tests, 2,486 s serial under emulation):
 
 | Test | Emulated time (s) |
 |------|------------------:|
@@ -41,15 +57,17 @@ Gated by this change (11 tests, 2,486 s under emulation):
 | `views::sntrup::tests::test_sntrup_fingerprint` | 82.2 |
 | `views::x25519_frodokem640::tests::test_640aes_roundtrip` | 69.1 |
 
-Five of these tests exceed the 1,800 s measurement cap under emulation;
-they report at least the cap value and are certainly slower.
+Five of the tests behind `slow-tests` exceed the 1,800 s measurement cap
+under emulation. They report the cap value as a lower bound, so their
+true serial time is larger. None of those tests appears in the table
+above.
 
 ## Budget rule
 
-The gated set is every test measured at 60 s or more under emulation. A
-test that grows past 60 s under the same measurement belongs behind the
-feature again; re-measure with `slow-tests` enabled. The CI job stays
+The wall clock of one complete run with the CI feature list is the budget
+measure. The measured budgets: 20-22 s on aarch64 and 76-86 s on
+riscv64gc against a 300 s target. A test that grows past 60 s in a
+single-test measurement on that target belongs behind that target's
+feature again. Re-measure with that gate enabled. The CI job stays
 correct as long as the sum of the ungated tests, doctests included, stays
-well under the job budget: roughly 906 s today against the 3,600 s
-target, with test-thread parallelism and doctests adding margin on the
-side of safety.
+well under the job budget.
