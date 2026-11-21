@@ -41,11 +41,16 @@ jobs:
             run-tests: true
     runs-on: [self-hosted, linux, x64]
 
-    # The runner image ships cross std for the aarch64 and riscv64gc gnu
-    # targets with nightly only and points CARGO_TARGET_*_LINKER at the
-    # cross compilers in PATH, so cross builds run nightly with --target.
-    # Foreign-arch binaries cannot execute on the x64 runner, so fmt,
-    # clippy, and the test run stay on the host target.
+    # The runner image ships the cross std for the aarch64 and riscv64gc
+    # gnu targets on the nightly toolchain and points CARGO_TARGET_*_LINKER
+    # at the cross compilers in PATH, so the cross clippy, build, and test
+    # runs execute nightly with --target while staying on the x64 host.
+    # Clippy and the build stop at checked and emitted code, so they need
+    # no target execution; the test run executes foreign-arch binaries,
+    # and the image points CARGO_TARGET_*_RUNNER at the matching static
+    # qemu-user emulators, so cargo runs the cross test binaries, the
+    # doctests included, through them. The fmt check stays on the default
+    # stable toolchain.
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +58,6 @@ jobs:
         if: matrix.run-tests
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
           components: rustfmt, clippy
 
       - name: Check Code Format
@@ -69,7 +73,7 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo +${{ matrix.rust }} test --verbose --all-feature --target ${{ matrix.target }}s
+        run: cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
 
   build_macos:
     needs: msrv
@@ -79,6 +83,11 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
+            rust: stable
+            run-tests: true
+          - target: x86_64-apple-darwin
+            rust: stable
+            run-tests: true
     runs-on: [self-hosted, macos, arm64]
 
     steps:
@@ -103,7 +112,7 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo +${{ matrix.rust }} test --verbose --all-feature --target ${{ matrix.target }}s
+        run: cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
 
   audit:
     needs: [build_linux, build_macos]
