@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.2.0] - 2026-11-26
 
 ### Added
 
@@ -15,6 +15,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The CI test jobs run `cargo test` with `--features deprecated,legacy_chacha20_fallback,wasm` on top of the default features. The old feature list derivation kept the per-arch gates enabled in every job. The MSRV check, clippy, and the build steps keep `--all-features`, so the gated code stays compile-checked.
 - `slow-tests` now holds out only the tests the native test run needs off the run (SLH-DSA, Classic McEliece, XMSS). The emulated-budget tests moved to `slow-tests-riscv`.
+
+### Dependencies
+
+- Raised `sad-rsa` from 0.2.3 to 0.10.4, the rc.5-compatible release the dependency pin waited for. `sad-rsa` re-exports the `pkcs1` traits the RSA views use, so the exact `pkcs1 = "=0.8.0-rc.4"` pin is removed and the `rsa` feature no longer turns on `dep:pkcs1`. `pkcs1` stays a transitive dependency resolved through `sad-rsa`.
+
+### Security
+
+- The `sad-rsa` 0.10.4 raise fixes RUSTSEC-2026-0583, a panic on crafted RSA private keys.
+
+### CI
+
+- Split the `build` job into `build_linux` (x86_64-unknown-linux-gnu) and `build_macos` (aarch64-apple-darwin and x86_64-apple-darwin), both with `fail-fast: false`. The 3.1.0 macOS job only ran a release build with all features. Both jobs now run the format check, clippy `-D warnings` with all features, a build with all features, and `cargo test`.
+- Added the `workflow_dispatch` trigger to the workflow.
+- Pinned the `msrv` job toolchain from 1.99.0 to 1.99.1. The crate `rust-version` stays 1.99, so the MSRV itself is unchanged.
+- The `audit` job now waits for `build_linux` and `build_macos`.
+- Removed the `coverage` job and the Codecov upload.
+- Added Dependabot configuration (`.github/dependabot.yml`). Cargo scans run weekly on Monday mornings, track direct and indirect dependencies, group the patch and minor bumps, and open one labeled pull request per bump.
+
+### Documentation
+
+- Added `docs/ci-test-budget.md`. It records the native, aarch64, and riscv64gc test budgets, the slow tests behind each hold-out gate with their measured times, and the rule for putting a future slow test back behind its target gate.
+- The README feature table gained the `slow-tests-aarch64` and `slow-tests-riscv` rows, and the default-build feature list names both gates.
 
 ## [3.1.0] - 2026-11-06
 
@@ -372,6 +394,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Major dependency updates: ed25519-dalek 3, blsful 4, elliptic-curve 0.14, vsss-rs 6, ssh-key 0.7.
 - Initial published release on crates.io as `multi-key`.
 
+[3.2.0]: https://github.com/cryptidtech/multi-key/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/cryptidtech/multi-key/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/cryptidtech/multi-key/compare/v2.3.0...v3.0.0
 [2.3.0]: https://github.com/cryptidtech/multi-key/compare/v2.2.0...v2.3.0
